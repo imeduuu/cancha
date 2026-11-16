@@ -1,0 +1,38 @@
+{
+  "sourceUrl": "https://www.cbf.com.br/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1999",
+  "capturedAt": "2026-10-17T01:41:57.467Z",
+  "matches": [
+    {
+      "id_jogo": "834010",
+      "rodada": "1",
+      "mandante": {
+        "id": "62194",
+        "nome": "Atlético Mineiro",
+        "gols": "2",
+        "panaltis": "0"
+      },
+      "visitante": {
+        "id": "20031",
+        "nome": "Ceará",
+        "gols": "1",
+        "panaltis": "0"
+      }
+    },
+    {
+      "id_jogo": "834026",
+      "rodada": "2",
+      "mandante": {
+        "id": "20031",
+        "nome": "Ceará",
+        "gols": "2",
+        "panaltis": "2"
+      },
+      "visitante": {
+        "id": "62194",
+        "nome": "Atlético Mineiro",
+        "gols": "1",
+        "panaltis": "4"
+      }
+    }
+  ]
+}

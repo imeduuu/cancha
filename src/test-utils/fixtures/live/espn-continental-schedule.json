@@ -1,0 +1,104 @@
+{
+  "sourceUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/conmebol.sudamericana/scoreboard?dates=2026&limit=1000",
+  "capturedAt": "2026-10-17T01:45:58.345Z",
+  "events": [
+    {
+      "id": "401865374",
+      "date": "2026-04-07T22:00Z",
+      "season": {
+        "year": 2026,
+        "type": 13917,
+        "slug": "group-stage"
+      },
+      "competitions": [
+        {
+          "status": {
+            "clock": 5400,
+            "displayClock": "90'+6'",
+            "period": 2,
+            "type": {
+              "id": "28",
+              "name": "STATUS_FULL_TIME",
+              "state": "post",
+              "completed": true,
+              "description": "Full Time",
+              "detail": "FT",
+              "shortDetail": "FT"
+            }
+          },
+          "group": {
+            "groupId": "7",
+            "name": "Group G",
+            "abbreviation": "Group G"
+          },
+          "competitors": [
+            {
+              "homeAway": "home",
+              "team": {
+                "id": "10060",
+                "displayName": "Barracas Central"
+              },
+              "score": "0"
+            },
+            {
+              "homeAway": "away",
+              "team": {
+                "id": "3454",
+                "displayName": "Vasco da Gama"
+              },
+              "score": "0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "401913957",
+      "date": "2026-10-21T00:30Z",
+      "season": {
+        "year": 2026,
+        "type": 13913,
+        "slug": "semifinals"
+      },
+      "competitions": [
+        {
+          "status": {
+            "clock": 0,
+            "displayClock": "0'",
+            "type": {
+              "id": "1",
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false,
+              "description": "Scheduled",
+              "detail": "Tue, October 20th at 8:30 PM EDT",
+              "shortDetail": "Scheduled"
+            }
+          },
+          "leg": {
+            "value": 2,
+            "displayValue": "2nd Leg"
+          },
+          "competitors": [
+            {
+              "homeAway": "home",
+              "team": {
+                "id": "3454",
+                "displayName": "Vasco da Gama"
+              },
+              "score": "0"
+            },
+            {
+              "homeAway": "away",
+              "team": {
+                "id": "5",
+                "displayName": "Boca Juniors"
+              },
+              "score": "0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

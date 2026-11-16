@@ -1,0 +1,3 @@
+export const MAX_TOURNAMENT_NAME_LENGTH = 80;
+export const MAX_TEAM_NAME_LENGTH = 40;
+export const MAX_TOURNAMENT_LEGS = 20;

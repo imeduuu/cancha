@@ -1,0 +1,97 @@
+{
+  "capturedAt": "2026-10-17T01:44:56.539Z",
+  "samples": [
+    {
+      "sourceUrl": "https://www.cbf.com.br/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1996",
+      "phaseId": "1996",
+      "matches": [
+        {
+          "id_jogo": "832897",
+          "rodada": "1",
+          "mandante": {
+            "id": "20108",
+            "nome": "Asa",
+            "gols": "1",
+            "panaltis": "0"
+          },
+          "visitante": {
+            "id": "20041",
+            "nome": "Operário",
+            "gols": "2",
+            "panaltis": "0"
+          }
+        },
+        {
+          "id_jogo": "832901",
+          "rodada": "1",
+          "mandante": {
+            "id": "35079",
+            "nome": "Operário",
+            "gols": "1",
+            "panaltis": "1"
+          },
+          "visitante": {
+            "id": "56220",
+            "nome": "Gazin Porto Velho",
+            "gols": "1",
+            "panaltis": "3"
+          }
+        },
+        {
+          "id_jogo": "832914",
+          "rodada": "1",
+          "mandante": {
+            "id": "34709",
+            "nome": "Betim Futebol",
+            "gols": "0",
+            "panaltis": "0"
+          },
+          "visitante": {
+            "id": "20106",
+            "nome": "Operário",
+            "gols": "2",
+            "panaltis": "0"
+          }
+        }
+      ]
+    },
+    {
+      "sourceUrl": "https://www.cbf.com.br/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1997",
+      "phaseId": "1997",
+      "matches": [
+        {
+          "id_jogo": "833319",
+          "rodada": "1",
+          "mandante": {
+            "id": "20079",
+            "nome": "Vila Nova",
+            "gols": "1",
+            "panaltis": "5"
+          },
+          "visitante": {
+            "id": "20041",
+            "nome": "Operário",
+            "gols": "1",
+            "panaltis": "4"
+          }
+        },
+        {
+          "id_jogo": "833328",
+          "rodada": "1",
+          "mandante": {
+            "id": "20106",
+            "nome": "Operário",
+            "gols": "2",
+            "panaltis": "0"
+          },
+          "visitante": {
+            "id": "37743",
+            "nome": "Capital",
+            "gols": "0",
+            "panaltis": "0"
+          }
+        }
+      ]
+    }
+  ]
+}
