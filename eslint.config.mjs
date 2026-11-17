@@ -1,4 +1,5 @@
 // Solo reglas de capas (ver "Regla de oro" en CLAUDE.md). Sin conjuntos recomendados.
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 const tsFiles = ["**/*.ts", "**/*.tsx"];
@@ -26,10 +27,15 @@ export default [
   {
     files: tsFiles,
     languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
-    // session-drafts.tsx tiene un "eslint-disable-next-line react-hooks/exhaustive-deps" previo.
-    // Se declara la regla como no-op (no se activa) para que el comentario sea válido sin agregar el plugin.
-    plugins: { "react-hooks": { rules: { "exhaustive-deps": { create: () => ({}) } } } },
-    linterOptions: { reportUnusedDisableDirectives: "off" },
+  },
+  {
+    // Solo dos reglas del plugin, sin su configuración recomendada.
+    files: ["apps/web/**/*.tsx", "apps/web/**/*.ts"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+    },
   },
   {
     files: ["packages/core/src/**/*.ts"],
