@@ -5,14 +5,21 @@
   "type": "module",
   "description": "Dominio y aplicación de Cancha: TypeScript puro, sin DOM ni APIs de servidor.",
   "exports": {
-    "./*": "./src/*.ts"
+    "./test-utils/*": "./src/test-utils/*.ts",
+    "./*": {
+      "source": "./src/*.ts",
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsdown && node scripts/smoke-node.mjs",
+    "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "tsdown": "0.23.7",
     "typescript": "~5.7.2",
     "vitest": "^5.0.4"
   }

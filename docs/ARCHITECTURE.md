@@ -15,7 +15,7 @@ El repositorio es un monorepo con npm workspaces. Todas las órdenes `npm` se ej
 Cómo se relacionan los paquetes:
 
 - La web consume el núcleo como `@cancha/core/<ruta>`, por ejemplo `@cancha/core/domain/entities/tournament`. Nunca se importa otro paquete con rutas relativas; dentro de un mismo paquete sí se usan rutas relativas.
-- `@cancha/core` se publica dentro del monorepo como **código fuente**, sin paso de compilación: su `package.json` declara `exports: { "./*": "./src/*.ts" }` y Vite/Vitest lo leen directamente.
+- `@cancha/core` tiene dos salidas en `exports`: la condición `source` (`./src/*.ts`), que usan Vite, Vitest y `tsc` de la web, por lo que la web no necesita compilar el núcleo; y `default`/`types` (`./dist/*.js`, `./dist/*.d.ts`), generados con tsdown por `npm run build -w @cancha/core` para Node (`apps/api`). `@cancha/core/test-utils/*` apunta siempre a la fuente.
 - Las dependencias se instalan una sola vez en el `node_modules` de la raíz.
 - Vite reenvía durante el desarrollo las rutas `/official-source`, `/third-division-source`, `/argentina-cup-source` y `/brazil-cup-source` a los sitios oficiales que no admiten CORS (configuración en `apps/web/vite.config.ts`). Un despliegue estático necesita un proxy equivalente.
 - El acceso público temporal (`npm run dev:public`) solo sirve los módulos de `@cancha/core` que la aplicación realmente importa.

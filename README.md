@@ -19,7 +19,7 @@ El repositorio es un monorepo con npm workspaces. Las órdenes `npm` se ejecutan
 | `apps/web` (`@cancha/web`) | La aplicación React/Vite: `src/infrastructure/` (persistencia en `localStorage`/IndexedDB, bloqueo entre pestañas e importadores), `src/presentation/` (React), `src/integration/` (pruebas de casos de uso contra los adaptadores reales), `e2e/` (Playwright) y `scripts/`. |
 | `apps/api` (`@cancha/api`) | Pendiente (fase 2). |
 
-La web importa el núcleo como `@cancha/core/<ruta>` (por ejemplo `@cancha/core/domain/entities/tournament`); el paquete se consume como código fuente, sin paso de compilación. `npm run lint` comprueba las reglas de capas: el núcleo no puede importar React, Node ni otros paquetes, ni usar `localStorage`, `window` u otros globales del navegador o de Node, y `domain` no puede depender de `application`.
+La web importa el núcleo como `@cancha/core/<ruta>` (por ejemplo `@cancha/core/domain/entities/tournament`) y lo consume como código fuente, sin paso de compilación: Vite, Vitest y `tsc` de la web usan la condición de exportación `source` (`src/*.ts`). Para Node (`apps/api`), `npm run build -w @cancha/core` compila el núcleo con [tsdown](https://tsdown.dev) a `packages/core/dist` (ESM + `.d.ts`, un archivo por módulo), que es lo que resuelve Node con la condición `default`; el build termina con una prueba de humo que importa todos los módulos desde Node puro. `@cancha/core/test-utils/*` apunta siempre a la fuente (sólo lo usan las pruebas). `npm run lint` comprueba las reglas de capas: el núcleo no puede importar React, Node ni otros paquetes, ni usar `localStorage`, `window` u otros globales del navegador o de Node, y `domain` no puede depender de `application`.
 
 Consulta [la arquitectura en detalle](docs/ARCHITECTURE.md): capas, regla de dependencias, puertos de persistencia y formato JSON v7 de los respaldos.
 
@@ -85,7 +85,7 @@ npm run lint
 npm run build
 ```
 
-`npm test` ejecuta las pruebas de todos los workspaces: las unitarias de `packages/core` (entorno Node, sin DOM) y las de `apps/web`, incluidas las pruebas React de interacción real. El archivo `apps/web/src/presentation/app.test.tsx` usa React Testing Library, `user-event` y el entorno jsdom mediante la anotación de Vitest; no hace falta una orden adicional. `npm run build` primero comprueba los tipos de `packages/core` sin la biblioteca DOM y luego compila la web en `apps/web/dist`.
+`npm test` ejecuta las pruebas de todos los workspaces: las unitarias de `packages/core` (entorno Node, sin DOM) y las de `apps/web`, incluidas las pruebas React de interacción real. El archivo `apps/web/src/presentation/app.test.tsx` usa React Testing Library, `user-event` y el entorno jsdom mediante la anotación de Vitest; no hace falta una orden adicional. `npm run build` primero comprueba los tipos de `packages/core` sin la biblioteca DOM, lo compila a `packages/core/dist` para Node y luego compila la web en `apps/web/dist` (la web no usa `packages/core/dist`).
 
 ## Importadores: cobertura, validación y reimportación
 

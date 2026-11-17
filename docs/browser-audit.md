@@ -25,9 +25,9 @@ Los participantes y resultados son sintéticos, reutilizando los fixtures existe
 Comandos opcionales:
 
 ```powershell
-npm run test:e2e -- --project=chromium-desktop
-npm run test:e2e -- --project=firefox-mobile
-npm run test:e2e -- --project=webkit-tablet --headed
+npm run test:e2e -w @cancha/web -- --project=chromium-desktop
+npm run test:e2e -w @cancha/web -- --project=firefox-mobile
+npm run test:e2e -w @cancha/web -- --project=webkit-tablet --headed
 npx playwright show-report
 npm run test:flows
 npm test
