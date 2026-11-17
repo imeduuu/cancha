@@ -1,35 +1,27 @@
 {
-  "name": "simulador-futbol-chileno",
+  "name": "cancha",
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "packages/core",
+    "apps/web",
+    "apps/api"
+  ],
   "scripts": {
-    "dev": "node --use-system-ca node_modules/vite/bin/vite.js",
-    "build": "tsc -b && vite build",
-    "test": "vitest run",
-    "preview": "node --use-system-ca node_modules/vite/bin/vite.js preview",
-    "analyze:bundle": "node scripts/analyze-bundle.mjs",
-    "verify:live": "node --use-system-ca scripts/verify-live-importers.mjs",
-    "test:flows": "vitest run src/presentation/app.test.tsx src/presentation/app-lazy.test.tsx src/presentation/app-journeys.test.tsx src/presentation/app-competitions.test.tsx src/presentation/components/deferred-panel.test.tsx src/presentation/app-checkpoints.test.tsx src/presentation/app-closure.test.tsx src/presentation/app-archive.test.tsx src/presentation/app-draws.test.tsx src/presentation/app-decisions.test.tsx",
-    "dev:public": "node --use-system-ca scripts/dev-public.mjs",
-    "test:e2e": "tsc -p tsconfig.e2e.json && playwright test"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "dev": "npm run dev -w @cancha/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "test:flows": "npm run test:flows -w @cancha/web",
+    "test:e2e": "npm run test:e2e -w @cancha/web",
+    "lint": "eslint .",
+    "preview": "npm run preview -w @cancha/web",
+    "analyze:bundle": "npm run analyze:bundle -w @cancha/web",
+    "verify:live": "npm run verify:live -w @cancha/web",
+    "dev:public": "npm run dev:public -w @cancha/web"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
-    "@testing-library/jest-dom": "^7.0.1",
-    "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.8",
-    "@types/node": "^22.20.5",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-react": "^6.1.2",
-    "jsdom": "^29.1.1",
-    "typescript": "~5.7.2",
-    "vite": "^8.3.4",
-    "vitest": "^5.0.4"
+    "eslint": "^10.14.0",
+    "typescript-eslint": "^8.72.1"
   }
 }

@@ -11,12 +11,15 @@ npm run dev
 
 ## Arquitectura
 
-La aplicación separa las reglas del campeonato de la interfaz y del almacenamiento:
+El repositorio es un monorepo con npm workspaces. Las órdenes `npm` se ejecutan desde la raíz.
 
-- `src/domain/`: equipos, campeonato, criterios de desempate y generación del calendario todos contra todos.
-- `src/application/`: casos de uso y puertos que conectan las reglas con el almacenamiento.
-- `src/infrastructure/`: adaptador de persistencia en `localStorage`, reemplazable por una API.
-- `src/presentation/`: componentes y pantalla de configuración en React.
+| Paquete | Contenido |
+| --- | --- |
+| `packages/core` (`@cancha/core`) | `src/domain/` (equipos, campeonato, criterios de desempate, calendarios y progresiones) y `src/application/` (casos de uso, servicios y puertos que conectan las reglas con el almacenamiento). TypeScript puro: compila sin DOM ni APIs del navegador o de servidor. `src/test-utils/` contiene fixtures de pruebas reutilizables. |
+| `apps/web` (`@cancha/web`) | La aplicación React/Vite: `src/infrastructure/` (persistencia en `localStorage`/IndexedDB, bloqueo entre pestañas e importadores), `src/presentation/` (React), `src/integration/` (pruebas de casos de uso contra los adaptadores reales), `e2e/` (Playwright) y `scripts/`. |
+| `apps/api` (`@cancha/api`) | Pendiente (fase 2). |
+
+La web importa el núcleo como `@cancha/core/<ruta>` (por ejemplo `@cancha/core/domain/entities/tournament`); el paquete se consume como código fuente, sin paso de compilación. `npm run lint` comprueba las reglas de capas: el núcleo no puede importar React, Node ni otros paquetes, ni usar `localStorage`, `window` u otros globales del navegador o de Node, y `domain` no puede depender de `application`.
 
 El calendario acepta cualquier cantidad de equipos y de 1 a 20 ruedas; con una cantidad impar de equipos, cada uno queda libre una fecha por rueda. La numeración de fechas continúa durante todo el campeonato: por ejemplo, en una liga de 20 equipos, la segunda rueda empieza en la fecha 20 y termina en la 38, no vuelve a la fecha 1. El límite de ruedas evita calendarios desproporcionados. Los nombres de torneo y equipo tienen límites de 80 y 40 caracteres, respectivamente. Los criterios de desempate se guardan en el orden elegido.
 
@@ -58,7 +61,7 @@ En la tabla anual argentina se destaca al líder como Campeón de Liga; los pues
 
 Las bases oficiales consultadas para estos puestos están publicadas por la [ANFP para Primera B 2026](https://www.anfp.cl/wp-content/uploads/2026/01/Bases-Primera-B-2026_VF_1.pdf) y [Segunda División 2026](https://www.anfp.cl/wp-content/uploads/2026/03/Bases-Segunda-Division-2026-2.pdf).
 
-Como los sitios oficiales chilenos no habilitan CORS para una aplicación externa, Vite reenvía `/official-source` a Campeonato Chileno y `/third-division-source` a ANFA Tercera División durante `npm run dev` y `npm run preview`. La API de ESPN sí admite consultas desde el navegador. Un despliegue estático debe configurar en su servidor un proxy equivalente para las rutas chilenas.
+Como los sitios oficiales chilenos no habilitan CORS para una aplicación externa, Vite reenvía `/official-source` a Campeonato Chileno y `/third-division-source` a ANFA Tercera División durante `npm run dev` y `npm run preview` (configuración en `apps/web/vite.config.ts`, que también reenvía `/argentina-cup-source` y `/brazil-cup-source`). La API de ESPN sí admite consultas desde el navegador. Un despliegue estático debe configurar en su servidor un proxy equivalente para las rutas chilenas.
 
 ## Reglas de clasificación y verificación
 
@@ -76,10 +79,11 @@ Los campos nuevos de identidad estable de un club (`averageIdentity`) y de regla
 
 ```bash
 npm test
+npm run lint
 npm run build
 ```
 
-`npm test` ejecuta las pruebas unitarias existentes y las pruebas React de interacción real. El archivo `src/presentation/app.test.tsx` usa React Testing Library, `user-event` y el entorno jsdom mediante la anotación de Vitest; no hace falta una orden adicional.
+`npm test` ejecuta las pruebas de todos los workspaces: las unitarias de `packages/core` (entorno Node, sin DOM) y las de `apps/web`, incluidas las pruebas React de interacción real. El archivo `apps/web/src/presentation/app.test.tsx` usa React Testing Library, `user-event` y el entorno jsdom mediante la anotación de Vitest; no hace falta una orden adicional. `npm run build` primero comprueba los tipos de `packages/core` sin la biblioteca DOM y luego compila la web en `apps/web/dist`.
 
 ## Importadores: cobertura, validación y reimportación
 
