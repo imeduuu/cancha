@@ -1,7 +1,6 @@
 import { renderApplication } from "../test-utils/render-application";
 import { installTestWebLocks } from "../test-utils/web-locks";
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { importOfficialTournament } from "@cancha/core/application/use-cases/import-official-tournament";

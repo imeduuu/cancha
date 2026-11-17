@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @cancha/web",
+    "dev:api": "npm run build -w @cancha/core && npm run start:dev -w @cancha/api",
     "build": "npm run build --workspaces --if-present",
     "test": "npm test --workspaces --if-present",
     "test:flows": "npm run test:flows -w @cancha/web",

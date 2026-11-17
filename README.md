@@ -17,7 +17,7 @@ El repositorio es un monorepo con npm workspaces. Las órdenes `npm` se ejecutan
 | --- | --- |
 | `packages/core` (`@cancha/core`) | `src/domain/` (equipos, campeonato, criterios de desempate, calendarios y progresiones) y `src/application/` (casos de uso, servicios y puertos que conectan las reglas con el almacenamiento). TypeScript puro: compila sin DOM ni APIs del navegador o de servidor. `src/test-utils/` contiene fixtures de pruebas reutilizables. |
 | `apps/web` (`@cancha/web`) | La aplicación React/Vite: `src/infrastructure/` (persistencia en `localStorage`/IndexedDB, bloqueo entre pestañas e importadores), `src/presentation/` (React), `src/integration/` (pruebas de casos de uso contra los adaptadores reales), `e2e/` (Playwright) y `scripts/`. |
-| `apps/api` (`@cancha/api`) | Pendiente (fase 2). |
+| `apps/api` (`@cancha/api`) | API NestJS 12 (compilada con el CLI de Nest) sobre `@cancha/core` compilado: configuración validada y `GET /health`. Ver [API](#api). |
 
 La web importa el núcleo como `@cancha/core/<ruta>` (por ejemplo `@cancha/core/domain/entities/tournament`) y lo consume como código fuente, sin paso de compilación: Vite, Vitest y `tsc` de la web usan la condición de exportación `source` (`src/*.ts`). Para Node (`apps/api`), `npm run build -w @cancha/core` compila el núcleo con [tsdown](https://tsdown.dev) a `packages/core/dist` (ESM + `.d.ts`, un archivo por módulo), que es lo que resuelve Node con la condición `default`; el build termina con una prueba de humo que importa todos los módulos desde Node puro. `@cancha/core/test-utils/*` apunta siempre a la fuente (sólo lo usan las pruebas). `npm run lint` comprueba las reglas de capas: el núcleo no puede importar React, Node ni otros paquetes, ni usar `localStorage`, `window` u otros globales del navegador o de Node, y `domain` no puede depender de `application`.
 
@@ -85,7 +85,22 @@ npm run lint
 npm run build
 ```
 
-`npm test` ejecuta las pruebas de todos los workspaces: las unitarias de `packages/core` (entorno Node, sin DOM) y las de `apps/web`, incluidas las pruebas React de interacción real. El archivo `apps/web/src/presentation/app.test.tsx` usa React Testing Library, `user-event` y el entorno jsdom mediante la anotación de Vitest; no hace falta una orden adicional. `npm run build` primero comprueba los tipos de `packages/core` sin la biblioteca DOM, lo compila a `packages/core/dist` para Node y luego compila la web en `apps/web/dist` (la web no usa `packages/core/dist`).
+`npm test` ejecuta las pruebas de todos los workspaces: las unitarias de `packages/core` (entorno Node, sin DOM), las de `apps/api` (chequeo de tipos + Vitest) y las de `apps/web`, incluidas las pruebas React de interacción real. El archivo `apps/web/src/presentation/app.test.tsx` usa React Testing Library, `user-event` y el entorno jsdom mediante la anotación de Vitest; no hace falta una orden adicional. `npm run build` primero comprueba los tipos de `packages/core` sin la biblioteca DOM, lo compila a `packages/core/dist` para Node y luego compila la web en `apps/web/dist` (la web no usa `packages/core/dist`).
+
+## API
+
+`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`). Todavía no expone casos de uso (GraphQL llega en la fase 3 y la autenticación en la 4).
+
+```bash
+cp apps/api/.env.example apps/api/.env   # ajusta MONGODB_URI si hace falta
+npm run dev:api                           # compila core y arranca Nest en modo watch
+curl http://localhost:3000/health
+```
+
+- **Configuración**: `@nestjs/config` valida `NODE_ENV`, `PORT` (3000), `MONGODB_URI` (obligatoria) y `MONGODB_DB` (`cancha`) al arrancar; si algo es inválido la API no inicia y enumera todos los problemas. Ver `apps/api/.env.example`.
+- **`GET /health`**: `200` con `{ status: "ok", app: { status, version, uptimeSeconds }, mongo: { status: "up", latencyMs } }`; `503` con el mismo formato y `mongo: { status: "down", error }` si MongoDB no responde al `ping` en 2 s. La API arranca aunque MongoDB no esté disponible.
+- `dev:api` vuelve a compilar core sólo al iniciar: si cambias `packages/core`, reinícialo. `npm run build` compila core antes que la API.
+- `npm run lint` impide que `apps/api` importe `apps/web` o rutas relativas a `packages/`.
 
 ## Importadores: cobertura, validación y reimportación
 

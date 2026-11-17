@@ -1,7 +1,6 @@
 import { renderApplication } from "../test-utils/render-application";
 import { installTestWebLocks } from "../test-utils/web-locks";
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import { randomUUID, webcrypto } from "node:crypto";
 import { TextEncoder } from "node:util";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

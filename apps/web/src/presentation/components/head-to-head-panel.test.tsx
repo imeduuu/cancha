@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import {afterEach,it,expect,vi} from "vitest";
 import {cleanup,render,screen,fireEvent,within} from "@testing-library/react";
 import {HeadToHeadPanel} from "./head-to-head-panel";

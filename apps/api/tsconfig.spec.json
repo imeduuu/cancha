@@ -1,0 +1,15 @@
+{
+  // Chequeo de tipos de las pruebas. Como Vitest, leen core desde la fuente
+  // (condición "source"), incluida la suite de contrato de @cancha/core/test-utils.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "customConditions": ["source"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src", "vitest.config.ts"],
+  "exclude": []
+}

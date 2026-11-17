@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import { lazy,useState } from "react";
 import { cleanup,render,screen,fireEvent } from "@testing-library/react";
 import { afterEach,describe,it,expect,vi } from "vitest";

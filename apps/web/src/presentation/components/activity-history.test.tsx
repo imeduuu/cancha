@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event";
 import type { Tournament } from "@cancha/core/domain/entities/tournament";

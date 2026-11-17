@@ -58,6 +58,22 @@ export default [
     },
   },
   {
+    // apps/api consume el núcleo como @cancha/core/... y nunca depende de la web.
+    files: ["apps/api/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [
+        {
+          regex: "^@cancha/web(/|$)|(^|/)apps/web(/|$)|^(\\.\\./)+web(/|$)",
+          message: "apps/api no puede importar apps/web: lo compartido va en @cancha/core.",
+        },
+        {
+          regex: "(^|/)packages/",
+          message: "Importa el núcleo como @cancha/core/..., no con rutas relativas entre paquetes.",
+        },
+      ] }],
+    },
+  },
+  {
     files: ["apps/web/**/*.ts", "apps/web/**/*.tsx", "apps/web/**/*.mjs"],
     rules: {
       "no-restricted-imports": ["error", { patterns: [

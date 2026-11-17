@@ -1,6 +1,5 @@
 import type {ActivityEvent} from "@cancha/core/domain/entities/activity-event";
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import {it,expect,afterEach,vi} from "vitest";
 import {render,screen,fireEvent,within,cleanup} from "@testing-library/react";
 import {ClubPerformancePanel} from "./club-performance-panel";

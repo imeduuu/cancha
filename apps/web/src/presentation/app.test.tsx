@@ -1,7 +1,6 @@
 import { renderApplication } from "../test-utils/render-application";
 import { installTestWebLocks } from "../test-utils/web-locks";
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {

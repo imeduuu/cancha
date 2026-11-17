@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import {afterEach,it,expect} from "vitest";
 import {cleanup,fireEvent,render,screen,within} from "@testing-library/react";
 import {DrawConfigurationEditor} from "./draw-configuration-editor";

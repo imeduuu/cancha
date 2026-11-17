@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import {afterEach,it,expect,vi} from "vitest";
 import {act,cleanup,render,screen,fireEvent,within} from "@testing-library/react";
 import {HistoricalArchive} from "./historical-archive";

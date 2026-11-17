@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import "@testing-library/jest-dom/vitest";
 import {it,expect,vi,afterEach,beforeAll} from "vitest";
 import {render,screen,fireEvent,cleanup,within} from "@testing-library/react";
 import {SeasonPlanningCenter} from "./season-planning-center";
