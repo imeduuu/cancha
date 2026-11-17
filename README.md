@@ -21,6 +21,8 @@ El repositorio es un monorepo con npm workspaces. Las órdenes `npm` se ejecutan
 
 La web importa el núcleo como `@cancha/core/<ruta>` (por ejemplo `@cancha/core/domain/entities/tournament`); el paquete se consume como código fuente, sin paso de compilación. `npm run lint` comprueba las reglas de capas: el núcleo no puede importar React, Node ni otros paquetes, ni usar `localStorage`, `window` u otros globales del navegador o de Node, y `domain` no puede depender de `application`.
 
+Consulta [la arquitectura en detalle](docs/ARCHITECTURE.md): capas, regla de dependencias, puertos de persistencia y formato JSON v7 de los respaldos.
+
 El calendario acepta cualquier cantidad de equipos y de 1 a 20 ruedas; con una cantidad impar de equipos, cada uno queda libre una fecha por rueda. La numeración de fechas continúa durante todo el campeonato: por ejemplo, en una liga de 20 equipos, la segunda rueda empieza en la fecha 20 y termina en la 38, no vuelve a la fecha 1. El límite de ruedas evita calendarios desproporcionados. Los nombres de torneo y equipo tienen límites de 80 y 40 caracteres, respectivamente. Los criterios de desempate se guardan en el orden elegido.
 
 La configuración valida nombres obligatorios y duplicados (sin distinguir mayúsculas ni espacios repetidos), ruedas enteras, criterios de desempate únicos y formatos inválidos. Las reglas se verifican tanto en la interfaz como en el caso de uso para que no puedan omitirse al crear el campeonato.
