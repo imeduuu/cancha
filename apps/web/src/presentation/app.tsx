@@ -31,14 +31,13 @@ import {
   tournamentsInUniverse,
   renameSportsUniverse,
 } from "@cancha/core/application/services/sports-universes";
-import type { TournamentRepository } from "@cancha/core/application/ports/tournament-repository";
 import type { MatchResult } from "@cancha/core/domain/entities/tournament";
 import type { OperationalMatchStatus } from "@cancha/core/domain/entities/tournament";
 import { calculateStandings, getUnresolvedStandingsTieDetails } from "@cancha/core/domain/services/standings";
 import { calculateInternationalQualifications } from "@cancha/core/domain/services/international-qualification";
 import { calculateRelegationAverages } from "@cancha/core/domain/services/relegation-averages";
 import { isValidFixtureResult } from "@cancha/core/domain/services/match-result-validation";
-import { advanceTournamentProgress } from "@cancha/core/application/use-cases/advance-tournament-progress";
+import { persistTournamentProgress } from "@cancha/core/application/use-cases/persist-tournament-progress";
 import { simulateFixtures, type SimulationMode } from "@cancha/core/application/use-cases/simulate-fixtures";
 import { simulateArgentinaHalf, type ArgentinaTournamentHalf } from "@cancha/core/application/use-cases/simulate-argentina-half";
 import { simulateChampionship } from "@cancha/core/application/use-cases/simulate-championship";
@@ -49,7 +48,7 @@ import { updateFixtureSchedule } from "@cancha/core/application/use-cases/update
 import { updateFixtureOperationalState } from "@cancha/core/application/use-cases/update-fixture-operational-state";
 import type { CalendarProgrammingProposal } from "@cancha/core/application/use-cases/program-season-calendar";
 import { updateTournamentRegulations, updateTournamentRoster } from "@cancha/core/application/use-cases/update-tournament-records";
-import { createActivityEvent, saveWithActivity, recordRejectedImport } from "@cancha/core/application/services/activity-log";
+import { recordRejectedImport } from "@cancha/core/application/services/activity-log";
 import { getOperationalStatusLabel } from "@cancha/core/domain/services/match-operational-status";
 import type { FixtureDetailsUpdate } from "@cancha/core/domain/services/match-details";
 import { createTournamentSeason } from "@cancha/core/application/use-cases/create-tournament-season";
@@ -89,24 +88,6 @@ function getInitialTournamentLeg(tournament: Tournament): number {
   );
   const lastMatchday = tournament.matchdays[tournament.matchdays.length - 1];
   return pendingMatchday?.leg ?? lastMatchday?.leg ?? 1;
-}
-
-function persistTournamentProgress(
-  tournament: Tournament,
-  repository: TournamentRepository,
-): Tournament {
-  const advancedTournament = advanceTournamentProgress(tournament, repository);
-  if (advancedTournament !== tournament) {
-    const invalidated = advancedTournament.officialResolutions?.filter(item => item.invalidation
-      && !tournament.officialResolutions?.find(old => old.id === item.id)?.invalidation);
-    if (invalidated?.length) saveWithActivity(repository, advancedTournament, createActivityEvent(tournament, {
-      action: "official-resolution-invalidated", entityType: "tournament",
-      summary: "Se revisaron las dependencias oficiales y se invalidaron resoluciones que ya no corresponden.",
-      before: tournament.officialResolutions, after: advancedTournament.officialResolutions,
-    }));
-    else repository.save(advancedTournament);
-  }
-  return advancedTournament;
 }
 
 import { secondDivisionKind } from "@cancha/core/domain/services/second-division-rules";

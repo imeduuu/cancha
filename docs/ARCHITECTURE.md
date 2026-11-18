@@ -10,7 +10,7 @@ El repositorio es un monorepo con npm workspaces. Todas las órdenes `npm` se ej
 | --- | --- | --- |
 | `@cancha/core` | `packages/core` | El modelo deportivo (`src/domain`), los casos de uso y puertos (`src/application`) y fixtures reutilizables para pruebas (`src/test-utils`). Es TypeScript puro, sin DOM ni APIs del navegador o del servidor. |
 | `@cancha/web` | `apps/web` | La aplicación React/Vite: adaptadores de infraestructura (`src/infrastructure`), interfaz (`src/presentation`), pruebas de casos de uso contra los adaptadores reales (`src/integration`), utilidades de prueba y muestras de los importadores (`src/test-utils`), pruebas de navegador (`e2e/`), scripts de desarrollo (`scripts/`) y la configuración de Vite y Playwright. |
-| `@cancha/api` | `apps/api` | API NestJS 12 sobre `@cancha/core` compilado: configuración validada, `GET /health`, persistencia en MongoDB (`MongoTournamentRepository`) y una unidad de trabajo (`LibraryUnitOfWork`) que ejecuta los casos de uso de core sin cambios sobre la biblioteca guardada en Mongo. |
+| `@cancha/api` | `apps/api` | API NestJS 12 sobre `@cancha/core` compilado: configuración validada, `GET /health`, persistencia en MongoDB (`MongoTournamentRepository`), una unidad de trabajo (`LibraryUnitOfWork`) que ejecuta los casos de uso de core sin cambios sobre la biblioteca guardada en Mongo, y una API GraphQL (`/graphql`). |
 
 Cómo se relacionan los paquetes:
 
@@ -88,6 +88,25 @@ Consecuencias:
 - **Conflicto sólo de biblioteca**: otro cliente escribió otro torneo. Se reintenta hasta 3 veces sobre datos frescos, comprobando de nuevo la versión esperada. Es seguro porque el caso de uso se vuelve a ejecutar completo.
 - **Costo**: cada petición carga la biblioteca completa, en memoria y latencia O(biblioteca). Es aceptable con bibliotecas de decenas de torneos, y con autenticación (fase 4) cada biblioteca será de un usuario.
 - **Sólo síncronos**: la unidad de trabajo admite únicamente casos de uso síncronos. Los asíncronos, como la importación oficial o la generación de grupos, quedan pendientes.
+
+### API GraphQL
+
+`apps/api/src/graphql/` expone la biblioteca en `/graphql` (Apollo, esquema *code-first*).
+
+- **Resolvers delgados** (`library.resolver.ts`): cada operación es un caso de uso de core ejecutado con `LibraryUnitOfWork`, más la traducción a tipos GraphQL (`tournament-mapper.ts`). Los cálculos (tabla, partidos jugados, estado) los hace core. La orquestación que antes vivía en la web pasó a core para que el servidor no la duplique:
+  - `persistTournamentProgress`;
+  - la simulación por jornada o rueda (`simulate-tournament-selection.ts`).
+- **Tipos y JSON**:
+  - Tienen tipos GraphQL lo que un cliente liviano muestra o filtra sin conocer core: el resumen de la biblioteca, el calendario, la tabla y la actividad.
+  - El documento completo del torneo va como escalar `JSON`. Tiene decenas de estructuras opcionales y versionadas (reglamentos, planes, resoluciones…), y tiparlas en GraphQL duplicaría el modelo y divergiría con cada extensión de v7. El cliente ya tiene los tipos de core.
+- **Versiones**: las consultas devuelven `version` por torneo y `libraryVersion`. Las mutaciones sobre un torneo reciben `expectedVersion`, que la unidad de trabajo compara antes de ejecutar.
+- **Errores** (`graphql-errors.ts`, en `formatError`):
+  - `CONFLICT`, con la versión vigente;
+  - `NOT_FOUND`;
+  - `VALIDATION`, para los `Error` de core, con su mensaje en español;
+  - `INTERNAL_SERVER_ERROR` genérico para todo lo demás.
+
+  Los errores propios de GraphQL conservan su código. Fuera de desarrollo no hay *stack traces*, GraphiQL ni introspección.
 
 ### Suite de contrato
 

@@ -89,7 +89,7 @@ npm run build
 
 ## API
 
-`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`) y persiste en MongoDB. Ejecuta los casos de uso de core sobre la biblioteca guardada mediante una unidad de trabajo; todavía no los expone por HTTP (GraphQL llega en la fase 3B y la autenticación en la 4).
+`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`) y persiste en MongoDB. Expone los casos de uso de core por GraphQL en `/graphql`, ejecutados mediante una unidad de trabajo. La autenticación llega en la fase 4.
 
 ```bash
 npm run db:up                             # MongoDB 8.0 en Docker como replica set de un nodo (espera al healthcheck)
@@ -100,6 +100,22 @@ curl http://localhost:3000/health
 
 - **Configuración**: `@nestjs/config` valida `NODE_ENV`, `PORT` (3000), `MONGODB_URI` (obligatoria) y `MONGODB_DB` (`cancha`) al arrancar; si algo es inválido la API no inicia y enumera todos los problemas. Ver `apps/api/.env.example`.
 - **`GET /health`**: `200` con `{ status: "ok", app: { status, version, uptimeSeconds }, mongo: { status: "up", latencyMs } }`; `503` con el mismo formato y `mongo: { status: "down", error }` si MongoDB no responde al `ping` en 2 s. La API arranca aunque MongoDB no esté disponible.
+- **GraphQL (`POST /graphql`)**: esquema *code-first* con `@nestjs/graphql` y Apollo.
+  - GraphiQL (`GET /graphql` en el navegador), introspección y *stack traces* sólo con `NODE_ENV=development`.
+  - Consultas: `library` (versión de la biblioteca y torneo activo), `tournaments(includeArchived)`, `tournament(id)`, `activeTournament` y `activity(tournamentId, limit)`.
+  - Mutaciones: `createTournament`, `updateMatchResult`, `simulateMatchday`, `simulateLeg`, `simulateChampionship`, `renameTournament`, `duplicateTournament`, `setTournamentArchived`, `deleteTournament` y `setActiveTournament`.
+  - **Tipos**: el listado, el calendario, la tabla y la actividad tienen tipos GraphQL. El documento completo del torneo va en `Tournament.document` como escalar `JSON`, con el tipo `Tournament` de `@cancha/core`.
+  - **Versiones**: cada torneo trae `version`. Las mutaciones sobre un torneo exigen `expectedVersion`; si otro cliente lo cambió, responden `CONFLICT`.
+  - **Errores (`extensions.code`)**:
+    - `VALIDATION`: regla de dominio, con el mensaje en español;
+    - `NOT_FOUND`;
+    - `CONFLICT`: incluye `tournamentId`, `expectedVersion` y `currentVersion`;
+    - `INTERNAL_SERVER_ERROR`: mensaje genérico; el detalle queda sólo en el log.
+
+  ```graphql
+  mutation { createTournament(input: { name: "Liga", teamNames: ["A", "B", "C", "D"], legs: 2, tieBreakers: ["goalDifference"] }) { id version } }
+  mutation { simulateChampionship(tournamentId: "<id>", expectedVersion: 1) { simulatedCount tournament { version standings { position teamName points } } } }
+  ```
 - `dev:api` vuelve a compilar core sólo al iniciar: si cambias `packages/core`, reinícialo. `npm run build` compila core antes que la API.
 - `npm run lint` impide que `apps/api` importe `apps/web` o rutas relativas a `packages/`.
 

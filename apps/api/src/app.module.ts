@@ -4,6 +4,7 @@ import { validateEnvironment } from "./config/env.validation.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { TournamentPersistenceModule } from "./infrastructure/persistence/tournament-persistence.module.js";
+import { ApiGraphqlModule } from "./graphql/graphql.module.js";
 import { LibraryModule } from "./library/library.module.js";
 
 @Module({
@@ -19,6 +20,7 @@ import { LibraryModule } from "./library/library.module.js";
     HealthModule,
     TournamentPersistenceModule,
     LibraryModule,
+    ApiGraphqlModule,
   ],
 })
 export class AppModule {}
