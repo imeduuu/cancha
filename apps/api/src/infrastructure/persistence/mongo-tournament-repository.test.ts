@@ -8,8 +8,11 @@ import { replicaSetStartupTimeoutMs, startTestReplicaSet, type TestReplicaSet } 
 import {
   LibraryVersionConflictError,
   MongoTournamentRepository,
+  scopedId,
   TournamentVersionConflictError,
   tournamentCollectionNames,
+  tournamentOrder,
+  userScope,
   type TournamentDocument,
 } from "./mongo-tournament-repository.js";
 
@@ -23,22 +26,33 @@ beforeEach(async () => {
   await MongoTournamentRepository.ensureIndexes(database);
 });
 
-const open = () => new MongoTournamentRepository(replicaSet.client, database);
+const userA = "user-a";
+const userB = "user-b";
+const open = (userId = userA) => new MongoTournamentRepository(replicaSet.client, database, userId);
 const league = (id: string, name = `Liga ${id}`): Tournament => ({ ...closureLeague(id), name });
 const event = (tournament: Tournament, summary = "Se actualizó el reglamento."): ActivityEvent =>
   createActivityEvent(tournament, { action: "regulations-updated", entityType: "tournament", summary });
-const storedTournament = (id: string) =>
-  database.collection<TournamentDocument>(tournamentCollectionNames.tournaments).findOne({ _id: id });
+const storedTournament = (id: string, userId = userA) =>
+  database.collection<TournamentDocument>(tournamentCollectionNames.tournaments).findOne({ _id: scopedId(userId, id) });
+
+/** Nombres de todas las etapas del plan ganador de un explain (anidadas en inputStage/inputStages/queryPlan). */
+function planStages(plan: unknown): string[] {
+  if (!plan || typeof plan !== "object") return [];
+  const node = plan as Record<string, unknown>;
+  const own = typeof node.stage === "string" ? [node.stage] : [];
+  return [...own, ...Object.values(node).flatMap(value => Array.isArray(value) ? value.flatMap(planStages) : planStages(value))];
+}
 
 describe("MongoTournamentRepository (específico de MongoDB)", () => {
-  it("guarda un documento por torneo con _id = id, versión y sin id duplicado", async () => {
+  it("guarda un documento por torneo con _id = { userId, id }, versión y sin id duplicado", async () => {
     const repository = open();
     const tournament = league("a");
     await repository.save(tournament);
     await repository.save({ ...tournament, name: "Liga A renombrada" });
 
     const document = await storedTournament("a");
-    expect(document).toMatchObject({ _id: "a", _version: 2, name: "Liga A renombrada" });
+    expect(document).toMatchObject({ _id: { userId: userA, id: "a" }, _version: 2, name: "Liga A renombrada" });
+    expect(Object.keys(document!._id)).toEqual(["userId", "id"]);
     expect(document).not.toHaveProperty("id");
     expect(document?._savedAt).toBeInstanceOf(Date);
     expect(repository.versionOf("a")).toBe(2);
@@ -135,7 +149,7 @@ describe("MongoTournamentRepository (específico de MongoDB)", () => {
   it("omite con advertencia los documentos dañados sin afectar a los válidos", async () => {
     await open().save(league("a"));
     await database.collection(tournamentCollectionNames.tournaments)
-      .insertOne({ _id: "roto", name: "Roto", _version: 1, _saveSeq: 0, _savedAt: new Date() } as never);
+      .insertOne({ _id: scopedId(userA, "roto"), name: "Roto", _version: 1, _saveSeq: 0, _savedAt: new Date() } as never);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect((await open().findAll()).map(({ id }) => id)).toEqual(["a"]);
@@ -143,16 +157,37 @@ describe("MongoTournamentRepository (específico de MongoDB)", () => {
     warn.mockRestore();
   });
 
-  it("crea los índices necesarios", async () => {
+  it("crea los índices por usuario", async () => {
     const activityIndexes = await database.collection(tournamentCollectionNames.activity).indexes();
     expect(activityIndexes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "seq_unique", key: { _seq: 1 }, unique: true }),
-      expect.objectContaining({ name: "tournament_seq", key: { tournamentId: 1, _seq: 1 } }),
+      expect.objectContaining({ name: "user_seq_unique", key: { "_id.userId": 1, _seq: 1 }, unique: true }),
+      expect.objectContaining({ name: "user_tournament_seq", key: { "_id.userId": 1, tournamentId: 1, _seq: 1 } }),
     ]));
     const tournamentIndexes = await database.collection(tournamentCollectionNames.tournaments).indexes();
     expect(tournamentIndexes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "saveSeq_desc", key: { _saveSeq: -1 } }),
+      expect.objectContaining({ name: "user_saveSeq", key: { "_id.userId": 1, _saveSeq: -1, "_id.id": 1 } }),
     ]));
+  });
+
+  it("findAll y el historial de un usuario usan un índice (IXSCAN, sin COLLSCAN ni SORT en memoria)", async () => {
+    for (const userId of [userA, userB, "user-c"]) {
+      const repository = open(userId);
+      for (const id of ["a", "b", "c"]) await repository.saveWithActivity(league(id), event(league(id)));
+    }
+    const tournaments = await database.collection(tournamentCollectionNames.tournaments)
+      .find(userScope(userA)).sort(tournamentOrder).explain("executionStats");
+    const tournamentStages = planStages(tournaments.queryPlanner);
+    expect(tournamentStages).toContain("IXSCAN");
+    expect(tournamentStages).not.toContain("COLLSCAN");
+    expect(tournamentStages).not.toContain("SORT");
+    expect(tournaments.executionStats).toMatchObject({ nReturned: 3, totalDocsExamined: 3 });
+
+    const activity = await database.collection(tournamentCollectionNames.activity)
+      .find(userScope(userA)).sort({ _seq: 1 }).explain("executionStats");
+    const activityStages = planStages(activity.queryPlanner);
+    expect(activityStages).toContain("IXSCAN");
+    expect(activityStages).not.toContain("COLLSCAN");
+    expect(activity.executionStats).toMatchObject({ nReturned: 3, totalDocsExamined: 3 });
   });
 
   it("cada escritura suelta incrementa la versión de la biblioteca", async () => {
@@ -249,6 +284,81 @@ describe("MongoTournamentRepository (específico de MongoDB)", () => {
 
       expect((await open().findAll()).map(({ id, name }) => [id, name])).toEqual([["c", "Liga c"], ["b", "B restaurada"]]);
       expect((await open().findActivity()).map(({ summary }) => summary)).toEqual(["Nuevo."]);
+    });
+  });
+
+  describe("aislamiento por usuario", () => {
+    it("dos usuarios pueden tener el mismo id de torneo y de evento sin verse ni chocar", async () => {
+      const shared = league("compartido", "Liga Compartida");
+      const sharedEvent = event(shared, "Mismo evento.");
+      await open(userA).saveWithActivity(shared, sharedEvent);
+      await open(userB).saveWithActivity({ ...shared, name: "Liga Compartida" }, sharedEvent);
+      await open(userB).save(league("solo-b"));
+
+      expect((await open(userA).findAll()).map(({ id }) => id)).toEqual(["compartido"]);
+      expect((await open(userB).findAll()).map(({ id }) => id)).toEqual(["solo-b", "compartido"]);
+      // El evento con el mismo id no se descarta como duplicado en la biblioteca de B.
+      expect((await open(userA).findActivity()).map(({ id }) => id)).toEqual([sharedEvent.id]);
+      expect((await open(userB).findActivity()).map(({ id }) => id)).toEqual([sharedEvent.id]);
+      expect(await storedTournament("compartido", userA)).toMatchObject({ _version: 1 });
+      expect(await storedTournament("compartido", userB)).toMatchObject({ _version: 1 });
+    });
+
+    it("no puede eliminar, guardar a ciegas ni activar lo de otro usuario como si existiera", async () => {
+      await open(userA).save(league("a"));
+      await expect(open(userB).deleteById("a")).rejects.toThrow("No se encontró el campeonato que quieres eliminar.");
+      // Para B, "a" es un torneo nuevo de su propia biblioteca: no toca el de A.
+      await open(userB).save({ ...league("a"), name: "De B" });
+      expect(await storedTournament("a", userA)).toMatchObject({ name: "Liga a", _version: 1 });
+      await open(userB).setActiveTournamentId("a");
+      expect(await open(userA).getActiveTournamentId()).toBeNull();
+    });
+
+    it("versión de biblioteca, contadores y torneo activo son por usuario", async () => {
+      await open(userA).save(league("a"));
+      await open(userA).setActiveTournamentId("a");
+      expect(await open(userA).libraryVersion()).toBe(2);
+      expect(await open(userB).libraryVersion()).toBe(0);
+
+      const stale = open(userB);
+      const snapshot = await stale.loadLibrary();
+      await open(userA).save(league("a2"));
+      await open(userA).recordActivity(event(league("a"), "Escritura de A."));
+      // Las escrituras de A no invalidan la lectura de B.
+      const result = await stale.commit({ saved: [league("b")], deleted: [], events: [event(league("b"))] }, snapshot);
+      expect(result.libraryVersion).toBe(1);
+      expect(await open(userB).getActiveTournamentId()).toBeNull();
+    });
+
+    it("replaceLibrary y replaceActivity sólo borran la biblioteca propia", async () => {
+      await open(userA).saveWithActivity(league("a"), event(league("a"), "De A."));
+      await open(userB).saveWithActivity(league("b"), event(league("b"), "De B."));
+      const repository = open(userB);
+      const snapshot = await repository.loadLibrary();
+
+      await repository.commit({
+        saved: [league("nuevo")], deleted: [], events: [event(league("nuevo"), "Restaurado.")],
+        replaceLibrary: true, replaceActivity: true,
+      }, snapshot);
+
+      expect((await open(userB).findAll()).map(({ id }) => id)).toEqual(["nuevo"]);
+      expect((await open(userA).findAll()).map(({ id }) => id)).toEqual(["a"]);
+      expect((await open(userA).findActivity()).map(({ summary }) => summary)).toEqual(["De A."]);
+    });
+
+    it("los documentos de la biblioteca global anterior (_id string) no los ve ningún usuario y se cuentan", async () => {
+      await database.collection(tournamentCollectionNames.tournaments)
+        .insertOne({ _id: "legado", ...league("legado"), _version: 1, _saveSeq: 1, _savedAt: new Date() } as never);
+      await database.collection(tournamentCollectionNames.libraryState).insertOne({ _id: "library", _version: 9 } as never);
+      await open(userA).save(league("a"));
+
+      expect((await open(userA).findAll()).map(({ id }) => id)).toEqual(["a"]);
+      expect(await open(userA).libraryVersion()).toBe(1);
+      expect(await MongoTournamentRepository.countLegacyDocuments(database)).toBe(2);
+    });
+
+    it("exige un userId", () => {
+      expect(() => open("")).toThrow(/exige el id del usuario/);
     });
   });
 

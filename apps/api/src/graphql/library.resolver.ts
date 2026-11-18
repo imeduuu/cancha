@@ -16,6 +16,8 @@ import {
 import { updateMatchResult } from "@cancha/core/application/use-cases/update-match-result";
 import { Inject } from "@nestjs/common";
 import { Args, ID, Int, Mutation, Query, Resolver } from "@nestjs/graphql";
+import { CurrentUser } from "../auth/auth.guard.js";
+import type { SessionUser } from "../auth/auth.service.js";
 import { LibraryUnitOfWork, NotFoundError, type UnitOfWorkResult } from "../library/library-unit-of-work.js";
 import {
   ActivityEventModel,
@@ -55,6 +57,8 @@ function versionOf(run: UnitOfWorkResult<unknown>, id: string): number {
 /**
  * Resolvers delgados: cada operación es un caso de uso de core ejecutado por la
  * unidad de trabajo, más la traducción a tipos GraphQL. Nada de lógica deportiva.
+ * Todas operan sobre la biblioteca del usuario de la sesión (`@CurrentUser()`):
+ * el esquema no tiene ningún argumento userId.
  */
 @Resolver()
 export class LibraryResolver {
@@ -63,16 +67,17 @@ export class LibraryResolver {
   // ---------- Consultas ----------
 
   @Query(() => LibraryInfoModel, { description: "Versión de la biblioteca y torneo activo." })
-  async library(): Promise<LibraryInfoModel> {
-    const run = await this.unitOfWork.read(repository => repository.getActiveTournamentId());
+  async library(@CurrentUser() user: SessionUser): Promise<LibraryInfoModel> {
+    const run = await this.unitOfWork.read(user.id, repository => repository.getActiveTournamentId());
     return { libraryVersion: run.libraryVersion, activeTournamentId: run.result };
   }
 
   @Query(() => [TournamentSummaryModel], { description: "Listado resumido, lo último guardado primero." })
   async tournaments(
+    @CurrentUser() user: SessionUser,
     @Args("includeArchived", { type: () => Boolean, defaultValue: true }) includeArchived: boolean,
   ): Promise<TournamentSummaryModel[]> {
-    const run = await this.unitOfWork.read(repository => ({
+    const run = await this.unitOfWork.read(user.id, repository => ({
       tournaments: repository.findAll().filter(tournament => includeArchived || !tournament.archived),
       activity: repository.findActivity?.() ?? [],
     }));
@@ -81,14 +86,14 @@ export class LibraryResolver {
   }
 
   @Query(() => TournamentModel)
-  async tournament(@Args("id", { type: () => ID }) id: string): Promise<TournamentModel> {
-    const run = await this.unitOfWork.read(repository => ({ value: findTournament(repository, id), repository }));
+  async tournament(@CurrentUser() user: SessionUser, @Args("id", { type: () => ID }) id: string): Promise<TournamentModel> {
+    const run = await this.unitOfWork.read(user.id, repository => ({ value: findTournament(repository, id), repository }));
     return this.toModel(run, run.result.value);
   }
 
   @Query(() => TournamentModel, { nullable: true, description: "El torneo activo, o null si no hay uno vigente." })
-  async activeTournament(): Promise<TournamentModel | null> {
-    const run = await this.unitOfWork.read(repository => {
+  async activeTournament(@CurrentUser() user: SessionUser): Promise<TournamentModel | null> {
+    const run = await this.unitOfWork.read(user.id, repository => {
       const id = repository.getActiveTournamentId();
       return { value: repository.findAll().find(tournament => tournament.id === id) ?? null, repository };
     });
@@ -97,10 +102,11 @@ export class LibraryResolver {
 
   @Query(() => [ActivityEventModel], { description: "Historial de actividad, lo más reciente primero." })
   async activity(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID, nullable: true }) tournamentId?: string,
     @Args("limit", { type: () => Int, nullable: true }) limit?: number,
   ): Promise<ActivityEventModel[]> {
-    const run = await this.unitOfWork.read(repository => repository.findActivity?.() ?? []);
+    const run = await this.unitOfWork.read(user.id, repository => repository.findActivity?.() ?? []);
     const events = run.result.filter(event => !tournamentId || event.tournamentId === tournamentId).reverse();
     return (limit === undefined || limit === null ? events : events.slice(0, Math.max(0, limit))).map(toActivityEventModel);
   }
@@ -109,9 +115,10 @@ export class LibraryResolver {
 
   @Mutation(() => TournamentModel)
   async createTournament(
+    @CurrentUser() user: SessionUser,
     @Args("input", { type: () => CreateTournamentInput }) input: CreateTournamentInput,
   ): Promise<TournamentModel> {
-    return this.mutate(repository => createTournament({
+    return this.mutate(user.id, repository => createTournament({
       name: input.name,
       teamNames: input.teamNames,
       legs: input.legs,
@@ -122,13 +129,14 @@ export class LibraryResolver {
 
   @Mutation(() => TournamentModel)
   async updateMatchResult(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
     @Args("fixtureId", { type: () => ID }) fixtureId: string,
     @Args("result", { type: () => MatchResultInput }) result: MatchResultInput,
     @Args("knockoutResolution", { type: () => String, nullable: true }) knockoutResolution?: string,
   ): Promise<TournamentModel> {
-    return this.mutate(repository => updateMatchResult(
+    return this.mutate(user.id, repository => updateMatchResult(
       findTournament(repository, tournamentId),
       fixtureId,
       {
@@ -144,72 +152,79 @@ export class LibraryResolver {
 
   @Mutation(() => SimulationResultModel, { description: "Simula una jornada (por su `index` en matchdays)." })
   async simulateMatchday(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
     @Args("matchdayIndex", { type: () => Int }) matchdayIndex: number,
     @Args("mode", { type: () => SimulationModeInput, defaultValue: SimulationModeInput.PENDING_ONLY }) mode: SimulationModeInput,
   ): Promise<SimulationResultModel> {
-    return this.simulate(tournamentId, expectedVersion, (tournament, repository) =>
+    return this.simulate(user.id, tournamentId, expectedVersion, (tournament, repository) =>
       simulateTournamentMatchday(tournament, matchdayIndex, mode, repository));
   }
 
   @Mutation(() => SimulationResultModel, { description: "Simula todos los partidos de una rueda." })
   async simulateLeg(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
     @Args("leg", { type: () => Int }) leg: number,
     @Args("mode", { type: () => SimulationModeInput, defaultValue: SimulationModeInput.PENDING_ONLY }) mode: SimulationModeInput,
   ): Promise<SimulationResultModel> {
-    return this.simulate(tournamentId, expectedVersion, (tournament, repository) =>
+    return this.simulate(user.id, tournamentId, expectedVersion, (tournament, repository) =>
       simulateTournamentLeg(tournament, leg, mode, repository));
   }
 
   @Mutation(() => SimulationResultModel, { description: "Simula el campeonato completo, con sus etapas generadas." })
   async simulateChampionship(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
     @Args("mode", { type: () => SimulationModeInput, defaultValue: SimulationModeInput.PENDING_ONLY }) mode: SimulationModeInput,
   ): Promise<SimulationResultModel> {
-    return this.simulate(tournamentId, expectedVersion, (tournament, repository) =>
+    return this.simulate(user.id, tournamentId, expectedVersion, (tournament, repository) =>
       simulateChampionship(tournament, mode, repository));
   }
 
   @Mutation(() => TournamentModel)
   async renameTournament(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
     @Args("name", { type: () => String }) name: string,
   ): Promise<TournamentModel> {
-    return this.mutate(repository => renameTournament(findTournament(repository, tournamentId), name, repository),
+    return this.mutate(user.id, repository => renameTournament(findTournament(repository, tournamentId), name, repository),
       { [tournamentId]: expectedVersion });
   }
 
   @Mutation(() => TournamentModel, { description: "Crea una copia independiente; devuelve el torneo nuevo." })
   async duplicateTournament(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
     @Args("mode", { type: () => DuplicateModeInput }) mode: DuplicateModeInput,
   ): Promise<TournamentModel> {
-    return this.mutate(repository => duplicateTournament(findTournament(repository, tournamentId), mode, repository),
+    return this.mutate(user.id, repository => duplicateTournament(findTournament(repository, tournamentId), mode, repository),
       { [tournamentId]: expectedVersion });
   }
 
   @Mutation(() => TournamentModel)
   async setTournamentArchived(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
     @Args("archived", { type: () => Boolean }) archived: boolean,
   ): Promise<TournamentModel> {
-    return this.mutate(repository => setTournamentArchived(findTournament(repository, tournamentId), archived, repository),
+    return this.mutate(user.id, repository => setTournamentArchived(findTournament(repository, tournamentId), archived, repository),
       { [tournamentId]: expectedVersion });
   }
 
   @Mutation(() => Boolean, { description: "Elimina el torneo y registra tournament-deleted." })
   async deleteTournament(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID }) tournamentId: string,
     @Args("expectedVersion", { type: () => Int }) expectedVersion: number,
   ): Promise<boolean> {
-    await this.unitOfWork.run(repository => repository.deleteById(tournamentId), {
+    await this.unitOfWork.run(user.id, repository => repository.deleteById(tournamentId), {
       expectedVersions: { [tournamentId]: expectedVersion },
     });
     return true;
@@ -217,10 +232,11 @@ export class LibraryResolver {
 
   @Mutation(() => LibraryInfoModel, { description: "Cambia el torneo activo (null lo deja sin torneo activo)." })
   async setActiveTournament(
+    @CurrentUser() user: SessionUser,
     @Args("tournamentId", { type: () => ID, nullable: true }) tournamentId: string | null,
   ): Promise<LibraryInfoModel> {
     const id = tournamentId ?? null;
-    const run = await this.unitOfWork.run(repository => {
+    const run = await this.unitOfWork.run(user.id, repository => {
       if (id !== null) findTournament(repository, id);
       repository.setActiveTournamentId(id);
     });
@@ -230,24 +246,25 @@ export class LibraryResolver {
   // ---------- JSON v7: importar, restaurar y exportar ----------
 
   @Query(() => JsonScalar, { description: "Archivo `cancha-tournament` v7 de un torneo." })
-  async exportTournament(@Args("id", { type: () => ID }) id: string): Promise<unknown> {
-    const run = await this.unitOfWork.read(repository => createTournamentArchive(findTournament(repository, id)));
+  async exportTournament(@CurrentUser() user: SessionUser, @Args("id", { type: () => ID }) id: string): Promise<unknown> {
+    const run = await this.unitOfWork.read(user.id, repository => createTournamentArchive(findTournament(repository, id)));
     return run.result;
   }
 
   @Query(() => JsonScalar, { description: "Respaldo `cancha-backup` v7 de la biblioteca completa, con su historial." })
-  async exportLibrary(): Promise<unknown> {
-    const run = await this.unitOfWork.read(repository =>
+  async exportLibrary(@CurrentUser() user: SessionUser): Promise<unknown> {
+    const run = await this.unitOfWork.read(user.id, repository =>
       createTournamentBackup(repository.findAll(), undefined, repository.findActivity?.() ?? []));
     return run.result;
   }
 
   @Mutation(() => TournamentModel, { description: "Importa un archivo `cancha-tournament` (texto JSON, v0 a v7)." })
   async importTournament(
+    @CurrentUser() user: SessionUser,
     @Args("archive", { type: () => String }) archive: string,
     @Args("decision", { type: () => ImportDecisionInput }) decision: ImportDecisionInput,
   ): Promise<TournamentModel> {
-    return this.mutate(repository => {
+    return this.mutate(user.id, repository => {
       const imported = importTournamentArchive(parseTournamentArchive(archive), decision, repository);
       if (!imported) throw new Error("No se importó el torneo.");
       return imported;
@@ -258,29 +275,33 @@ export class LibraryResolver {
     description: "Restaura un respaldo `cancha-backup` (texto JSON, v0 a v7) sin importación parcial.",
   })
   async restoreBackup(
+    @CurrentUser() user: SessionUser,
     @Args("backup", { type: () => String }) backup: string,
     @Args("mode", { type: () => RestoreModeInput }) mode: RestoreModeInput,
   ): Promise<RestoreResultModel> {
-    const run = await this.unitOfWork.run(repository => restoreTournamentBackup(backup, mode, repository));
+    const run = await this.unitOfWork.run(user.id, repository => restoreTournamentBackup(backup, mode, repository));
     return { ...run.result, libraryVersion: run.libraryVersion };
   }
 
   // ---------- Apoyo ----------
 
   private async mutate(
+    userId: string,
     work: (repository: TournamentLibraryRepository) => Tournament,
     expectedVersions?: Record<string, number>,
   ): Promise<TournamentModel> {
-    const run = await this.unitOfWork.run(repository => ({ value: work(repository), repository }), { expectedVersions });
+    const run = await this.unitOfWork.run(userId, repository => ({ value: work(repository), repository }), { expectedVersions });
     return this.toModel(run, run.result.value);
   }
 
   private async simulate(
+    userId: string,
     tournamentId: string,
     expectedVersion: number,
     work: (tournament: Tournament, repository: TournamentLibraryRepository) => { tournament: Tournament; simulatedCount: number },
   ): Promise<SimulationResultModel> {
     const run = await this.unitOfWork.run(
+      userId,
       repository => ({ value: work(findTournament(repository, tournamentId), repository), repository }),
       { expectedVersions: { [tournamentId]: expectedVersion } },
     );

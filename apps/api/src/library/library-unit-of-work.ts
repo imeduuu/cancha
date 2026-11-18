@@ -66,19 +66,31 @@ export class LibraryUnitOfWork {
     @Inject(TOURNAMENT_REPOSITORY_FACTORY) private readonly createRepository: TournamentRepositoryFactory,
   ) {}
 
-  /** Sólo lectura: carga y ejecuta, sin flush (lo que el trabajo cambie se descarta). */
-  async read<T>(work: (repository: TournamentLibraryRepository, view: LibraryView) => T): Promise<UnitOfWorkResult<T>> {
-    const snapshot = await this.createRepository().loadLibrary();
+  /**
+   * Sólo lectura sobre la biblioteca de `userId`: carga y ejecuta, sin flush (lo
+   * que el trabajo cambie se descarta).
+   */
+  async read<T>(
+    userId: string,
+    work: (repository: TournamentLibraryRepository, view: LibraryView) => T,
+  ): Promise<UnitOfWorkResult<T>> {
+    const snapshot = await this.createRepository(userId).loadLibrary();
     const result = this.execute(work, new InMemoryTournamentRepository(this.stateOf(snapshot)), snapshot);
     return { result, committed: false, ...view(snapshot.versions, snapshot.libraryVersion) };
   }
 
+  /**
+   * Ejecuta `work` sobre la biblioteca de `userId` y escribe sus cambios. El
+   * userId sale siempre de la sesión, nunca de un argumento del cliente: lo de
+   * otro usuario no está en la biblioteca cargada, así que responde NOT_FOUND.
+   */
   async run<T>(
+    userId: string,
     work: (repository: TournamentLibraryRepository, view: LibraryView) => T,
     options: UnitOfWorkOptions = {},
   ): Promise<UnitOfWorkResult<T>> {
     for (let attempt = 1; ; attempt++) {
-      const store = this.createRepository();
+      const store = this.createRepository(userId);
       const snapshot = await store.loadLibrary();
       this.assertExpectedVersions(snapshot, options.expectedVersions);
       const repository = new InMemoryTournamentRepository(this.stateOf(snapshot));
@@ -86,7 +98,7 @@ export class LibraryUnitOfWork {
       try {
         result = this.execute(work, repository, snapshot);
       } catch (error) {
-        await this.persistRejections(repository.changes());
+        await this.persistRejections(userId, repository.changes());
         throw error;
       }
       const changes = repository.changes();
@@ -142,11 +154,11 @@ export class LibraryUnitOfWork {
   }
 
   /** El caso de uso falló: sólo se conservan sus eventos de rechazo (p. ej. tournament-import-rejected). */
-  private async persistRejections(changes: LibraryChanges): Promise<void> {
+  private async persistRejections(userId: string, changes: LibraryChanges): Promise<void> {
     const rejected = changes.events.filter(event => event.outcome === "rejected");
     if (rejected.length === 0) return;
     try {
-      const store = this.createRepository();
+      const store = this.createRepository(userId);
       for (const event of rejected) await store.recordActivity(event);
     } catch (error) {
       this.logger.warn(`No se pudo registrar el rechazo: ${error instanceof Error ? error.message : String(error)}`);

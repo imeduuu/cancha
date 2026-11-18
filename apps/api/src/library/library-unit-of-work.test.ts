@@ -25,8 +25,10 @@ beforeEach(async () => {
   await MongoTournamentRepository.ensureIndexes(database);
 });
 
-const open = () => new MongoTournamentRepository(replicaSet.client, database);
-const unitOfWork = (factory: () => MongoTournamentRepository = open) => new LibraryUnitOfWork(factory);
+const user = "user-a";
+const otherUser = "user-b";
+const open = (userId = user) => new MongoTournamentRepository(replicaSet.client, database, userId);
+const unitOfWork = (factory: (userId: string) => MongoTournamentRepository = open) => new LibraryUnitOfWork(factory);
 const league = (id: string): Tournament => ({ ...closureLeague(id), name: `Liga ${id}` });
 const event = (tournament: Tournament, summary: string) =>
   createActivityEvent(tournament, { action: "regulations-updated", entityType: "tournament", summary });
@@ -40,8 +42,8 @@ function barrierFactory(parties: number) {
   let loads = 0;
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
-  const factory = () => {
-    const repository = open();
+  const factory = (userId: string) => {
+    const repository = open(userId);
     const load = repository.loadLibrary.bind(repository);
     repository.loadLibrary = async () => {
       const snapshot = await load();
@@ -62,6 +64,7 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     await open().save(league("a"));
     const { factory } = barrierFactory(2);
     const rename = (name: string) => unitOfWork(factory).run(
+      user,
       repository => saveWithActivity(repository, { ...find(repository.findAll(), "a"), name }, event(league("a"), name)),
       { expectedVersions: { a: 1 } },
     );
@@ -87,6 +90,7 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     const initial = await open().libraryVersion();
     const { factory, loads } = barrierFactory(2);
     const rename = (id: string) => unitOfWork(factory).run(
+      user,
       repository => saveWithActivity(repository, { ...find(repository.findAll(), id), name: `${id} nuevo` }, event(league(id), id)),
       { expectedVersions: { [id]: 1 } },
     );
@@ -106,13 +110,13 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     const repositories: MongoTournamentRepository[] = [];
     const commit = vi.fn();
 
-    const result = await unitOfWork(() => {
-      const repository = open();
+    const result = await unitOfWork(userId => {
+      const repository = open(userId);
       const original = repository.commit.bind(repository);
       repository.commit = (...args) => { commit(); return original(...args); };
       repositories.push(repository);
       return repository;
-    }).run(repository => {
+    }).run(user, repository => {
       const a = find(repository.findAll(), "a");
       saveWithActivity(repository, { ...a, name: "A una vez" }, event(a, "Uno."));
       repository.save({ ...find(repository.findAll(), "b"), name: "B" });
@@ -131,7 +135,7 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     await open().saveWithActivity(league("a"), event(league("a"), "Previo."));
     const before = await open().loadLibrary();
 
-    await expect(unitOfWork().run(repository => {
+    await expect(unitOfWork().run(user, repository => {
       saveWithActivity(repository, { ...find(repository.findAll(), "a"), name: "No debe quedar" }, event(league("a"), "No."));
       repository.save(league("b"));
       repository.setActiveTournamentId("b");
@@ -145,7 +149,7 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     await open().save(league("a"));
     const before = await open().findAll();
 
-    await expect(unitOfWork().run(repository =>
+    await expect(unitOfWork().run(user, repository =>
       importTournamentArchive({ ...league("a"), name: "Importado" }, "add", repository),
     )).rejects.toThrow("Ya existe un torneo con ese identificador.");
 
@@ -158,8 +162,8 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     await open().save(league("a"));
     const work = vi.fn();
 
-    await expect(unitOfWork().run(work, { expectedVersions: { nada: 1 } })).rejects.toBeInstanceOf(NotFoundError);
-    await expect(unitOfWork().run(work, { expectedVersions: { a: 7 } }))
+    await expect(unitOfWork().run(user, work, { expectedVersions: { nada: 1 } })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(unitOfWork().run(user, work, { expectedVersions: { a: 7 } }))
       .rejects.toMatchObject({ name: "TournamentVersionConflictError", expectedVersion: 7, actualVersion: 1 });
     expect(work).not.toHaveBeenCalled();
   });
@@ -168,8 +172,8 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     await open().save(league("a"));
     const initial = await open().libraryVersion();
 
-    const run = await unitOfWork().run(repository => repository.findAll().length);
-    const read = await unitOfWork().read(repository => {
+    const run = await unitOfWork().run(user, repository => repository.findAll().length);
+    const read = await unitOfWork().read(user, repository => {
       repository.save({ ...find(repository.findAll(), "a"), name: "Descartado" });
       return repository.findAll()[0].name;
     });
@@ -180,8 +184,36 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     expect(await open().libraryVersion()).toBe(initial);
   });
 
+  it("la unidad de trabajo sólo ve la biblioteca del usuario indicado", async () => {
+    await open(otherUser).save(league("ajeno"));
+    await open().save(league("propio"));
+
+    const read = await unitOfWork().read(user, repository => repository.findAll().map(({ id }) => id));
+    expect(read.result).toEqual(["propio"]);
+    expect(read.versionOf("ajeno")).toBeUndefined();
+    await expect(unitOfWork().run(user, vi.fn(), { expectedVersions: { ajeno: 1 } })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("unidades concurrentes de usuarios distintos no se ven como conflicto de biblioteca (sin reintentos)", async () => {
+    await open().save(league("a"));
+    await open(otherUser).save(league("a"));
+    const { factory, loads } = barrierFactory(2);
+    const rename = (userId: string) => unitOfWork(factory).run(
+      userId,
+      repository => saveWithActivity(repository, { ...find(repository.findAll(), "a"), name: `De ${userId}` }, event(league("a"), userId)),
+      { expectedVersions: { a: 1 } },
+    );
+
+    const [first, second] = await Promise.all([rename(user), rename(otherUser)]);
+
+    expect(loads()).toBe(2);
+    expect([first.libraryVersion, second.libraryVersion]).toEqual([2, 2]);
+    expect((await open().findAll())[0].name).toBe(`De ${user}`);
+    expect((await open(otherUser).findAll())[0].name).toBe(`De ${otherUser}`);
+  });
+
   describe("casos de uso reales de core, sin cambios", () => {
-    const create = () => unitOfWork().run(repository => createTournament({
+    const create = () => unitOfWork().run(user, repository => createTournament({
       name: "Liga del servidor",
       teamNames: ["Club Uno", "Club Dos", "Club Tres", "Club Cuatro"],
       legs: 2,
@@ -195,12 +227,14 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
 
       const fixtureId = created.result.matchdays[0].fixtures[0].id;
       const updated = await unitOfWork().run(
+        user,
         repository => updateMatchResult(find(repository.findAll(), id), fixtureId, { homeGoals: 3, awayGoals: 1 }, repository),
         { expectedVersions: { [id]: 1 } },
       );
       expect(updated.versionOf(id)).toBe(2);
 
       const renamed = await unitOfWork().run(
+        user,
         repository => renameTournament(find(repository.findAll(), id), "Liga renombrada", repository),
         { expectedVersions: { [id]: 2 } },
       );
@@ -219,6 +253,7 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
       const initial = created.libraryVersion;
 
       const simulated = await unitOfWork().run(
+        user,
         repository => simulateChampionship(find(repository.findAll(), id), "pendingOnly", repository),
         { expectedVersions: { [id]: 1 } },
       );

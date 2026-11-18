@@ -20,30 +20,50 @@ export const tournamentCollectionNames = {
   libraryState: "library_state",
 } as const;
 
-/** Documento de `tournaments`: el torneo sin `id` (va en `_id`) más metadatos `_`. */
+/**
+ * Clave de todo documento de la biblioteca: el dueño y el id dentro de su
+ * biblioteca. Usar el `_id` (siempre indexado y único) garantiza la unicidad por
+ * usuario desde la primera escritura, sin depender de índices secundarios, y
+ * permite que dos usuarios tengan el mismo id de torneo o de evento. El orden de
+ * los campos importa (Mongo compara subdocumentos en orden): créala sólo con
+ * `scopedId`.
+ */
+export interface ScopedId { userId: string; id: string }
+
+export function scopedId(userId: string, id: string): ScopedId {
+  return { userId, id };
+}
+
+/** Filtro de todos los documentos de un usuario en una colección de la biblioteca. */
+export function userScope(userId: string): { "_id.userId": string } {
+  return { "_id.userId": userId };
+}
+
+/** Documento de `tournaments`: el torneo sin `id` (va en `_id.id`) más metadatos `_`. */
 export interface TournamentDocument {
-  _id: string;
+  _id: ScopedId;
   /** Versión para concurrencia optimista: 1 al crear, +1 en cada escritura. */
   _version: number;
-  /** Orden de guardado (contador global): findAll devuelve primero lo último guardado. */
+  /** Orden de guardado (contador del usuario): findAll devuelve primero lo último guardado. */
   _saveSeq: number;
   _savedAt: Date;
   [field: string]: unknown;
 }
 
-/** Documento de `activity`: el evento con `_id = event.id` y su orden de registro. */
+/** Documento de `activity`: el evento con `_id.id = event.id` y su orden de registro. */
 export interface ActivityDocument {
-  _id: string;
+  _id: ScopedId;
   _seq: number;
   [field: string]: unknown;
 }
 
-interface CounterDocument { _id: string; seq: number }
+/** `counters`: secuencias por usuario (`_id.id` = "tournaments" o "activity"). */
+interface CounterDocument { _id: ScopedId; seq: number }
 /**
- * `library_state`: `active-tournament` guarda el torneo activo y `library` la
- * versión de la biblioteca completa (+1 en cada escritura).
+ * `library_state`: por usuario, `active-tournament` guarda el torneo activo y
+ * `library` la versión de su biblioteca (+1 en cada escritura).
  */
-interface LibraryStateDocument { _id: string; tournamentId?: string | null; _version?: number }
+interface LibraryStateDocument { _id: ScopedId; tournamentId?: string | null; _version?: number }
 
 const activeTournamentStateId = "active-tournament";
 const libraryVersionStateId = "library";
@@ -53,6 +73,8 @@ const transactionOptions: TransactionOptions = {
   readPreference: "primary",
 };
 const duplicateKeyCode = 11000;
+/** Lo último guardado primero; cubierto por el índice `user_saveSeq`. */
+export const tournamentOrder = { _saveSeq: -1, "_id.id": 1 } as const;
 
 /**
  * Dos clientes guardaron sobre la misma versión de un torneo (o uno lo borró):
@@ -126,13 +148,13 @@ function toPlainJson<T>(value: T): T {
 function toTournament(document: TournamentDocument): Tournament {
   const { _id, _version, _saveSeq, _savedAt, ...fields } = document;
   void _version; void _saveSeq; void _savedAt;
-  return { id: _id, ...fields } as unknown as Tournament;
+  return { id: _id.id, ...fields } as unknown as Tournament;
 }
 
 function toActivityEvent(document: ActivityDocument): unknown {
   const { _id, _seq, ...fields } = document;
   void _seq;
-  return { id: _id, ...fields };
+  return { id: _id.id, ...fields };
 }
 
 function storageIssue(tournament: Tournament): string | undefined {
@@ -147,6 +169,10 @@ function storageIssue(tournament: Tournament): string | undefined {
  * Implementación MongoDB de la biblioteca de torneos con las mismas garantías que
  * LocalStorageTournamentRepository, pero con transacciones reales (replica set).
  *
+ * Acotada a un usuario: cada instancia lee y escribe sólo los documentos cuyo
+ * `_id.userId` es el suyo (torneos, actividad, contadores, versión de biblioteca
+ * y torneo activo). Lo de otro usuario no existe para ella.
+ *
  * Unidad de trabajo: cada instancia recuerda la versión de los torneos que leyó
  * (findAll) o escribió, y al guardar exige que la versión en la base siga siendo
  * esa. Guardar un torneo existente sin haberlo leído en esta instancia también
@@ -159,22 +185,38 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   private readonly counters: Collection<CounterDocument>;
   private readonly libraryState: Collection<LibraryStateDocument>;
 
-  constructor(private readonly client: MongoClient, database: Db) {
+  constructor(private readonly client: MongoClient, database: Db, private readonly userId: string) {
+    if (typeof userId !== "string" || userId === "") {
+      throw new TypeError("MongoTournamentRepository exige el id del usuario dueño de la biblioteca.");
+    }
     this.tournaments = database.collection(tournamentCollectionNames.tournaments);
     this.activity = database.collection(tournamentCollectionNames.activity);
     this.counters = database.collection(tournamentCollectionNames.counters);
     this.libraryState = database.collection(tournamentCollectionNames.libraryState);
   }
 
-  /** Índices necesarios. Idempotente: se puede ejecutar en cada arranque. */
+  /**
+   * Índices de las consultas por usuario (`"_id.userId"` no usa el índice de
+   * `_id`). Idempotente: se puede ejecutar en cada arranque. Ninguna garantía de
+   * unicidad depende de ellos: la da el `_id` compuesto.
+   */
   static async ensureIndexes(database: Db): Promise<void> {
     await database.collection(tournamentCollectionNames.tournaments).createIndexes([
-      { key: { _saveSeq: -1 }, name: "saveSeq_desc" },
+      { key: { "_id.userId": 1, _saveSeq: -1, "_id.id": 1 }, name: "user_saveSeq" },
     ]);
     await database.collection(tournamentCollectionNames.activity).createIndexes([
-      { key: { _seq: 1 }, name: "seq_unique", unique: true },
-      { key: { tournamentId: 1, _seq: 1 }, name: "tournament_seq" },
+      { key: { "_id.userId": 1, _seq: 1 }, name: "user_seq_unique", unique: true },
+      { key: { "_id.userId": 1, tournamentId: 1, _seq: 1 }, name: "user_tournament_seq" },
     ]);
+  }
+
+  /** Documentos de la biblioteca global anterior a la fase 4B (`_id` string): ningún usuario los ve. */
+  static async countLegacyDocuments(database: Db): Promise<number> {
+    let total = 0;
+    for (const name of Object.values(tournamentCollectionNames)) {
+      total += await database.collection(name).countDocuments({ _id: { $type: "string" } } as never);
+    }
+    return total;
   }
 
   /** Versión conocida por esta instancia (leída o escrita), o undefined. */
@@ -183,22 +225,22 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   }
 
   async findAll(): Promise<Tournament[]> {
-    const documents = await this.tournaments.find().sort({ _saveSeq: -1, _id: 1 }).toArray();
+    const documents = await this.tournaments.find(this.scope()).sort(tournamentOrder).toArray();
     return this.readValidTournaments(documents, this.versions);
   }
 
   /**
-   * Toda la biblioteca (torneos, actividad, torneo activo y versión) en una
-   * transacción snapshot: una vista coherente para la unidad de trabajo.
+   * Toda la biblioteca del usuario (torneos, actividad, torneo activo y versión)
+   * en una transacción snapshot: una vista coherente para la unidad de trabajo.
    */
   async loadLibrary(): Promise<LibrarySnapshot> {
     const snapshot = await this.transaction(async session => {
-      const documents = await this.tournaments.find({}, { session }).sort({ _saveSeq: -1, _id: 1 }).toArray();
+      const documents = await this.tournaments.find(this.scope(), { session }).sort(tournamentOrder).toArray();
       const versions = new Map<string, number>();
       const tournaments = this.readValidTournaments(documents, versions);
       const activity = await this.readActivity(session);
-      const active = await this.libraryState.findOne({ _id: activeTournamentStateId }, { session });
-      const library = await this.libraryState.findOne({ _id: libraryVersionStateId }, { session });
+      const active = await this.libraryState.findOne({ _id: this.key(activeTournamentStateId) }, { session });
+      const library = await this.libraryState.findOne({ _id: this.key(libraryVersionStateId) }, { session });
       return {
         tournaments,
         versions,
@@ -228,13 +270,13 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
       const libraryVersion = await this.advanceLibraryVersion(read.libraryVersion, session);
       if (changes.replaceLibrary) {
         const kept = [...savedIds].filter(id => read.versions.has(id));
-        await this.tournaments.deleteMany({ _id: { $nin: kept } }, { session });
+        await this.tournaments.deleteMany({ ...this.scope(), "_id.id": { $nin: kept } }, { session });
       } else {
         for (const id of changes.deleted) {
           const expected = read.versions.get(id);
           const deleted = expected === undefined
             ? { deletedCount: 0 }
-            : await this.tournaments.deleteOne({ _id: id, _version: expected }, { session });
+            : await this.tournaments.deleteOne({ _id: this.key(id), _version: expected }, { session });
           if (deleted.deletedCount === 0) {
             throw new TournamentVersionConflictError(id, expected ?? null, await this.currentVersion(id, session));
           }
@@ -243,11 +285,11 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
       const versions = changes.saved.length > 0
         ? await this.writeTournaments(changes.saved, session, read.versions)
         : new Map<string, number>();
-      if (changes.replaceActivity) await this.activity.deleteMany({}, { session });
+      if (changes.replaceActivity) await this.activity.deleteMany(this.scope(), { session });
       for (const event of changes.events) await this.appendActivity(event, session);
       if (changes.activeTournament) {
         await this.libraryState.updateOne(
-          { _id: activeTournamentStateId },
+          { _id: this.key(activeTournamentStateId) },
           { $set: { tournamentId: changes.activeTournament.id } },
           { upsert: true, session },
         );
@@ -259,9 +301,9 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
     return result;
   }
 
-  /** Versión vigente de la biblioteca (0 si nunca se escribió). */
+  /** Versión vigente de la biblioteca del usuario (0 si nunca se escribió). */
   async libraryVersion(): Promise<number> {
-    return (await this.libraryState.findOne({ _id: libraryVersionStateId }))?._version ?? 0;
+    return (await this.libraryState.findOne({ _id: this.key(libraryVersionStateId) }))?._version ?? 0;
   }
 
   async save(tournament: Tournament): Promise<void> {
@@ -309,14 +351,14 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
 
   async deleteById(id: string): Promise<void> {
     await this.transaction(async session => {
-      const document = await this.tournaments.findOne({ _id: id }, { session });
+      const document = await this.tournaments.findOne({ _id: this.key(id) }, { session });
       if (!document) throw new Error("No se encontró el campeonato que quieres eliminar.");
       const tournament = toTournament(document);
       if (storageIssue(tournament)) {
         throw new Error("No se eliminó el campeonato porque sus datos guardados están dañados.");
       }
       const expected = this.versions.get(id) ?? document._version;
-      const deleted = await this.tournaments.deleteOne({ _id: id, _version: expected }, { session });
+      const deleted = await this.tournaments.deleteOne({ _id: this.key(id), _version: expected }, { session });
       if (deleted.deletedCount === 0) {
         throw new TournamentVersionConflictError(id, expected, document._version, tournament.name);
       }
@@ -332,7 +374,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   }
 
   async getActiveTournamentId(): Promise<string | null> {
-    const state = await this.libraryState.findOne({ _id: activeTournamentStateId });
+    const state = await this.libraryState.findOne({ _id: this.key(activeTournamentStateId) });
     return state?.tournamentId ?? null;
   }
 
@@ -340,11 +382,21 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
     await this.transaction(async session => {
       await this.bumpLibraryVersion(session);
       await this.libraryState.updateOne(
-        { _id: activeTournamentStateId },
+        { _id: this.key(activeTournamentStateId) },
         { $set: { tournamentId: id } },
         { upsert: true, session },
       );
     });
+  }
+
+  /** `_id` de un documento de este usuario. */
+  private key(id: string): ScopedId {
+    return scopedId(this.userId, id);
+  }
+
+  /** Filtro de todos los documentos de este usuario en una colección. */
+  private scope(): { "_id.userId": string } {
+    return userScope(this.userId);
   }
 
   private assertStorable(tournament: Tournament): void {
@@ -373,7 +425,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   }
 
   private async readActivity(session?: ClientSession): Promise<ActivityEvent[]> {
-    const events = (await this.activity.find({}, { session }).sort({ _seq: 1 }).toArray()).map(toActivityEvent);
+    const events = (await this.activity.find(this.scope(), { session }).sort({ _seq: 1 }).toArray()).map(toActivityEvent);
     if (!events.every(isActivityEvent)) {
       throw new Error("El historial de actividad contiene registros inválidos.");
     }
@@ -383,7 +435,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   /** Escrituras sueltas (fuera de una unidad de trabajo): +1 sin verificar, para invalidar lecturas ajenas. */
   private async bumpLibraryVersion(session: ClientSession): Promise<void> {
     await this.libraryState.updateOne(
-      { _id: libraryVersionStateId },
+      { _id: this.key(libraryVersionStateId) },
       { $inc: { _version: 1 } },
       { upsert: true, session },
     );
@@ -393,7 +445,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   private async advanceLibraryVersion(expected: number, session: ClientSession): Promise<number> {
     if (expected === 0) {
       try {
-        await this.libraryState.insertOne({ _id: libraryVersionStateId, _version: 1 }, { session });
+        await this.libraryState.insertOne({ _id: this.key(libraryVersionStateId), _version: 1 }, { session });
         return 1;
       } catch (error) {
         if (!(error instanceof MongoServerError) || error.code !== duplicateKeyCode) throw error;
@@ -401,7 +453,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
       }
     }
     const updated = await this.libraryState.updateOne(
-      { _id: libraryVersionStateId, _version: expected },
+      { _id: this.key(libraryVersionStateId), _version: expected },
       { $inc: { _version: 1 } },
       { session },
     );
@@ -413,7 +465,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
 
   private async currentLibraryVersion(session?: ClientSession): Promise<number | null> {
     try {
-      return (await this.libraryState.findOne({ _id: libraryVersionStateId }, { session }))?._version ?? 0;
+      return (await this.libraryState.findOne({ _id: this.key(libraryVersionStateId) }, { session }))?._version ?? 0;
     } catch {
       return null;
     }
@@ -441,7 +493,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
       const saveSeq = lastSeq - tournaments.length + 1 + index;
       const expected = readVersions.get(id);
       const version = (expected ?? 0) + 1;
-      const document: TournamentDocument = { _id: id, ...fields, _version: version, _saveSeq: saveSeq, _savedAt: savedAt };
+      const document: TournamentDocument = { _id: this.key(id), ...fields, _version: version, _saveSeq: saveSeq, _savedAt: savedAt };
       if (expected === undefined) {
         try {
           await this.tournaments.insertOne(document, { session });
@@ -450,7 +502,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
           throw new TournamentVersionConflictError(id, null, await this.currentVersion(id), tournament.name);
         }
       } else {
-        const result = await this.tournaments.replaceOne({ _id: id, _version: expected }, document, { session });
+        const result = await this.tournaments.replaceOne({ _id: this.key(id), _version: expected }, document, { session });
         if (result.matchedCount === 0) {
           throw new TournamentVersionConflictError(id, expected, await this.currentVersion(id, session), tournament.name);
         }
@@ -463,24 +515,24 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   /** Lee la versión vigente para el mensaje de conflicto (fuera de la transacción abortada si hace falta). */
   private async currentVersion(id: string, session?: ClientSession): Promise<number | null> {
     try {
-      const current = await this.tournaments.findOne({ _id: id }, { session, projection: { _version: 1 } });
+      const current = await this.tournaments.findOne({ _id: this.key(id) }, { session, projection: { _version: 1 } });
       return current?._version ?? null;
     } catch {
       return null;
     }
   }
 
-  /** Igual que localStorage: un evento con un id ya registrado no se duplica. */
+  /** Igual que localStorage: un evento con un id ya registrado (en la biblioteca del usuario) no se duplica. */
   private async appendActivity(event: ActivityEvent, session: ClientSession): Promise<void> {
-    if (await this.activity.findOne({ _id: event.id }, { session, projection: { _id: 1 } })) return;
+    if (await this.activity.findOne({ _id: this.key(event.id) }, { session, projection: { _id: 1 } })) return;
     const { id, ...fields } = toPlainJson(event);
     const seq = await this.nextSequence("activity", 1, session);
-    await this.activity.insertOne({ _id: id, _seq: seq, ...fields }, { session });
+    await this.activity.insertOne({ _id: this.key(id), _seq: seq, ...fields }, { session });
   }
 
   private async nextSequence(name: string, increment: number, session: ClientSession): Promise<number> {
     const counter = await this.counters.findOneAndUpdate(
-      { _id: name },
+      { _id: this.key(name) },
       { $inc: { seq: increment } },
       { upsert: true, returnDocument: "after", session },
     );

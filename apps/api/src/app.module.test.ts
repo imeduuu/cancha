@@ -37,14 +37,15 @@ describe("AppModule con MongoDB real (replica set)", () => {
 
   it("crea los índices al arrancar y la fábrica entrega repositorios independientes", async () => {
     const create = app.get<TournamentRepositoryFactory>(TOURNAMENT_REPOSITORY_FACTORY);
-    const first = create();
-    expect(create()).not.toBe(first);
+    const first = create("user-a");
+    expect(create("user-a")).not.toBe(first);
 
     await first.save(closureLeague("desde-app"));
-    expect((await create().findAll()).map(({ id }) => id)).toEqual(["desde-app"]);
+    expect((await create("user-a").findAll()).map(({ id }) => id)).toEqual(["desde-app"]);
+    expect(await create("user-b").findAll()).toEqual([]);
 
     await expect.poll(async () =>
       (await replicaSet.client.db(databaseName).collection("activity").indexes()).map(({ name }) => name),
-    ).toEqual(expect.arrayContaining(["seq_unique", "tournament_seq"]));
+    ).toEqual(expect.arrayContaining(["user_seq_unique", "user_tournament_seq"]));
   });
 });

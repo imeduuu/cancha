@@ -70,7 +70,17 @@ El puerto síncrono no puede implementarse sobre MongoDB, cuyo driver es asíncr
 - Antes de escribir valida igual que `localStorage`, con `getTournamentStorageIssue` (`application/validation/tournament-storage.ts`): integridad, jugadores, reglamento y detalles de partido.
 - **Concurrencia optimista**: cada documento lleva `_version`. Una instancia del repositorio es una unidad de trabajo que recuerda la versión de lo que leyó; al guardar exige que siga vigente. Si no, lanza `TournamentVersionConflictError` y aborta la transacción. Tampoco permite sobrescribir a ciegas un torneo existente que no leyó.
 - No implementa lo específico del navegador: universos deportivos, copia `cancha.recovery` e importación de respaldos.
-- **Versión de biblioteca**: `library_state` guarda además `{ _id: "library", _version }`, que sube en cada escritura. Sirve para detectar *write skew*: un caso de uso que decide leyendo el torneo B y escribe sólo el A.
+- **Versión de biblioteca**: `library_state` guarda además, por usuario, la versión de su biblioteca, que sube en cada escritura. Sirve para detectar *write skew*: un caso de uso que decide leyendo el torneo B y escribe sólo el A.
+
+### Biblioteca por usuario
+
+Cada instancia de `MongoTournamentRepository` está acotada a un usuario (`new MongoTournamentRepository(client, db, userId)`), y la unidad de trabajo recibe ese userId de la sesión (`run(userId, …)`, `read(userId, …)`). Los resolvers nunca aceptan un userId del cliente.
+
+- **Clave compuesta**: todos los documentos de la biblioteca (torneos, actividad, contadores y estado) tienen `_id: { userId, id }`. Se eligió en vez de un campo `userId` con un índice único secundario porque el repositorio detecta conflictos con la clave duplicada al insertar. El índice de `_id` existe siempre; uno secundario se crea de forma asíncrona al arrancar, y en una base nueva habría una carrera. Además, dos usuarios pueden tener el mismo id de torneo o de evento sin chocar, así que ninguna colisión revela que algo de otro usuario existe.
+- **Índices por usuario**: una búsqueda por `"_id.userId"` no puede usar el índice de `_id`. Por eso hay índices secundarios que empiezan por `_id.userId` (torneos ordenados por guardado, historial ordenado por registro), verificados con `explain()` en las pruebas.
+- **Versión y torneo activo por usuario**: la escritura de un usuario no invalida la lectura de otro, así que dos usuarios trabajando a la vez nunca ven un conflicto ni provocan reintentos.
+- **Lo ajeno no existe**: como la biblioteca cargada sólo contiene lo propio, un torneo de otro usuario responde `NOT_FOUND` por los mismos caminos que uno inexistente. Restaurar con REPLACE sólo borra la biblioteca propia.
+- **Datos anteriores**: la biblioteca global de antes de la fase 4B (documentos con `_id` de texto) queda invisible para todos. La API avisa al arrancar; se vacía con `npm run db:reset`. No hay migración: eran datos de desarrollo, y la ruta exportar → restaurar ya está probada.
 
 ### Unidad de trabajo del servidor
 
@@ -86,7 +96,7 @@ Consecuencias:
 - **Si el caso de uso lanza**, no se escribe nada. La excepción son los eventos de rechazo (`outcome: "rejected"`, p. ej. `tournament-import-rejected`), que se registran aparte, igual que en la web.
 - **Versión del cliente**: `run(trabajo, { expectedVersions })` compara la versión que editó el cliente antes de ejecutar nada. Si ya no es la vigente, lanza `TournamentVersionConflictError`; un torneo inexistente es `NotFoundError`.
 - **Conflicto sólo de biblioteca**: otro cliente escribió otro torneo. Se reintenta hasta 3 veces sobre datos frescos, comprobando de nuevo la versión esperada. Es seguro porque el caso de uso se vuelve a ejecutar completo.
-- **Costo**: cada petición carga la biblioteca completa, en memoria y latencia O(biblioteca). Es aceptable con bibliotecas de decenas de torneos, y con autenticación (fase 4) cada biblioteca será de un usuario.
+- **Costo**: cada petición carga la biblioteca completa del usuario, en memoria y latencia O(biblioteca del usuario). Es aceptable con bibliotecas de decenas de torneos.
 - **Sólo síncronos**: la unidad de trabajo admite únicamente casos de uso síncronos. Los asíncronos, como la importación oficial o la generación de grupos, quedan pendientes.
 
 ### API GraphQL
