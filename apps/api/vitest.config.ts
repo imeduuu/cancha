@@ -10,5 +10,8 @@ export default defineConfig({
   ssr: { resolve: { conditions } },
   test: {
     environment: "node",
+    // Un solo replica set de MongoDB en memoria para toda la corrida (ver el archivo).
+    // La primera corrida descarga ahí el binario de mongod (~80 MB).
+    globalSetup: ["./src/test-utils/mongo-global-setup.ts"],
   },
 });

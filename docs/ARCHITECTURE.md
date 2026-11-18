@@ -71,6 +71,10 @@ El puerto síncrono no puede implementarse sobre MongoDB, cuyo driver es asíncr
 - **Concurrencia optimista**: cada documento lleva `_version`. Una instancia del repositorio es una unidad de trabajo que recuerda la versión de lo que leyó; al guardar exige que siga vigente. Si no, lanza `TournamentVersionConflictError` y aborta la transacción. Tampoco permite sobrescribir a ciegas un torneo existente que no leyó.
 - No implementa lo específico del navegador: universos deportivos, copia `cancha.recovery` e importación de respaldos.
 
+### Suite de contrato
+
+`describeTournamentRepositoryContract` (`packages/core/src/test-utils/tournament-repository-contract.ts`) recibe una fábrica de repositorios y verifica en 13 casos el comportamiento que esperan los casos de uso, con el puerto síncrono o el asíncrono. Provoca los fallos sólo con entradas inválidas, así que funciona con cualquier adaptador sin inyectar errores de almacenamiento. La ejecutan el adaptador de `localStorage` (en `apps/web`) y el de MongoDB (en `apps/api`); un adaptador nuevo debe pasarla también.
+
 ### Puntos de guardado
 
 `SaveCheckpointStore` (`save-checkpoint-store.ts`) define el almacén de puntos de guardado, implementado sobre IndexedDB por `IndexedDbSaveCheckpointStore`. Sus operaciones de reemplazo y eliminación comparan primero con el valor esperado (compare-and-set), y `exclusive()` garantiza exclusión entre pestañas.
