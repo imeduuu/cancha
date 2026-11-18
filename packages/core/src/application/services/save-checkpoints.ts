@@ -11,6 +11,8 @@ export interface CompleteLibrary {
   activity: readonly ActivityEvent[];
   universes: SportsUniverseLibrary;
 }
+/** Lo que guarda un punto: la web incluye universos deportivos; el servidor, no. */
+export type CheckpointLibrary = Omit<CompleteLibrary, "universes"> & { readonly universes?: SportsUniverseLibrary };
 export interface CheckpointCreationReview { readonly checkpoint: SaveCheckpoint; readonly libraryToken: string }
 export interface CheckpointComparison {
   readonly sharedTournamentIds: readonly string[];
@@ -63,6 +65,82 @@ export function checkpointMetadata(raw: unknown): SaveCheckpoint {
     throw new CheckpointValidationError("Los metadatos o la información de integridad del punto están dañados.");
   return r;
 }
+/**
+ * Respaldo `cancha-backup` v7 con sangría (como lo descarga la web) de la
+ * biblioteca en el instante `at`. Lanza si el respaldo no pasa su propia validación.
+ */
+export function checkpointContent(library: CheckpointLibrary, at: string): string {
+  const backup = createTournamentBackup(library.tournaments, () => new Date(at), library.activity, library.universes);
+  const content = JSON.stringify(backup, null, 2);
+  parseTournamentBackupWithActivity(content);
+  return content;
+}
+
+export interface CheckpointRecordInput {
+  readonly library: CheckpointLibrary;
+  readonly content: string;
+  readonly digest: string;
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly createdAt: string;
+}
+
+/** Registro (metadatos + contenido) de un punto nuevo; valida nombre, descripción y metadatos. */
+export function checkpointRecord(input: CheckpointRecordInput): SaveCheckpoint {
+  const checkpoint: SaveCheckpoint = {storageVersion: 1, id: input.id, name: text(input.name, "Nombre", 120, true),
+    description: text(input.description ?? "", "Descripción", 1000),
+    createdAt: input.createdAt, updatedAt: input.createdAt, revision: 1, backupFormat: "cancha-backup", backupVersion: 7,
+    tournamentCount: input.library.tournaments.length, universeCount: input.library.universes?.universes.length ?? 0,
+    activityCount: input.library.activity.length, sizeBytes: new TextEncoder().encode(input.content).byteLength,
+    integrity: {algorithm: "SHA-256", digest: input.digest}, content: input.content};
+  checkpointMetadata(checkpoint);
+  return checkpoint;
+}
+
+export interface CreateSaveCheckpointOptions {
+  readonly now?: () => Date;
+  readonly createId?: () => string;
+  readonly digest?: (content: string) => Promise<string>;
+}
+
+/**
+ * Punto de guardado de una biblioteca ya leída de forma coherente (p. ej. en
+ * una transacción del servidor): no hace falta la revisión en dos pasos de la web.
+ */
+export async function createSaveCheckpoint(
+  library: CheckpointLibrary,
+  name: string,
+  description = "",
+  options: CreateSaveCheckpointOptions = {},
+): Promise<SaveCheckpoint> {
+  const createdAt = (options.now ?? (() => new Date()))().toISOString();
+  text(name, "Nombre", 120, true); text(description, "Descripción", 1000);
+  const content = checkpointContent(library, createdAt);
+  const digest = await (options.digest ?? checkpointDigest)(content);
+  return checkpointRecord({library, content, digest, id: (options.createId ?? (() => crypto.randomUUID()))(), name, description, createdAt});
+}
+
+/**
+ * Verifica un registro guardado: metadatos, huella SHA-256 del contenido,
+ * respaldo válido y coherente con los metadatos. Lanza CheckpointValidationError.
+ */
+export async function verifySaveCheckpoint(
+  raw: unknown,
+  digest: (content: string) => Promise<string> = checkpointDigest,
+): Promise<SaveCheckpoint> {
+  const record = checkpointMetadata(raw);
+  if (await digest(record.content) !== record.integrity.digest) throw new CheckpointValidationError("La huella SHA-256 no coincide: el contenido del punto cambió.");
+  let backup: ParsedTournamentBackup;
+  try { backup = parseTournamentBackupWithActivity(record.content); }
+  catch (error) { throw new CheckpointValidationError(`El respaldo del punto no pasa la validación: ${error instanceof Error ? error.message : "contenido inválido"}`); }
+  if (backup.version !== 7 || backup.exportedAt !== record.createdAt || backup.tournaments.length !== record.tournamentCount
+    || (backup.universes?.universes.length ?? 0) !== record.universeCount || backup.activity.length !== record.activityCount
+    || new TextEncoder().encode(record.content).byteLength !== record.sizeBytes)
+    throw new CheckpointValidationError("El respaldo no coincide con los metadatos del punto.");
+  return record;
+}
+
 function libraryToken(state: CompleteLibrary) { return JSON.stringify([state.tournaments, state.activity, state.universes]); }
 function results(tournaments: readonly Tournament[]) {
   return tournaments.flatMap(t => t.matchdays.flatMap(d => d.fixtures.filter(f => f.result))).length;
@@ -108,10 +186,7 @@ export class SaveCheckpoints {
 
   private capture(at: string) {
     const state = this.readLibrary();
-    const backup = createTournamentBackup(state.tournaments, () => new Date(at), state.activity, state.universes);
-    const content = JSON.stringify(backup, null, 2);
-    parseTournamentBackupWithActivity(content);
-    return {state, content, token: libraryToken(state)};
+    return {state, content: checkpointContent(state, at), token: libraryToken(state)};
   }
   async list(): Promise<unknown[]> { return this.store.list(); }
   async verify(id: string): Promise<SaveCheckpoint> {
@@ -127,16 +202,7 @@ export class SaveCheckpoints {
     }
   }
   private async verifyRecord(raw: unknown): Promise<SaveCheckpoint> {
-    const record = checkpointMetadata(raw);
-    if (await this.digest(record.content) !== record.integrity.digest) throw new CheckpointValidationError("La huella SHA-256 no coincide: el contenido del punto cambió.");
-    let backup: ParsedTournamentBackup;
-    try { backup = parseTournamentBackupWithActivity(record.content); }
-    catch (error) { throw new CheckpointValidationError(`El respaldo del punto no pasa la validación: ${error instanceof Error ? error.message : "contenido inválido"}`); }
-    if (backup.version !== 7 || backup.exportedAt !== record.createdAt || backup.tournaments.length !== record.tournamentCount
-      || (backup.universes?.universes.length ?? 0) !== record.universeCount || backup.activity.length !== record.activityCount
-      || new TextEncoder().encode(record.content).byteLength !== record.sizeBytes)
-      throw new CheckpointValidationError("El respaldo no coincide con los metadatos del punto.");
-    return record;
+    return verifySaveCheckpoint(raw, this.digest);
   }
   async reviewCreation(name: string, description = ""): Promise<CheckpointCreationReview> {
     const createdAt = this.now().toISOString();
@@ -144,12 +210,8 @@ export class SaveCheckpoints {
     const captured = this.capture(createdAt);
     const digest = await this.digest(captured.content);
     if (this.capture(createdAt).token !== captured.token) throw new Error("La biblioteca cambió durante la revisión. Revisa nuevamente el punto.");
-    const checkpoint: SaveCheckpoint = {storageVersion: 1, id: this.createId(), name: normalizedName, description: normalizedDescription,
-      createdAt, updatedAt: createdAt, revision: 1, backupFormat: "cancha-backup", backupVersion: 7,
-      tournamentCount: captured.state.tournaments.length, universeCount: captured.state.universes.universes.length,
-      activityCount: captured.state.activity.length, sizeBytes: new TextEncoder().encode(captured.content).byteLength,
-      integrity: {algorithm: "SHA-256", digest}, content: captured.content};
-    checkpointMetadata(checkpoint);
+    const checkpoint = checkpointRecord({library: captured.state, content: captured.content, digest, id: this.createId(),
+      name: normalizedName, description: normalizedDescription, createdAt});
     const review = {checkpoint, libraryToken: captured.token};
     this.creations.set(review, JSON.stringify(review));return review;
   }

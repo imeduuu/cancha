@@ -1,7 +1,9 @@
 import { unwrapResolverError } from "@apollo/server/errors";
 import { Logger } from "@nestjs/common";
 import { ThrottlerException } from "@nestjs/throttler";
+import { CheckpointValidationError } from "@cancha/core/application/services/save-checkpoints";
 import { AuthenticationError, ForbiddenOriginError } from "../auth/auth.errors.js";
+import { SaveCheckpointVersionConflictError } from "../save-checkpoints/mongo-save-checkpoint-store.js";
 import { GraphQLError, type GraphQLFormattedError } from "graphql";
 import { NotFoundError } from "../library/library-unit-of-work.js";
 import {
@@ -31,7 +33,8 @@ function withoutStacktrace(extensions: GraphQLFormattedError["extensions"]): Rec
 
 /**
  * Traduce los errores de los resolvers a errores GraphQL tipados:
- * - conflictos de versión ⇒ CONFLICT con la versión vigente;
+ * - conflictos de versión (torneo, biblioteca o punto de guardado) ⇒ CONFLICT con la versión vigente;
+ * - punto de guardado dañado o incompatible ⇒ VALIDATION;
  * - NotFoundError ⇒ NOT_FOUND;
  * - sin sesión válida ⇒ UNAUTHENTICATED; origen no permitido ⇒ FORBIDDEN;
  * - rate limit superado ⇒ TOO_MANY_REQUESTS;
@@ -63,6 +66,14 @@ export function createFormatError(development: boolean) {
         currentLibraryVersion: original.actualVersion,
       });
     }
+    if (original instanceof SaveCheckpointVersionConflictError) {
+      return as(apiErrorCodes.conflict, original.message, {
+        checkpointId: original.checkpointId,
+        expectedVersion: original.expectedVersion,
+        currentVersion: original.actualVersion,
+      });
+    }
+    if (original instanceof CheckpointValidationError) return as(apiErrorCodes.validation, original.message);
     if (original instanceof NotFoundError) return as(apiErrorCodes.notFound, original.message);
     if (original instanceof AuthenticationError) return as(apiErrorCodes.unauthenticated, original.message);
     if (original instanceof ForbiddenOriginError) return as(apiErrorCodes.forbidden, original.message);

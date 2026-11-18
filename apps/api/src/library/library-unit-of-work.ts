@@ -1,4 +1,5 @@
 import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
+import type { ClientSession } from "mongodb";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import {
   hasLibraryChanges,
@@ -32,6 +33,14 @@ export interface LibraryView {
 export interface UnitOfWorkOptions {
   /** Versión que el cliente editó, por torneo: si ya no es la vigente, CONFLICT sin ejecutar nada. */
   readonly expectedVersions?: Readonly<Record<string, number>>;
+  /**
+   * Versión de la biblioteca que el cliente revisó (p. ej. en la vista previa de
+   * una restauración): si ya no es la vigente, CONFLICT sin ejecutar nada y sin
+   * reintentos. Ata una revisión a su confirmación entre dos peticiones.
+   */
+  readonly expectedLibraryVersion?: number;
+  /** Verificación adicional dentro de la transacción del commit (ver LibraryCommitOptions). */
+  readonly beforeCommit?: (session: ClientSession) => Promise<void>;
 }
 
 export interface UnitOfWorkResult<T> extends LibraryView {
@@ -93,6 +102,9 @@ export class LibraryUnitOfWork {
       const store = this.createRepository(userId);
       const snapshot = await store.loadLibrary();
       this.assertExpectedVersions(snapshot, options.expectedVersions);
+      if (options.expectedLibraryVersion !== undefined && snapshot.libraryVersion !== options.expectedLibraryVersion) {
+        throw new LibraryVersionConflictError(options.expectedLibraryVersion, snapshot.libraryVersion);
+      }
       const repository = new InMemoryTournamentRepository(this.stateOf(snapshot));
       let result: T;
       try {
@@ -106,7 +118,7 @@ export class LibraryUnitOfWork {
         return { result, committed: false, ...view(snapshot.versions, snapshot.libraryVersion) };
       }
       try {
-        const committed = await store.commit(changes, snapshot);
+        const committed = await store.commit(changes, snapshot, { beforeWrite: options.beforeCommit });
         const versions = new Map(snapshot.versions);
         for (const id of changes.deleted) versions.delete(id);
         if (changes.replaceLibrary) {

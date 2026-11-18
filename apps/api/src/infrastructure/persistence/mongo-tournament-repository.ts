@@ -123,6 +123,15 @@ export interface LibraryReadVersions {
   readonly libraryVersion: number;
 }
 
+export interface LibraryCommitOptions {
+  /**
+   * Verificación adicional dentro de la MISMA transacción, antes de escribir:
+   * si lanza, no se escribe nada (p. ej. que un punto de guardado siga en la
+   * versión que se restaura).
+   */
+  readonly beforeWrite?: (session: ClientSession) => Promise<void>;
+}
+
 export interface LibraryCommitResult {
   /** Versión nueva de cada torneo guardado. */
   readonly versions: ReadonlyMap<string, number>;
@@ -259,7 +268,11 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
    * biblioteca y la de cada torneo escrito sigan siendo las leídas; cualquier
    * conflicto aborta todo.
    */
-  async commit(changes: LibraryChanges, read: LibraryReadVersions): Promise<LibraryCommitResult> {
+  async commit(
+    changes: LibraryChanges,
+    read: LibraryReadVersions,
+    options: LibraryCommitOptions = {},
+  ): Promise<LibraryCommitResult> {
     changes.saved.forEach(tournament => this.assertStorable(tournament));
     changes.events.forEach(event => this.assertActivityEvent(event));
     const savedIds = new Set(changes.saved.map(({ id }) => id));
@@ -267,6 +280,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
       throw new Error("No se guardaron los cambios: la selección contiene torneos duplicados.");
     }
     const result = await this.transaction(async session => {
+      await options.beforeWrite?.(session);
       const libraryVersion = await this.advanceLibraryVersion(read.libraryVersion, session);
       if (changes.replaceLibrary) {
         const kept = [...savedIds].filter(id => read.versions.has(id));

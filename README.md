@@ -135,7 +135,11 @@ npm run db:reset                          # BORRA el volumen de MongoDB y levant
   - Exportar: `exportTournament(id)` devuelve un archivo `cancha-tournament` y `exportLibrary` un respaldo `cancha-backup` con el historial.
   - `importTournament(archive, decision: ADD | COPY | UPDATE)` recibe el texto del archivo. Si falla, sólo se registra el evento `tournament-import-rejected`.
   - `restoreBackup(backup, mode: MERGE | REPLACE)` agrega los torneos nuevos o reemplaza la biblioteca y el historial, en una sola transacción.
-  - Diferencias con la web: el servidor ignora los universos deportivos del respaldo y todavía no guarda una copia de recuperación antes de reemplazar (llega con los puntos de guardado, fase 4).
+  - Diferencias con la web: el servidor ignora los universos deportivos del respaldo y no guarda automáticamente una copia de recuperación antes de reemplazar. Para tener una, crea antes un punto de guardado.
+- **Puntos de guardado** (por usuario): `createSaveCheckpoint(name, description)` guarda una copia completa de la biblioteca y su historial (respaldo JSON v7 con huella SHA-256). `saveCheckpoints` los lista, `saveCheckpointContent(id)` descarga el respaldo verificado y `deleteSaveCheckpoint(id, expectedVersion)` elimina uno.
+  - Para restaurar: `saveCheckpointPreview(id)` verifica el punto, lo compara con la biblioteca actual y devuelve la versión del punto y la de la biblioteca. Después, `restoreSaveCheckpoint(id, expectedVersion, expectedLibraryVersion)` reemplaza la biblioteca en una sola transacción.
+  - Si la biblioteca o el punto cambiaron desde la vista previa, responde `CONFLICT` sin escribir nada. Un punto alterado en la base no pasa la verificación (`VALIDATION`).
+  - Límite: 20 puntos por usuario, de hasta 15 MB cada uno.
 - `dev:api` vuelve a compilar core sólo al iniciar: si cambias `packages/core`, reinícialo. `npm run build` compila core antes que la API.
 - `npm run lint` impide que `apps/api` importe `apps/web` o rutas relativas a `packages/`.
 
@@ -167,7 +171,6 @@ npm run db:reset                          # BORRA el volumen de MongoDB y levant
 | Temporadas | `create-tournament-season`, `create-linked-division-seasons`, `simulate-argentina-half` | Síncronos; requieren definir sus entradas (selección de copa nacional, equipos entrantes). |
 | Revisar → confirmar | `plan-season`, `prepare-continental-edition`, `prepare-stage-draw` (sorteo y calendario), `configure-stage-draw`, `confirm-season-closure`, `record-club-affiliation`, `review-sports-resolution`, `simulate-season-scope`, `program-season-calendar` | La revisión se ata a la confirmación con un `WeakMap` en memoria, así que no puede repartirse entre dos peticiones HTTP. Opciones: revisar y confirmar en la misma unidad de trabajo, o un token de revisión firmado con la versión de la biblioteca. |
 | Asíncronos | `import-official-tournament`, `import-planned-season-calendar`, `generate-local-groups` | La unidad de trabajo sólo admite casos de uso síncronos. Además, las fuentes oficiales (`OfficialLeagueSource`) necesitan adaptadores de servidor con acceso de red (hoy son proxies de Vite). |
-| Puntos de guardado | `services/save-checkpoints` | Por usuario: fase 4 (autenticación). |
 
 ### MongoDB
 

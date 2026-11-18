@@ -184,6 +184,30 @@ describe("LibraryUnitOfWork contra MongoDB (replica set en memoria)", () => {
     expect(await open().libraryVersion()).toBe(initial);
   });
 
+  it("expectedLibraryVersion distinta de la vigente: conflicto sin ejecutar ni reintentar", async () => {
+    await open().save(league("a"));
+    const current = await open().libraryVersion();
+    const work = vi.fn();
+
+    await expect(unitOfWork().run(user, work, { expectedLibraryVersion: current - 1 }))
+      .rejects.toMatchObject({ name: "LibraryVersionConflictError", expectedVersion: current - 1, actualVersion: current });
+    expect(work).not.toHaveBeenCalled();
+    const ok = await unitOfWork().run(user, repository => repository.save(league("b")), { expectedLibraryVersion: current });
+    expect(ok.libraryVersion).toBe(current + 1);
+  });
+
+  it("si beforeCommit lanza dentro de la transacción, no se escribe nada", async () => {
+    await open().saveWithActivity(league("a"), event(league("a"), "Previo."));
+    const before = await open().loadLibrary();
+
+    await expect(unitOfWork().run(user, repository => {
+      repository.save(league("b"));
+      repository.setActiveTournamentId("b");
+    }, { beforeCommit: async () => { throw new Error("El punto cambió."); } })).rejects.toThrow("El punto cambió.");
+
+    expect(await open().loadLibrary()).toEqual(before);
+  });
+
   it("la unidad de trabajo sólo ve la biblioteca del usuario indicado", async () => {
     await open(otherUser).save(league("ajeno"));
     await open().save(league("propio"));
