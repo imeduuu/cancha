@@ -4,6 +4,7 @@ import { validateEnvironment } from "./config/env.validation.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { TournamentPersistenceModule } from "./infrastructure/persistence/tournament-persistence.module.js";
+import { LibraryModule } from "./library/library.module.js";
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { TournamentPersistenceModule } from "./infrastructure/persistence/tourna
     DatabaseModule,
     HealthModule,
     TournamentPersistenceModule,
+    LibraryModule,
   ],
 })
 export class AppModule {}

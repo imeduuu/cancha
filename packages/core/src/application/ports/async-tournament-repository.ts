@@ -7,8 +7,9 @@ import type { ActivityEvent } from "../../domain/entities/activity-event";
  * historial son obligatorias: un servidor siempre debe garantizar que el torneo
  * y su ActivityEvent se guardan juntos o no se guarda nada.
  *
- * Los casos de uso siguen usando el puerto síncrono; ver "Pendiente: fase 3"
- * en CLAUDE.md para cómo se conectarán.
+ * Los casos de uso siguen usando el puerto síncrono: en el servidor se ejecutan
+ * sobre un repositorio en memoria dentro de una unidad de trabajo (ver
+ * "Unidad de trabajo del servidor" en CLAUDE.md).
  */
 export interface AsyncTournamentRepository {
   save(tournament: Tournament): Promise<void>;

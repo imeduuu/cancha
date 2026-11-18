@@ -89,7 +89,7 @@ npm run build
 
 ## API
 
-`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`) y persiste en MongoDB. Todavía no expone casos de uso (GraphQL llega en la fase 3 y la autenticación en la 4).
+`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`) y persiste en MongoDB. Ejecuta los casos de uso de core sobre la biblioteca guardada mediante una unidad de trabajo; todavía no los expone por HTTP (GraphQL llega en la fase 3B y la autenticación en la 4).
 
 ```bash
 npm run db:up                             # MongoDB 8.0 en Docker como replica set de un nodo (espera al healthcheck)
@@ -107,9 +107,15 @@ curl http://localhost:3000/health
 
 - `docker-compose.yml` (raíz): imagen `mongo:8.0.38` con `--replSet rs0`, volumen `cancha-mongo-data` y un healthcheck que inicia el replica set la primera vez. Las transacciones de MongoDB exigen un replica set. `npm run db:up` lo levanta y espera a que esté sano; `npm run db:down` lo detiene sin borrar el volumen (`docker compose down -v` lo borra). El miembro se anuncia como `localhost:27017`, válido para conectarse desde el host con `directConnection=true`.
 - `MongoTournamentRepository` (`apps/api/src/infrastructure/persistence/`) guarda la biblioteca de torneos con las mismas validaciones y garantías que el adaptador de `localStorage`, pero con transacciones reales: `saveWithActivity`, `saveManyWithActivity`, `recordActivity` y `deleteById` escriben el torneo y su evento de actividad en una sola transacción o no escriben nada.
-- Colecciones: `tournaments` (un documento por torneo, `_id` = id del torneo, `_version`, `_saveSeq`, `_savedAt`), `activity` (`_id` = id del evento, `_seq` = orden de registro), `counters` (secuencias) y `library_state` (torneo activo). Índices: `tournaments._saveSeq`, `activity._seq` (único) y `activity.tournamentId + _seq`; se crean al arrancar la API.
+- Colecciones: `tournaments` (un documento por torneo, `_id` = id del torneo, `_version`, `_saveSeq`, `_savedAt`), `activity` (`_id` = id del evento, `_seq` = orden de registro), `counters` (secuencias) y `library_state` (torneo activo y versión de la biblioteca). Índices: `tournaments._saveSeq`, `activity._seq` (único) y `activity.tournamentId + _seq`; se crean al arrancar la API.
 - **Concurrencia optimista**: cada torneo tiene una versión. Si dos clientes leen la misma versión y ambos guardan, el segundo recibe `TournamentVersionConflictError` ("otro cliente lo modificó (versión esperada N, versión actual M). Recarga el torneo y vuelve a aplicar tus cambios.") y su transacción completa se descarta.
-- **Suite de contrato**: `packages/core/src/test-utils/tournament-repository-contract.ts` define en 13 casos lo que debe cumplir cualquier repositorio de la biblioteca: guardar y leer sin pérdidas, escrituras coordinadas con el historial, operaciones de varios torneos sin escrituras parciales, eliminación y torneo activo. Se ejecuta contra `LocalStorageTournamentRepository` (web) y contra `MongoTournamentRepository` (API); ambos la cumplen completa.
+- **Unidad de trabajo** (`apps/api/src/library/library-unit-of-work.ts`): `LibraryUnitOfWork.run(casoDeUso, { expectedVersions })` funciona así:
+  1. Carga la biblioteca de Mongo en un `InMemoryTournamentRepository`.
+  2. Ejecuta el caso de uso de core sin cambios.
+  3. Escribe todos los cambios (torneos, eliminaciones, eventos y torneo activo) en una sola transacción. Verifica la versión de cada torneo y la de la biblioteca, para evitar decidir con datos que otro cliente cambió.
+
+  Si el caso de uso lanza, no se escribe nada; sólo se conservan los eventos de rechazo. Un conflicto sólo de biblioteca se reintenta hasta 3 veces.
+- **Suite de contrato**: `packages/core/src/test-utils/tournament-repository-contract.ts` define en 13 casos lo que debe cumplir cualquier repositorio de la biblioteca: guardar y leer sin pérdidas, escrituras coordinadas con el historial, operaciones de varios torneos sin escrituras parciales, eliminación y torneo activo. Se ejecuta contra `LocalStorageTournamentRepository` (web), `MongoTournamentRepository` e `InMemoryTournamentRepository` (API); los tres la cumplen completa.
 - Pruebas: `npm test` usa, una sola vez por corrida, [mongodb-memory-server](https://github.com/typegoose/mongodb-memory-server) (`mongod` real en modo replica set), sin Docker. La versión del binario está fijada en `config.mongodbMemoryServer.version` de `apps/api/package.json` (la misma que la imagen de Docker; cámbialas juntas). La primera ejecución descarga el binario (~80 MB) a `~/.cache/mongodb-binaries`; en CI conviene cachear esa carpeta o fijarla con `MONGOMS_DOWNLOAD_DIR`.
 
 ## Importadores: cobertura, validación y reimportación

@@ -3,6 +3,7 @@ import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { AsyncTournamentLibraryRepository } from "@cancha/core/application/ports/async-tournament-repository";
 import { createActivityEvent } from "@cancha/core/application/services/activity-log";
 import { getTournamentStorageIssue } from "@cancha/core/application/validation/tournament-storage";
+import type { LibraryChanges } from "./in-memory-tournament-repository.js";
 import {
   MongoServerError,
   type ClientSession,
@@ -38,9 +39,14 @@ export interface ActivityDocument {
 }
 
 interface CounterDocument { _id: string; seq: number }
-interface LibraryStateDocument { _id: string; tournamentId: string | null }
+/**
+ * `library_state`: `active-tournament` guarda el torneo activo y `library` la
+ * versión de la biblioteca completa (+1 en cada escritura).
+ */
+interface LibraryStateDocument { _id: string; tournamentId?: string | null; _version?: number }
 
 const activeTournamentStateId = "active-tournament";
+const libraryVersionStateId = "library";
 const transactionOptions: TransactionOptions = {
   readConcern: { level: "snapshot" },
   writeConcern: { w: "majority" },
@@ -62,6 +68,43 @@ export class TournamentVersionConflictError extends Error {
     super(conflictMessage(tournamentName, expectedVersion, actualVersion));
     this.name = "TournamentVersionConflictError";
   }
+}
+
+/**
+ * Otro cliente escribió en la biblioteca después de que una unidad de trabajo la
+ * leyera. Evita el write skew (decidir leyendo el torneo B y escribir sólo A):
+ * la transacción se aborta completa.
+ */
+export class LibraryVersionConflictError extends Error {
+  constructor(readonly expectedVersion: number, readonly actualVersion: number | null) {
+    super(
+      `No se guardaron los cambios: otro cliente modificó la biblioteca (versión esperada ${expectedVersion}, `
+      + `versión actual ${actualVersion ?? "desconocida"}). Recarga la biblioteca y vuelve a intentarlo.`,
+    );
+    this.name = "LibraryVersionConflictError";
+  }
+}
+
+/** Biblioteca leída en una sola transacción snapshot, con las versiones de lo leído. */
+export interface LibrarySnapshot {
+  readonly tournaments: Tournament[];
+  readonly versions: ReadonlyMap<string, number>;
+  readonly activity: ActivityEvent[];
+  readonly activeTournamentId: string | null;
+  /** 0 si la biblioteca nunca se escribió. */
+  readonly libraryVersion: number;
+}
+
+/** Versiones contra las que se verifica un commit (las de la lectura). */
+export interface LibraryReadVersions {
+  readonly versions: ReadonlyMap<string, number>;
+  readonly libraryVersion: number;
+}
+
+export interface LibraryCommitResult {
+  /** Versión nueva de cada torneo guardado. */
+  readonly versions: ReadonlyMap<string, number>;
+  readonly libraryVersion: number;
 }
 
 function conflictMessage(name: string, expected: number | null, actual: number | null): string {
@@ -141,24 +184,92 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
 
   async findAll(): Promise<Tournament[]> {
     const documents = await this.tournaments.find().sort({ _saveSeq: -1, _id: 1 }).toArray();
-    const valid: Tournament[] = [];
-    for (const document of documents) {
-      const tournament = toTournament(document);
-      const issue = storageIssue(tournament);
-      if (issue) {
-        const name = typeof tournament.name === "string" ? tournament.name : tournament.id;
-        console.warn(`Se omitió un campeonato guardado por contener datos inválidos. "${name}". ${issue}`);
-        continue;
-      }
-      this.versions.set(tournament.id, document._version);
-      valid.push(tournament);
+    return this.readValidTournaments(documents, this.versions);
+  }
+
+  /**
+   * Toda la biblioteca (torneos, actividad, torneo activo y versión) en una
+   * transacción snapshot: una vista coherente para la unidad de trabajo.
+   */
+  async loadLibrary(): Promise<LibrarySnapshot> {
+    const snapshot = await this.transaction(async session => {
+      const documents = await this.tournaments.find({}, { session }).sort({ _saveSeq: -1, _id: 1 }).toArray();
+      const versions = new Map<string, number>();
+      const tournaments = this.readValidTournaments(documents, versions);
+      const activity = await this.readActivity(session);
+      const active = await this.libraryState.findOne({ _id: activeTournamentStateId }, { session });
+      const library = await this.libraryState.findOne({ _id: libraryVersionStateId }, { session });
+      return {
+        tournaments,
+        versions,
+        activity,
+        activeTournamentId: active?.tournamentId ?? null,
+        libraryVersion: library?._version ?? 0,
+      };
+    });
+    this.remember(snapshot.versions);
+    return snapshot;
+  }
+
+  /**
+   * Escribe en UNA transacción todo lo que cambió una unidad de trabajo: torneos
+   * guardados y eliminados, eventos y torneo activo. Exige que la versión de la
+   * biblioteca y la de cada torneo escrito sigan siendo las leídas; cualquier
+   * conflicto aborta todo.
+   */
+  async commit(changes: LibraryChanges, read: LibraryReadVersions): Promise<LibraryCommitResult> {
+    changes.saved.forEach(tournament => this.assertStorable(tournament));
+    changes.events.forEach(event => this.assertActivityEvent(event));
+    const savedIds = new Set(changes.saved.map(({ id }) => id));
+    if (savedIds.size !== changes.saved.length) {
+      throw new Error("No se guardaron los cambios: la selección contiene torneos duplicados.");
     }
-    return valid;
+    const result = await this.transaction(async session => {
+      const libraryVersion = await this.advanceLibraryVersion(read.libraryVersion, session);
+      if (changes.replaceLibrary) {
+        const kept = [...savedIds].filter(id => read.versions.has(id));
+        await this.tournaments.deleteMany({ _id: { $nin: kept } }, { session });
+      } else {
+        for (const id of changes.deleted) {
+          const expected = read.versions.get(id);
+          const deleted = expected === undefined
+            ? { deletedCount: 0 }
+            : await this.tournaments.deleteOne({ _id: id, _version: expected }, { session });
+          if (deleted.deletedCount === 0) {
+            throw new TournamentVersionConflictError(id, expected ?? null, await this.currentVersion(id, session));
+          }
+        }
+      }
+      const versions = changes.saved.length > 0
+        ? await this.writeTournaments(changes.saved, session, read.versions)
+        : new Map<string, number>();
+      if (changes.replaceActivity) await this.activity.deleteMany({}, { session });
+      for (const event of changes.events) await this.appendActivity(event, session);
+      if (changes.activeTournament) {
+        await this.libraryState.updateOne(
+          { _id: activeTournamentStateId },
+          { $set: { tournamentId: changes.activeTournament.id } },
+          { upsert: true, session },
+        );
+      }
+      return { versions, libraryVersion };
+    });
+    for (const id of changes.deleted) this.versions.delete(id);
+    this.remember(result.versions);
+    return result;
+  }
+
+  /** Versión vigente de la biblioteca (0 si nunca se escribió). */
+  async libraryVersion(): Promise<number> {
+    return (await this.libraryState.findOne({ _id: libraryVersionStateId }))?._version ?? 0;
   }
 
   async save(tournament: Tournament): Promise<void> {
     this.assertStorable(tournament);
-    const written = await this.transaction(session => this.writeTournaments([tournament], session));
+    const written = await this.transaction(async session => {
+      await this.bumpLibraryVersion(session);
+      return this.writeTournaments([tournament], session);
+    });
     this.remember(written);
   }
 
@@ -176,6 +287,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
     tournaments.forEach(tournament => this.assertStorable(tournament));
     this.assertActivityEvent(event);
     const written = await this.transaction(async session => {
+      await this.bumpLibraryVersion(session);
       const versions = await this.writeTournaments(tournaments, session);
       await this.appendActivity(event, session);
       return versions;
@@ -185,15 +297,14 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
 
   async recordActivity(event: ActivityEvent): Promise<void> {
     this.assertActivityEvent(event);
-    await this.transaction(session => this.appendActivity(event, session));
+    await this.transaction(async session => {
+      await this.bumpLibraryVersion(session);
+      await this.appendActivity(event, session);
+    });
   }
 
   async findActivity(): Promise<ActivityEvent[]> {
-    const events = (await this.activity.find().sort({ _seq: 1 }).toArray()).map(toActivityEvent);
-    if (!events.every(isActivityEvent)) {
-      throw new Error("El historial de actividad contiene registros inválidos.");
-    }
-    return events;
+    return this.readActivity();
   }
 
   async deleteById(id: string): Promise<void> {
@@ -209,6 +320,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
       if (deleted.deletedCount === 0) {
         throw new TournamentVersionConflictError(id, expected, document._version, tournament.name);
       }
+      await this.bumpLibraryVersion(session);
       await this.appendActivity(createActivityEvent(tournament, {
         action: "tournament-deleted",
         entityType: "tournament",
@@ -225,11 +337,14 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   }
 
   async setActiveTournamentId(id: string | null): Promise<void> {
-    await this.libraryState.updateOne(
-      { _id: activeTournamentStateId },
-      { $set: { tournamentId: id } },
-      { upsert: true },
-    );
+    await this.transaction(async session => {
+      await this.bumpLibraryVersion(session);
+      await this.libraryState.updateOne(
+        { _id: activeTournamentStateId },
+        { $set: { tournamentId: id } },
+        { upsert: true, session },
+      );
+    });
   }
 
   private assertStorable(tournament: Tournament): void {
@@ -239,6 +354,69 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
 
   private assertActivityEvent(event: ActivityEvent): void {
     if (!isActivityEvent(event)) throw new Error("No se pudo guardar un evento de actividad inválido.");
+  }
+
+  private readValidTournaments(documents: readonly TournamentDocument[], versions: Map<string, number>): Tournament[] {
+    const valid: Tournament[] = [];
+    for (const document of documents) {
+      const tournament = toTournament(document);
+      const issue = storageIssue(tournament);
+      if (issue) {
+        const name = typeof tournament.name === "string" ? tournament.name : tournament.id;
+        console.warn(`Se omitió un campeonato guardado por contener datos inválidos. "${name}". ${issue}`);
+        continue;
+      }
+      versions.set(tournament.id, document._version);
+      valid.push(tournament);
+    }
+    return valid;
+  }
+
+  private async readActivity(session?: ClientSession): Promise<ActivityEvent[]> {
+    const events = (await this.activity.find({}, { session }).sort({ _seq: 1 }).toArray()).map(toActivityEvent);
+    if (!events.every(isActivityEvent)) {
+      throw new Error("El historial de actividad contiene registros inválidos.");
+    }
+    return events;
+  }
+
+  /** Escrituras sueltas (fuera de una unidad de trabajo): +1 sin verificar, para invalidar lecturas ajenas. */
+  private async bumpLibraryVersion(session: ClientSession): Promise<void> {
+    await this.libraryState.updateOne(
+      { _id: libraryVersionStateId },
+      { $inc: { _version: 1 } },
+      { upsert: true, session },
+    );
+  }
+
+  /** Unidad de trabajo: +1 sólo si la biblioteca sigue en la versión leída. */
+  private async advanceLibraryVersion(expected: number, session: ClientSession): Promise<number> {
+    if (expected === 0) {
+      try {
+        await this.libraryState.insertOne({ _id: libraryVersionStateId, _version: 1 }, { session });
+        return 1;
+      } catch (error) {
+        if (!(error instanceof MongoServerError) || error.code !== duplicateKeyCode) throw error;
+        throw new LibraryVersionConflictError(expected, await this.currentLibraryVersion());
+      }
+    }
+    const updated = await this.libraryState.updateOne(
+      { _id: libraryVersionStateId, _version: expected },
+      { $inc: { _version: 1 } },
+      { session },
+    );
+    if (updated.matchedCount === 0) {
+      throw new LibraryVersionConflictError(expected, await this.currentLibraryVersion(session));
+    }
+    return expected + 1;
+  }
+
+  private async currentLibraryVersion(session?: ClientSession): Promise<number | null> {
+    try {
+      return (await this.libraryState.findOne({ _id: libraryVersionStateId }, { session }))?._version ?? 0;
+    } catch {
+      return null;
+    }
   }
 
   private async transaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
@@ -253,6 +431,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   private async writeTournaments(
     tournaments: readonly Tournament[],
     session: ClientSession,
+    readVersions: ReadonlyMap<string, number> = this.versions,
   ): Promise<Map<string, number>> {
     const lastSeq = await this.nextSequence("tournaments", tournaments.length, session);
     const savedAt = new Date();
@@ -260,7 +439,7 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
     for (const [index, tournament] of tournaments.entries()) {
       const { id, ...fields } = toPlainJson(tournament);
       const saveSeq = lastSeq - tournaments.length + 1 + index;
-      const expected = this.versions.get(id);
+      const expected = readVersions.get(id);
       const version = (expected ?? 0) + 1;
       const document: TournamentDocument = { _id: id, ...fields, _version: version, _saveSeq: saveSeq, _savedAt: savedAt };
       if (expected === undefined) {

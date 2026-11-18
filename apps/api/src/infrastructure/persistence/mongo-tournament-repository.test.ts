@@ -6,6 +6,7 @@ import type { Db } from "mongodb";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { replicaSetStartupTimeoutMs, startTestReplicaSet, type TestReplicaSet } from "../../test-utils/mongo-replica-set.js";
 import {
+  LibraryVersionConflictError,
   MongoTournamentRepository,
   TournamentVersionConflictError,
   tournamentCollectionNames,
@@ -152,6 +153,103 @@ describe("MongoTournamentRepository (específico de MongoDB)", () => {
     expect(tournamentIndexes).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "saveSeq_desc", key: { _saveSeq: -1 } }),
     ]));
+  });
+
+  it("cada escritura suelta incrementa la versión de la biblioteca", async () => {
+    const repository = open();
+    expect(await repository.libraryVersion()).toBe(0);
+    await repository.save(league("a"));
+    await repository.recordActivity(event(league("a")));
+    await repository.setActiveTournamentId("a");
+    await repository.deleteById("a");
+    expect(await repository.libraryVersion()).toBe(4);
+  });
+
+  describe("loadLibrary + commit (unidad de trabajo)", () => {
+    it("loadLibrary lee torneos, versiones, actividad, torneo activo y versión de biblioteca", async () => {
+      const setup = open();
+      await setup.saveWithActivity(league("a"), event(league("a"), "Primero."));
+      await setup.setActiveTournamentId("a");
+
+      const snapshot = await open().loadLibrary();
+      expect(snapshot.tournaments.map(({ id }) => id)).toEqual(["a"]);
+      expect(snapshot.versions.get("a")).toBe(1);
+      expect(snapshot.activity.map(({ summary }) => summary)).toEqual(["Primero."]);
+      expect(snapshot.activeTournamentId).toBe("a");
+      expect(snapshot.libraryVersion).toBe(2);
+    });
+
+    it("escribe varios torneos, eventos, eliminaciones y torneo activo en una sola transacción", async () => {
+      const setup = open();
+      await setup.save(league("a"));
+      await setup.save(league("b"));
+      const repository = open();
+      const snapshot = await repository.loadLibrary();
+      const a = snapshot.tournaments.find(({ id }) => id === "a")!;
+
+      const result = await repository.commit({
+        saved: [{ ...a, name: "A cambiada" }, league("c")],
+        deleted: ["b"],
+        events: [event(a, "Uno."), event(league("c"), "Dos.")],
+        activeTournament: { id: "c" },
+      }, snapshot);
+
+      expect(result.libraryVersion).toBe(snapshot.libraryVersion + 1);
+      expect([...result.versions]).toEqual([["a", 2], ["c", 1]]);
+      expect((await open().findAll()).map(({ id, name }) => [id, name])).toEqual([["c", "Liga c"], ["a", "A cambiada"]]);
+      expect((await open().findActivity()).map(({ summary }) => summary)).toEqual(["Uno.", "Dos."]);
+      expect(await open().getActiveTournamentId()).toBe("c");
+    });
+
+    it("un conflicto de biblioteca aborta todo el commit", async () => {
+      await open().save(league("a"));
+      const stale = open();
+      const snapshot = await stale.loadLibrary();
+      await open().recordActivity(event(league("x"), "Otro cliente."));
+
+      const failure = stale.commit({ saved: [league("nuevo")], deleted: [], events: [event(league("nuevo"))] }, snapshot);
+      await expect(failure).rejects.toBeInstanceOf(LibraryVersionConflictError);
+      await expect(failure).rejects.toThrow(/otro cliente modificó la biblioteca \(versión esperada 1, versión actual 2\)/);
+      expect((await open().findAll()).map(({ id }) => id)).toEqual(["a"]);
+      expect((await open().findActivity()).map(({ summary }) => summary)).toEqual(["Otro cliente."]);
+    });
+
+    it("un conflicto de un torneo aborta todo el commit aunque la biblioteca coincida", async () => {
+      await open().save(league("a"));
+      await open().save(league("b"));
+      const repository = open();
+      const snapshot = await repository.loadLibrary();
+      const stale = { ...snapshot, versions: new Map([...snapshot.versions, ["b", 99]]) };
+
+      const failure = repository.commit({
+        saved: [{ ...league("a"), name: "A nueva" }, { ...league("b"), name: "B nueva" }],
+        deleted: [],
+        events: [event(league("a"))],
+      }, stale);
+      await expect(failure).rejects.toBeInstanceOf(TournamentVersionConflictError);
+      expect((await open().findAll()).map(({ name }) => name).sort()).toEqual(["Liga a", "Liga b"]);
+      expect(await open().findActivity()).toEqual([]);
+      expect(await open().libraryVersion()).toBe(snapshot.libraryVersion);
+    });
+
+    it("replaceLibrary reemplaza todos los torneos y replaceActivity el historial", async () => {
+      const setup = open();
+      await setup.saveWithActivity(league("a"), event(league("a"), "Viejo."));
+      await setup.save(league("b"));
+      const repository = open();
+      const snapshot = await repository.loadLibrary();
+
+      await repository.commit({
+        saved: [{ ...league("b"), name: "B restaurada" }, league("c")],
+        deleted: [],
+        events: [event(league("c"), "Nuevo.")],
+        replaceLibrary: true,
+        replaceActivity: true,
+      }, snapshot);
+
+      expect((await open().findAll()).map(({ id, name }) => [id, name])).toEqual([["c", "Liga c"], ["b", "B restaurada"]]);
+      expect((await open().findActivity()).map(({ summary }) => summary)).toEqual(["Nuevo."]);
+    });
   });
 
   it("serializa escrituras concurrentes sobre la misma versión: sólo una gana", async () => {

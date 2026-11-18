@@ -10,7 +10,7 @@ El repositorio es un monorepo con npm workspaces. Todas las órdenes `npm` se ej
 | --- | --- | --- |
 | `@cancha/core` | `packages/core` | El modelo deportivo (`src/domain`), los casos de uso y puertos (`src/application`) y fixtures reutilizables para pruebas (`src/test-utils`). Es TypeScript puro, sin DOM ni APIs del navegador o del servidor. |
 | `@cancha/web` | `apps/web` | La aplicación React/Vite: adaptadores de infraestructura (`src/infrastructure`), interfaz (`src/presentation`), pruebas de casos de uso contra los adaptadores reales (`src/integration`), utilidades de prueba y muestras de los importadores (`src/test-utils`), pruebas de navegador (`e2e/`), scripts de desarrollo (`scripts/`) y la configuración de Vite y Playwright. |
-| `@cancha/api` | `apps/api` | API NestJS 12 sobre `@cancha/core` compilado: configuración validada, `GET /health` y persistencia en MongoDB (`MongoTournamentRepository`). Todavía no expone casos de uso (fase 3). |
+| `@cancha/api` | `apps/api` | API NestJS 12 sobre `@cancha/core` compilado: configuración validada, `GET /health`, persistencia en MongoDB (`MongoTournamentRepository`) y una unidad de trabajo (`LibraryUnitOfWork`) que ejecuta los casos de uso de core sin cambios sobre la biblioteca guardada en Mongo. |
 
 Cómo se relacionan los paquetes:
 
@@ -39,7 +39,7 @@ infrastructure┘
 
 **El dominio no puede depender de React, de `localStorage` ni de ninguna otra API del navegador, ni de ninguna librería de servidor.**
 
-La regla se extiende a todo `@cancha/core`, que es TypeScript puro y determinista. Cualquier efecto (almacenamiento, red, interfaz) entra a través de un puerto definido en `application/ports/` e implementado fuera del núcleo: hoy en `apps/web/src/infrastructure/` y, en la fase 2, en `apps/api`. Gracias a esto el mismo núcleo puede ejecutarse en el navegador, en pruebas con Node y, más adelante, en un servidor.
+La regla se extiende a todo `@cancha/core`, que es TypeScript puro y determinista. Cualquier efecto (almacenamiento, red, interfaz) entra a través de un puerto definido en `application/ports/` e implementado fuera del núcleo: en `apps/web/src/infrastructure/` (navegador) y en `apps/api/src/infrastructure/` (servidor). Gracias a esto el mismo núcleo se ejecuta en el navegador, en pruebas con Node y en el servidor (`apps/api`).
 
 La regla se comprueba automáticamente:
 
@@ -55,7 +55,7 @@ Las interfaces están en `packages/core/src/application/ports/` y sus implementa
 
 ### Repositorio de torneos
 
-`TournamentRepository` y `TournamentLibraryRepository` (`tournament-repository.ts`) definen cómo se guardan y leen los torneos, la biblioteca y el historial de actividad. La única implementación es `LocalStorageTournamentRepository`, que usa las claves `cancha.tournaments`, `cancha.activity`, `cancha.sportsUniverses` y `cancha.recovery`, además de la selección activa.
+`TournamentRepository` y `TournamentLibraryRepository` (`tournament-repository.ts`) definen cómo se guardan y leen los torneos, la biblioteca y el historial de actividad. En el navegador lo implementa `LocalStorageTournamentRepository`; en el servidor, `InMemoryTournamentRepository` (dentro de la unidad de trabajo, ver más abajo). `LocalStorageTournamentRepository` usa las claves `cancha.tournaments`, `cancha.activity`, `cancha.sportsUniverses` y `cancha.recovery`, además de la selección activa.
 
 - **`saveWithActivity(tournament, event)`** es la forma de guardar cualquier cambio que deba quedar registrado: escribe el torneo y su evento de actividad de manera coordinada. Si falla una de las escrituras, el adaptador intenta revertir ambas; si la reversión también falla, el error lo indica explícitamente. No equivale a una transacción del navegador.
 - Los casos de uso guardan mediante el servicio `saveWithActivity` de `application/services/activity-log.ts`. Ese servicio rechaza el guardado si el repositorio no ofrece escritura coordinada, en lugar de guardar el torneo y el evento por separado (lo que podría dejar uno sin el otro). También añade al evento las resoluciones oficiales que el cambio haya invalidado.
@@ -70,16 +70,34 @@ El puerto síncrono no puede implementarse sobre MongoDB, cuyo driver es asíncr
 - Antes de escribir valida igual que `localStorage`, con `getTournamentStorageIssue` (`application/validation/tournament-storage.ts`): integridad, jugadores, reglamento y detalles de partido.
 - **Concurrencia optimista**: cada documento lleva `_version`. Una instancia del repositorio es una unidad de trabajo que recuerda la versión de lo que leyó; al guardar exige que siga vigente. Si no, lanza `TournamentVersionConflictError` y aborta la transacción. Tampoco permite sobrescribir a ciegas un torneo existente que no leyó.
 - No implementa lo específico del navegador: universos deportivos, copia `cancha.recovery` e importación de respaldos.
+- **Versión de biblioteca**: `library_state` guarda además `{ _id: "library", _version }`, que sube en cada escritura. Sirve para detectar *write skew*: un caso de uso que decide leyendo el torneo B y escribe sólo el A.
+
+### Unidad de trabajo del servidor
+
+Los casos de uso de core son síncronos y el repositorio de MongoDB es asíncrono. En lugar de duplicarlos, `LibraryUnitOfWork` (`apps/api/src/library/`) los ejecuta **sin cambios** en tres pasos:
+
+1. **Cargar**: `MongoTournamentRepository.loadLibrary()` lee en una transacción *snapshot* los torneos con sus versiones, la actividad, el torneo activo y la versión de la biblioteca.
+2. **Ejecutar**: el caso de uso corre sobre un `InMemoryTournamentRepository`, un adaptador síncrono que cumple la suite de contrato y registra lo que cambió: torneos guardados y eliminados, eventos y torneo activo.
+3. **Escribir**: `MongoTournamentRepository.commit(cambios, versionesLeídas)` lo escribe todo en **una** transacción. Exige que la versión de la biblioteca y la de cada torneo escrito sigan siendo las leídas. Un conflicto aborta todo.
+
+Consecuencias:
+
+- **Atomicidad por caso de uso**: aunque llame varias veces a `save` o `saveWithActivity`, como `simulateChampionship`, se hace un único commit.
+- **Si el caso de uso lanza**, no se escribe nada. La excepción son los eventos de rechazo (`outcome: "rejected"`, p. ej. `tournament-import-rejected`), que se registran aparte, igual que en la web.
+- **Versión del cliente**: `run(trabajo, { expectedVersions })` compara la versión que editó el cliente antes de ejecutar nada. Si ya no es la vigente, lanza `TournamentVersionConflictError`; un torneo inexistente es `NotFoundError`.
+- **Conflicto sólo de biblioteca**: otro cliente escribió otro torneo. Se reintenta hasta 3 veces sobre datos frescos, comprobando de nuevo la versión esperada. Es seguro porque el caso de uso se vuelve a ejecutar completo.
+- **Costo**: cada petición carga la biblioteca completa, en memoria y latencia O(biblioteca). Es aceptable con bibliotecas de decenas de torneos, y con autenticación (fase 4) cada biblioteca será de un usuario.
+- **Sólo síncronos**: la unidad de trabajo admite únicamente casos de uso síncronos. Los asíncronos, como la importación oficial o la generación de grupos, quedan pendientes.
 
 ### Suite de contrato
 
-`describeTournamentRepositoryContract` (`packages/core/src/test-utils/tournament-repository-contract.ts`) recibe una fábrica de repositorios y verifica en 13 casos el comportamiento que esperan los casos de uso, con el puerto síncrono o el asíncrono. Provoca los fallos sólo con entradas inválidas, así que funciona con cualquier adaptador sin inyectar errores de almacenamiento. La ejecutan el adaptador de `localStorage` (en `apps/web`) y el de MongoDB (en `apps/api`); un adaptador nuevo debe pasarla también.
+`describeTournamentRepositoryContract` (`packages/core/src/test-utils/tournament-repository-contract.ts`) recibe una fábrica de repositorios y verifica en 13 casos el comportamiento que esperan los casos de uso, con el puerto síncrono o el asíncrono. Provoca los fallos sólo con entradas inválidas, así que funciona con cualquier adaptador sin inyectar errores de almacenamiento. La ejecutan el adaptador de `localStorage` (en `apps/web`), el de MongoDB y el repositorio en memoria de la unidad de trabajo (ambos en `apps/api`); un adaptador nuevo debe pasarla también.
 
 ### Puntos de guardado
 
 `SaveCheckpointStore` (`save-checkpoint-store.ts`) define el almacén de puntos de guardado, implementado sobre IndexedDB por `IndexedDbSaveCheckpointStore`. Sus operaciones de reemplazo y eliminación comparan primero con el valor esperado (compare-and-set), y `exclusive()` garantiza exclusión entre pestañas.
 
-En el servidor no se usan ni `SaveCheckpointStore` ni `LibraryWriteLease`: las transacciones y la versión de cada torneo reemplazan la exclusión entre pestañas. Los puntos de guardado en el servidor dependen de la autenticación (fase 4), porque pertenecen a un usuario.
+En el servidor no se usan ni `SaveCheckpointStore` ni `LibraryWriteLease`: las transacciones, la versión de cada torneo y la de la biblioteca reemplazan la exclusión entre pestañas. Los puntos de guardado en el servidor dependen de la autenticación (fase 4), porque pertenecen a un usuario.
 
 ### Coordinación entre pestañas
 
