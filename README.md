@@ -89,9 +89,10 @@ npm run build
 
 ## API
 
-`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`). Todavía no expone casos de uso (GraphQL llega en la fase 3 y la autenticación en la 4).
+`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`) y persiste en MongoDB. Todavía no expone casos de uso (GraphQL llega en la fase 3 y la autenticación en la 4).
 
 ```bash
+npm run db:up                             # MongoDB 8.0 en Docker como replica set de un nodo (espera al healthcheck)
 cp apps/api/.env.example apps/api/.env   # ajusta MONGODB_URI si hace falta
 npm run dev:api                           # compila core y arranca Nest en modo watch
 curl http://localhost:3000/health
@@ -101,6 +102,14 @@ curl http://localhost:3000/health
 - **`GET /health`**: `200` con `{ status: "ok", app: { status, version, uptimeSeconds }, mongo: { status: "up", latencyMs } }`; `503` con el mismo formato y `mongo: { status: "down", error }` si MongoDB no responde al `ping` en 2 s. La API arranca aunque MongoDB no esté disponible.
 - `dev:api` vuelve a compilar core sólo al iniciar: si cambias `packages/core`, reinícialo. `npm run build` compila core antes que la API.
 - `npm run lint` impide que `apps/api` importe `apps/web` o rutas relativas a `packages/`.
+
+### MongoDB
+
+- `docker-compose.yml` (raíz): imagen `mongo:8.0.38` con `--replSet rs0`, volumen `cancha-mongo-data` y un healthcheck que inicia el replica set la primera vez. Las transacciones de MongoDB exigen un replica set. `npm run db:up` lo levanta y espera a que esté sano; `npm run db:down` lo detiene sin borrar el volumen (`docker compose down -v` lo borra). El miembro se anuncia como `localhost:27017`, válido para conectarse desde el host con `directConnection=true`.
+- `MongoTournamentRepository` (`apps/api/src/infrastructure/persistence/`) guarda la biblioteca de torneos con las mismas validaciones y garantías que el adaptador de `localStorage`, pero con transacciones reales: `saveWithActivity`, `saveManyWithActivity`, `recordActivity` y `deleteById` escriben el torneo y su evento de actividad en una sola transacción o no escriben nada.
+- Colecciones: `tournaments` (un documento por torneo, `_id` = id del torneo, `_version`, `_saveSeq`, `_savedAt`), `activity` (`_id` = id del evento, `_seq` = orden de registro), `counters` (secuencias) y `library_state` (torneo activo). Índices: `tournaments._saveSeq`, `activity._seq` (único) y `activity.tournamentId + _seq`; se crean al arrancar la API.
+- **Concurrencia optimista**: cada torneo tiene una versión. Si dos clientes leen la misma versión y ambos guardan, el segundo recibe `TournamentVersionConflictError` ("otro cliente lo modificó (versión esperada N, versión actual M). Recarga el torneo y vuelve a aplicar tus cambios.") y su transacción completa se descarta.
+- Pruebas: `npm test` usa [mongodb-memory-server](https://github.com/typegoose/mongodb-memory-server) (`mongod` real en modo replica set), sin Docker. La versión del binario está fijada en `config.mongodbMemoryServer.version` de `apps/api/package.json` (la misma que la imagen de Docker; cámbialas juntas). La primera ejecución descarga el binario (~80 MB) a `~/.cache/mongodb-binaries`; en CI conviene cachear esa carpeta o fijarla con `MONGOMS_DOWNLOAD_DIR`.
 
 ## Importadores: cobertura, validación y reimportación
 

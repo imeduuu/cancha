@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { validateEnvironment } from "./config/env.validation.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { HealthModule } from "./health/health.module.js";
+import { TournamentPersistenceModule } from "./infrastructure/persistence/tournament-persistence.module.js";
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { HealthModule } from "./health/health.module.js";
     }),
     DatabaseModule,
     HealthModule,
+    TournamentPersistenceModule,
   ],
 })
 export class AppModule {}

@@ -10,7 +10,7 @@ El repositorio es un monorepo con npm workspaces. Todas las órdenes `npm` se ej
 | --- | --- | --- |
 | `@cancha/core` | `packages/core` | El modelo deportivo (`src/domain`), los casos de uso y puertos (`src/application`) y fixtures reutilizables para pruebas (`src/test-utils`). Es TypeScript puro, sin DOM ni APIs del navegador o del servidor. |
 | `@cancha/web` | `apps/web` | La aplicación React/Vite: adaptadores de infraestructura (`src/infrastructure`), interfaz (`src/presentation`), pruebas de casos de uso contra los adaptadores reales (`src/integration`), utilidades de prueba y muestras de los importadores (`src/test-utils`), pruebas de navegador (`e2e/`), scripts de desarrollo (`scripts/`) y la configuración de Vite y Playwright. |
-| `@cancha/api` | `apps/api` | Reservado para una API futura (fase 2). Todavía no contiene código. |
+| `@cancha/api` | `apps/api` | API NestJS 12 sobre `@cancha/core` compilado: configuración validada, `GET /health` y persistencia en MongoDB (`MongoTournamentRepository`). Todavía no expone casos de uso (fase 3). |
 
 Cómo se relacionan los paquetes:
 
@@ -51,7 +51,7 @@ La regla se comprueba automáticamente:
 
 ## Puertos de persistencia
 
-Las interfaces están en `packages/core/src/application/ports/` y sus implementaciones en `apps/web/src/infrastructure/persistence/`.
+Las interfaces están en `packages/core/src/application/ports/` y sus implementaciones en `apps/web/src/infrastructure/persistence/` (navegador) y `apps/api/src/infrastructure/persistence/` (servidor).
 
 ### Repositorio de torneos
 
@@ -62,9 +62,20 @@ Las interfaces están en `packages/core/src/application/ports/` y sus implementa
 - `saveManyWithActivity` cubre las operaciones que modifican varios torneos a la vez, como la creación de temporadas vinculadas entre divisiones o la simulación de una temporada completa.
 - `recordActivity` registra eventos que no corresponden a un torneo guardado, como una importación rechazada.
 
+### Repositorio de torneos en el servidor (MongoDB)
+
+El puerto síncrono no puede implementarse sobre MongoDB, cuyo driver es asíncrono. `AsyncTournamentRepository` y `AsyncTournamentLibraryRepository` (`async-tournament-repository.ts`) tienen los mismos métodos y la misma semántica, pero devuelven promesas y hacen obligatorias las escrituras con historial. Los implementa `MongoTournamentRepository` en `apps/api`:
+
+- Cada escritura con historial es una transacción real (replica set): el torneo, o los torneos, y su evento se guardan juntos o no se guarda nada.
+- Antes de escribir valida igual que `localStorage`, con `getTournamentStorageIssue` (`application/validation/tournament-storage.ts`): integridad, jugadores, reglamento y detalles de partido.
+- **Concurrencia optimista**: cada documento lleva `_version`. Una instancia del repositorio es una unidad de trabajo que recuerda la versión de lo que leyó; al guardar exige que siga vigente. Si no, lanza `TournamentVersionConflictError` y aborta la transacción. Tampoco permite sobrescribir a ciegas un torneo existente que no leyó.
+- No implementa lo específico del navegador: universos deportivos, copia `cancha.recovery` e importación de respaldos.
+
 ### Puntos de guardado
 
 `SaveCheckpointStore` (`save-checkpoint-store.ts`) define el almacén de puntos de guardado, implementado sobre IndexedDB por `IndexedDbSaveCheckpointStore`. Sus operaciones de reemplazo y eliminación comparan primero con el valor esperado (compare-and-set), y `exclusive()` garantiza exclusión entre pestañas.
+
+En el servidor no se usan ni `SaveCheckpointStore` ni `LibraryWriteLease`: las transacciones y la versión de cada torneo reemplazan la exclusión entre pestañas. Los puntos de guardado en el servidor dependen de la autenticación (fase 4), porque pertenecen a un usuario.
 
 ### Coordinación entre pestañas
 

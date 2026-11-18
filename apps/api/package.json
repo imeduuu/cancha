@@ -4,6 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "description": "API de Cancha (NestJS + MongoDB) sobre @cancha/core compilado.",
+  "config": {
+    "mongodbMemoryServer": {
+      "version": "8.0.38"
+    }
+  },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
@@ -25,6 +30,7 @@
     "@nestjs/cli": "12.0.13",
     "@nestjs/testing": "12.5.1",
     "@types/node": "^22.20.5",
+    "mongodb-memory-server-core": "11.3.0",
     "typescript": "~5.7.2",
     "vitest": "^5.0.4"
   }
