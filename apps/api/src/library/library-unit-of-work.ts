@@ -1,5 +1,6 @@
 import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
 import { isRejectionEvent } from "@cancha/core/application/services/activity-log";
+import { validateLibraryChanges } from "@cancha/core/application/validation/library-changes";
 import type { ClientSession } from "mongodb";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import {
@@ -48,6 +49,14 @@ export interface UnitOfWorkResult<T> extends LibraryView {
   readonly result: T;
   /** true si hubo flush. */
   readonly committed: boolean;
+}
+
+/** Resultado de `commitChanges`: versión de la biblioteca y de cada torneo tras el envío. */
+export interface LibraryChangesCommit {
+  /** false si el envío no cambiaba nada (no hubo escritura). */
+  readonly committed: boolean;
+  readonly libraryVersion: number;
+  readonly versions: ReadonlyMap<string, number>;
 }
 
 /** Intentos ante un conflicto sólo de biblioteca (la versión del torneo que esperaba el cliente sigue vigente). */
@@ -133,6 +142,33 @@ export class LibraryUnitOfWork {
         throw error;
       }
     }
+  }
+
+  /**
+   * Confirma un conjunto de cambios calculado por un cliente (fase 5, C3) sobre la
+   * biblioteca de `userId`: carga, exige que la biblioteca siga en
+   * `expectedLibraryVersion` (sin reintentos: el cliente decidió leyendo esa
+   * versión), valida todo lo que llega con `validateLibraryChanges` y escribe en
+   * una transacción. Cualquier rechazo deja la biblioteca intacta.
+   */
+  async commitChanges(userId: string, changes: unknown, expectedLibraryVersion: number): Promise<LibraryChangesCommit> {
+    const store = this.createRepository(userId);
+    const snapshot = await store.loadLibrary();
+    if (snapshot.libraryVersion !== expectedLibraryVersion) {
+      throw new LibraryVersionConflictError(expectedLibraryVersion, snapshot.libraryVersion);
+    }
+    const normalized = validateLibraryChanges(changes, {
+      tournamentIds: new Set(snapshot.versions.keys()),
+      activityIds: new Set(snapshot.activity.map(({ id }) => id)),
+    });
+    if (!hasLibraryChanges(normalized)) {
+      return { committed: false, libraryVersion: snapshot.libraryVersion, versions: snapshot.versions };
+    }
+    const committed = await store.commit(normalized, snapshot);
+    const versions = new Map(snapshot.versions);
+    for (const id of normalized.deleted) versions.delete(id);
+    for (const [id, version] of committed.versions) versions.set(id, version);
+    return { committed: true, libraryVersion: committed.libraryVersion, versions };
   }
 
   private execute<T>(

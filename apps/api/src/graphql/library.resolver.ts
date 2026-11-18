@@ -24,6 +24,7 @@ import {
   CreateTournamentInput,
   DuplicateModeInput,
   ImportDecisionInput,
+  LibraryCommitModel,
   LibraryInfoModel,
   MatchResultInput,
   RestoreModeInput,
@@ -70,6 +71,19 @@ export class LibraryResolver {
   async library(@CurrentUser() user: SessionUser): Promise<LibraryInfoModel> {
     const run = await this.unitOfWork.read(user.id, repository => repository.getActiveTournamentId());
     return { libraryVersion: run.libraryVersion, activeTournamentId: run.result };
+  }
+
+  @Query(() => JsonScalar, {
+    description: "Biblioteca completa para la réplica del cliente con sesión: { tournaments, activity, activeTournamentId, libraryVersion, versions }.",
+  })
+  async librarySnapshot(@CurrentUser() user: SessionUser): Promise<unknown> {
+    const run = await this.unitOfWork.read(user.id, repository => ({
+      tournaments: repository.findAll(),
+      activity: repository.findActivity?.() ?? [],
+      activeTournamentId: repository.getActiveTournamentId(),
+    }));
+    const versions = Object.fromEntries(run.result.tournaments.map(({ id }) => [id, versionOf(run, id)]));
+    return { ...run.result, libraryVersion: run.libraryVersion, versions };
   }
 
   @Query(() => [TournamentSummaryModel], { description: "Listado resumido, lo último guardado primero." })
@@ -243,6 +257,21 @@ export class LibraryResolver {
     return { libraryVersion: run.libraryVersion, activeTournamentId: id };
   }
 
+  // ---------- Réplica del cliente con sesión (fase 5, C3) ----------
+
+  @Mutation(() => LibraryCommitModel, {
+    description: "Confirma los cambios que el cliente calculó sobre su réplica, si la biblioteca sigue en `expectedLibraryVersion`. Valida todo lo que llega; no admite reemplazar la biblioteca (usa restoreBackup).",
+  })
+  async commitLibraryChanges(
+    @CurrentUser() user: SessionUser,
+    @Args("changes", { type: () => JsonScalar }) changes: unknown,
+    @Args("expectedLibraryVersion", { type: () => Int }) expectedLibraryVersion: number,
+  ): Promise<LibraryCommitModel> {
+    const run = await this.unitOfWork.commitChanges(user.id, changes, expectedLibraryVersion);
+    const versions = [...run.versions].map(([id, version]) => ({ id, version }));
+    return { committed: run.committed, libraryVersion: run.libraryVersion, versions };
+  }
+
   // ---------- JSON v7: importar, restaurar y exportar ----------
 
   @Query(() => JsonScalar, { description: "Archivo `cancha-tournament` v7 de un torneo." })
@@ -278,8 +307,17 @@ export class LibraryResolver {
     @CurrentUser() user: SessionUser,
     @Args("backup", { type: () => String }) backup: string,
     @Args("mode", { type: () => RestoreModeInput }) mode: RestoreModeInput,
+    @Args("expectedLibraryVersion", {
+      type: () => Int,
+      nullable: true,
+      description: "Si se indica y la biblioteca ya no está en esa versión: CONFLICT sin escribir nada.",
+    }) expectedLibraryVersion?: number | null,
   ): Promise<RestoreResultModel> {
-    const run = await this.unitOfWork.run(user.id, repository => restoreTournamentBackup(backup, mode, repository));
+    const run = await this.unitOfWork.run(
+      user.id,
+      repository => restoreTournamentBackup(backup, mode, repository),
+      expectedLibraryVersion === null || expectedLibraryVersion === undefined ? {} : { expectedLibraryVersion },
+    );
     return { ...run.result, libraryVersion: run.libraryVersion };
   }
 

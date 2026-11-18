@@ -267,6 +267,23 @@ describe("MongoTournamentRepository (específico de MongoDB)", () => {
       expect(await open().libraryVersion()).toBe(snapshot.libraryVersion);
     });
 
+    it("valida todo lo que llega a commit, aunque no venga de un caso de uso: un torneo o evento inválido no escribe nada", async () => {
+      await open().saveWithActivity(league("a"), event(league("a"), "Original."));
+      const repository = open();
+      const snapshot = await repository.loadLibrary();
+      const handmade = { id: "roto", name: "Torneo a mano", teams: "no es una lista", matchdays: [] } as unknown as Tournament;
+      const invalidEvent = { ...event(league("a"), "Inválido."), occurredAt: "no es una fecha" };
+
+      await expect(repository.commit({ saved: [{ ...league("a"), name: "A nueva" }, handmade], deleted: [], events: [] }, snapshot))
+        .rejects.toThrow(/No se guardó "Torneo a mano"/);
+      await expect(repository.commit({ saved: [league("b")], deleted: ["a"], events: [invalidEvent] }, snapshot))
+        .rejects.toThrow(/evento de actividad inválido/);
+
+      expect((await open().findAll()).map(({ id, name }) => [id, name])).toEqual([["a", "Liga a"]]);
+      expect((await open().findActivity()).map(({ summary }) => summary)).toEqual(["Original."]);
+      expect(await open().libraryVersion()).toBe(snapshot.libraryVersion);
+    });
+
     it("replaceLibrary reemplaza todos los torneos y replaceActivity el historial", async () => {
       const setup = open();
       await setup.saveWithActivity(league("a"), event(league("a"), "Viejo."));

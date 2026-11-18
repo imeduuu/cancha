@@ -146,6 +146,20 @@ export class LibraryInfoModel {
   @Field(() => ID, { nullable: true }) activeTournamentId!: string | null;
 }
 
+@ObjectType("TournamentVersion")
+export class TournamentVersionModel {
+  @Field(() => ID) id!: string;
+  @Field(() => Int) version!: number;
+}
+
+@ObjectType("LibraryCommit", { description: "Resultado de confirmar un conjunto de cambios de la biblioteca." })
+export class LibraryCommitModel {
+  @Field(() => Boolean, { description: "false si el envío no cambiaba nada (no se escribió)." }) committed!: boolean;
+  @Field(() => Int) libraryVersion!: number;
+  @Field(() => [TournamentVersionModel], { description: "Versión vigente de cada torneo de la biblioteca." })
+  versions!: TournamentVersionModel[];
+}
+
 @ObjectType("SimulationResult")
 export class SimulationResultModel {
   @Field(() => Int) simulatedCount!: number;
