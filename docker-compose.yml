@@ -1,6 +1,7 @@
 # MongoDB para apps/api: replica set de un nodo (las transacciones lo requieren).
 # npm run db:up  -> levanta y espera a que el healthcheck esté sano
 # npm run db:down -> detiene (los datos quedan en el volumen cancha-mongo-data)
+# npm run db:reset -> BORRA el volumen (todos los datos) y levanta una base vacía
 #
 # La versión debe coincidir con config.mongodbMemoryServer.version de
 # apps/api/package.json (binario de las pruebas).

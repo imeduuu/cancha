@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { AuthModule } from "./auth/auth.module.js";
 import { validateEnvironment } from "./config/env.validation.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { HealthModule } from "./health/health.module.js";
@@ -18,6 +19,7 @@ import { LibraryModule } from "./library/library.module.js";
     }),
     DatabaseModule,
     HealthModule,
+    AuthModule,
     TournamentPersistenceModule,
     LibraryModule,
     ApiGraphqlModule,

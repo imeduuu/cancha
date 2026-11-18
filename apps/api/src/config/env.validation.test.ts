@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { validateEnvironment } from "./env.validation.js";
+import { developmentCorsOrigins, developmentJwtSecret, validateEnvironment } from "./env.validation.js";
 
 const uri = "mongodb://localhost:27017/?replicaSet=rs0&directConnection=true";
+const productionSecret = "s".repeat(32);
+const production = { NODE_ENV: "production", JWT_ACCESS_SECRET: productionSecret, CORS_ORIGINS: "https://cancha.example.cl" };
 
 describe("validateEnvironment", () => {
   it("aplica valores por defecto y conserva la URI", () => {
@@ -10,12 +12,20 @@ describe("validateEnvironment", () => {
       PORT: 3000,
       MONGODB_URI: uri,
       MONGODB_DB: "cancha",
+      JWT_ACCESS_SECRET: developmentJwtSecret,
+      CORS_ORIGINS: [...developmentCorsOrigins],
+      AUTH_COOKIE_SAMESITE: "lax",
+      AUTH_COOKIE_SECURE: true,
+      REFRESH_TOKEN_TTL_DAYS: 30,
+      AUTH_RATE_LIMIT: 10,
+      AUTH_RATE_TTL_SECONDS: 60,
+      TRUST_PROXY: 0,
     });
   });
 
   it("convierte PORT a número y acepta mongodb+srv", () => {
     const env = validateEnvironment({
-      NODE_ENV: "production", PORT: " 8080 ", MONGODB_URI: "mongodb+srv://cluster.example.net", MONGODB_DB: "cancha_prod",
+      ...production, PORT: " 8080 ", MONGODB_URI: "mongodb+srv://cluster.example.net", MONGODB_DB: "cancha_prod",
     });
     expect(env.PORT).toBe(8080);
     expect(env.NODE_ENV).toBe("production");
@@ -47,5 +57,47 @@ describe("validateEnvironment", () => {
     catch (error) { message = (error as Error).message; }
     expect(message).toMatch(/^Configuración inválida de la API:/);
     expect(message.split("\n- ")).toHaveLength(4);
+  });
+
+  describe("autenticación y CORS", () => {
+    it("en producción exige JWT_ACCESS_SECRET y CORS_ORIGINS, y rechaza el secreto de desarrollo", () => {
+      expect(() => validateEnvironment({ MONGODB_URI: uri, NODE_ENV: "production" }))
+        .toThrow(/JWT_ACCESS_SECRET es obligatoria en producción[\s\S]*CORS_ORIGINS es obligatoria en producción/);
+      expect(() => validateEnvironment({ ...production, MONGODB_URI: uri, JWT_ACCESS_SECRET: developmentJwtSecret }))
+        .toThrow(/no puede ser el valor de desarrollo/);
+      expect(validateEnvironment({ ...production, MONGODB_URI: uri }).JWT_ACCESS_SECRET).toBe(productionSecret);
+    });
+
+    it("exige al menos 32 caracteres de secreto en cualquier entorno", () => {
+      expect(() => validateEnvironment({ MONGODB_URI: uri, JWT_ACCESS_SECRET: "corto" }))
+        .toThrow(/al menos 32 caracteres/);
+    });
+
+    it("normaliza la lista de orígenes y rechaza los que tienen ruta, barra final o esquema inválido", () => {
+      const env = validateEnvironment({ MONGODB_URI: uri, CORS_ORIGINS: " https://a.example.cl , http://localhost:4179 " });
+      expect(env.CORS_ORIGINS).toEqual(["https://a.example.cl", "http://localhost:4179"]);
+      expect(() => validateEnvironment({ MONGODB_URI: uri, CORS_ORIGINS: "https://a.example.cl/,ftp://b.cl,https://c.cl/app" }))
+        .toThrow(/inválidos: https:\/\/a\.example\.cl\/, ftp:\/\/b\.cl, https:\/\/c\.cl\/app/);
+    });
+
+    it("valida SameSite y Secure de la cookie", () => {
+      expect(validateEnvironment({ MONGODB_URI: uri, AUTH_COOKIE_SAMESITE: "None" }).AUTH_COOKIE_SAMESITE).toBe("none");
+      expect(() => validateEnvironment({ MONGODB_URI: uri, AUTH_COOKIE_SAMESITE: "relaxed" })).toThrow(/AUTH_COOKIE_SAMESITE debe ser/);
+      expect(() => validateEnvironment({ MONGODB_URI: uri, AUTH_COOKIE_SAMESITE: "none", AUTH_COOKIE_SECURE: "false" }))
+        .toThrow(/exige AUTH_COOKIE_SECURE=true/);
+      expect(() => validateEnvironment({ ...production, MONGODB_URI: uri, AUTH_COOKIE_SECURE: "false" }))
+        .toThrow(/no puede ser false en producción/);
+      expect(() => validateEnvironment({ MONGODB_URI: uri, AUTH_COOKIE_SECURE: "si" })).toThrow(/true o false/);
+      expect(validateEnvironment({ MONGODB_URI: uri, AUTH_COOKIE_SECURE: "false" }).AUTH_COOKIE_SECURE).toBe(false);
+    });
+
+    it("valida los enteros de sesión, rate limit y proxy", () => {
+      const env = validateEnvironment({
+        MONGODB_URI: uri, REFRESH_TOKEN_TTL_DAYS: "7", AUTH_RATE_LIMIT: "3", AUTH_RATE_TTL_SECONDS: "10", TRUST_PROXY: "1",
+      });
+      expect(env).toMatchObject({ REFRESH_TOKEN_TTL_DAYS: 7, AUTH_RATE_LIMIT: 3, AUTH_RATE_TTL_SECONDS: 10, TRUST_PROXY: 1 });
+      expect(() => validateEnvironment({ MONGODB_URI: uri, AUTH_RATE_LIMIT: "0" })).toThrow(/AUTH_RATE_LIMIT debe ser un entero/);
+      expect(() => validateEnvironment({ MONGODB_URI: uri, REFRESH_TOKEN_TTL_DAYS: "1.5" })).toThrow(/REFRESH_TOKEN_TTL_DAYS/);
+    });
   });
 });

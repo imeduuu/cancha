@@ -104,9 +104,31 @@ Consecuencias:
   - `CONFLICT`, con la versión vigente;
   - `NOT_FOUND`;
   - `VALIDATION`, para los `Error` de core, con su mensaje en español;
+  - `UNAUTHENTICATED`, `FORBIDDEN` (origen no permitido) y `TOO_MANY_REQUESTS` (rate limit), de la autenticación;
   - `INTERNAL_SERVER_ERROR` genérico para todo lo demás.
 
   Los errores propios de GraphQL conservan su código. Fuera de desarrollo no hay *stack traces*, GraphiQL ni introspección.
+- **Límites**: una regla de validación propia (`depth-limit.rule.ts`) rechaza consultas de más de 10 niveles antes de ejecutarlas. Sólo en desarrollo exceptúa la introspección, porque la consulta estándar de GraphiQL tiene 15. El cuerpo JSON admite hasta 32 MB: un respaldo de 60 torneos simulados, exportado con sangría como lo hace la web, ocupa 8,2 MB dentro de la petición. El límite por defecto de Nest (100 KB) rechazaba respaldos reales.
+- **Arranque compartido** (`src/bootstrap.ts`): `configureApp` fija CORS, el body parser, `cookie-parser` y `trust proxy`. Lo usan `main.ts` y las pruebas e2e, así que las pruebas ejercitan la misma configuración HTTP que producción.
+
+### Autenticación
+
+`apps/api/src/auth/` agrega cuentas y sesiones. Las decisiones principales:
+
+- **Dónde viaja cada token**:
+  - El access token es un JWT HS256 de 15 minutos que va en `Authorization: Bearer`. El cliente lo guarda sólo en memoria. Como no es una cookie, el navegador no lo adjunta solo en una petición entre sitios, y las operaciones de la biblioteca no quedan expuestas a CSRF.
+  - El refresh token va en la cookie `cancha_refresh`, `HttpOnly`, `Secure` y con `Path=/graphql`: un XSS no puede leerlo ni sacarlo del navegador, como sí podría desde `localStorage` o desde el cuerpo de una respuesta.
+  - `SameSite` es `Lax` por defecto y configurable. En la fase 8 la web hará un *rewrite* de `/graphql` hacia la API, así que serán el mismo origen y `Lax` basta. `None` (que exige `Secure`) queda disponible para un despliegue entre sitios, con el riesgo de que los navegadores que bloquean cookies de terceros la descarten.
+- **CSRF de la cookie**: Apollo exige un preflight a toda petición (`csrfPrevention`). CORS sólo responde con credenciales a `CORS_ORIGINS`. Además, `refreshToken` y `logout` rechazan con `FORBIDDEN` un `Origin` que no esté en la lista.
+- **Sesiones y rotación**:
+  - Cada login o registro crea una sesión (`sessions`, `_id` = familia) y su primer refresh token.
+  - Un refresh token tiene la forma `id.secreto`, y en `refresh_tokens` sólo se guarda el hash SHA-256 del secreto. Basta SHA-256 porque el secreto tiene 256 bits aleatorios; argon2 se reserva para las contraseñas.
+  - `refreshToken` marca el token como usado e inserta el siguiente de la misma familia, en una transacción.
+  - Si llega un token ya usado, se trata como robo: se revoca la familia completa (la sesión y todos sus refresh tokens). Las demás sesiones del usuario siguen activas.
+- **Revocación inmediata**: el JWT lleva `sub` (usuario) y `sid` (sesión). El guard global (`APP_GUARD`) verifica firma y vencimiento, y además que la sesión siga activa (un `findOne` por `_id`). Así, `logout` y la detección de robo cortan también los access tokens vigentes. Comparada con cargar la biblioteca en cada petición, esa lectura es despreciable.
+- **Login sin filtraciones**: si el email no existe se ejecuta igual `argon2.verify` contra un hash ficticio, y el mensaje es siempre "Email o contraseña incorrectos". El registro sí informa que el email está en uso: evitarlo exige verificación por correo, que todavía no existe. El rate limit lo mitiga.
+- **Índices**: los de `users` (email único) y los TTL de `sessions` y `refresh_tokens` se crean antes del primer registro o login, con un memo. Así la unicidad del email no depende de que haya terminado una tarea asíncrona de arranque, y la API sigue arrancando sin Mongo.
+- **Operaciones públicas**: `@Public()` marca `GET /health`, `register`, `login` y `refreshToken`. Esas tres mutaciones tienen rate limit por IP y por operación (`GqlThrottlerGuard`, una adaptación de `@nestjs/throttler` a GraphQL). Su almacenamiento es en memoria, válido para una instancia; con varias haría falta uno compartido (p. ej. Redis).
 
 ### Suite de contrato
 

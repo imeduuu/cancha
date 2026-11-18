@@ -89,19 +89,30 @@ npm run build
 
 ## API
 
-`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`) y persiste en MongoDB. Expone los casos de uso de core por GraphQL en `/graphql`, ejecutados mediante una unidad de trabajo. La autenticación llega en la fase 4.
+`apps/api` es una API NestJS 12 que consume `@cancha/core` compilado (`packages/core/dist`) y persiste en MongoDB. Expone los casos de uso de core por GraphQL en `/graphql`, ejecutados mediante una unidad de trabajo. Desde la fase 4 exige una sesión: cuentas con email y contraseña, access token JWT y refresh token rotativo en una cookie HttpOnly.
 
 ```bash
 npm run db:up                             # MongoDB 8.0 en Docker como replica set de un nodo (espera al healthcheck)
 cp apps/api/.env.example apps/api/.env   # ajusta MONGODB_URI si hace falta
 npm run dev:api                           # compila core y arranca Nest en modo watch
 curl http://localhost:3000/health
+npm run db:reset                          # BORRA el volumen de MongoDB y levanta una base vacía
 ```
 
-- **Configuración**: `@nestjs/config` valida `NODE_ENV`, `PORT` (3000), `MONGODB_URI` (obligatoria) y `MONGODB_DB` (`cancha`) al arrancar; si algo es inválido la API no inicia y enumera todos los problemas. Ver `apps/api/.env.example`.
+- **Configuración**: `@nestjs/config` valida al arrancar `NODE_ENV`, `PORT` (3000), `MONGODB_URI` (obligatoria), `MONGODB_DB` (`cancha`) y las variables de autenticación (`JWT_ACCESS_SECRET`, `CORS_ORIGINS`, `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_SECURE`, `REFRESH_TOKEN_TTL_DAYS`, `AUTH_RATE_LIMIT`, `AUTH_RATE_TTL_SECONDS`, `TRUST_PROXY`). Si algo es inválido la API no inicia y enumera todos los problemas. En producción, `JWT_ACCESS_SECRET` (≥ 32 caracteres, distinto del valor de desarrollo) y `CORS_ORIGINS` son obligatorias. Ver `apps/api/.env.example`.
+- **Autenticación** (`apps/api/src/auth/`):
+  - `register(input: { email, password })` y `login(input)` devuelven `{ accessToken, accessTokenExpiresAt, user }` y fijan la cookie del refresh token. `refreshToken` la canjea y la rota; `logout` cierra la sesión actual; `me` devuelve el usuario.
+  - El email se guarda normalizado (sin espacios, en minúsculas) y es único. La contraseña tiene entre 12 y 256 caracteres y se guarda con argon2id. Los mensajes de validación están en español.
+  - Un login fallido responde siempre "Email o contraseña incorrectos" y tarda lo mismo exista o no el email. El registro sí informa que el email ya está en uso.
+  - **Access token**: JWT HS256 de 15 minutos, en `Authorization: Bearer <token>`. El cliente lo guarda sólo en memoria.
+  - **Refresh token**: de un solo uso, en la cookie `cancha_refresh` (`HttpOnly`, `Secure`, `Path=/graphql`, `SameSite=Lax` por defecto, configurable). En Mongo sólo se guarda su hash. Si se reutiliza uno ya usado, se revoca la sesión completa (su familia de tokens y su access token); las demás sesiones del usuario siguen activas.
+  - Cada petición verifica la firma, el vencimiento y que la sesión no esté revocada: tras `logout`, el access token deja de servir al instante.
+  - Todo exige sesión salvo `GET /health`, `register`, `login` y `refreshToken`. Esas tres mutaciones tienen rate limit por IP (10 por minuto por defecto).
+  - **CORS** con credenciales sólo para `CORS_ORIGINS`. `refreshToken` y `logout` rechazan además un `Origin` que no esté en la lista.
 - **`GET /health`**: `200` con `{ status: "ok", app: { status, version, uptimeSeconds }, mongo: { status: "up", latencyMs } }`; `503` con el mismo formato y `mongo: { status: "down", error }` si MongoDB no responde al `ping` en 2 s. La API arranca aunque MongoDB no esté disponible.
 - **GraphQL (`POST /graphql`)**: esquema *code-first* con `@nestjs/graphql` y Apollo.
   - GraphiQL (`GET /graphql` en el navegador), introspección y *stack traces* sólo con `NODE_ENV=development`.
+  - **Límites**: profundidad máxima de 10 niveles por consulta y cuerpo JSON de hasta 32 MB (un respaldo realista de 60 torneos simulados pesa unos 8 MB dentro de la petición).
   - Consultas: `library` (versión de la biblioteca y torneo activo), `tournaments(includeArchived)`, `tournament(id)`, `activeTournament` y `activity(tournamentId, limit)`.
   - Mutaciones: `createTournament`, `updateMatchResult`, `simulateMatchday`, `simulateLeg`, `simulateChampionship`, `renameTournament`, `duplicateTournament`, `setTournamentArchived`, `deleteTournament` y `setActiveTournament`.
   - **Tipos**: el listado, el calendario, la tabla y la actividad tienen tipos GraphQL. El documento completo del torneo va en `Tournament.document` como escalar `JSON`, con el tipo `Tournament` de `@cancha/core`.
@@ -110,9 +121,13 @@ curl http://localhost:3000/health
     - `VALIDATION`: regla de dominio, con el mensaje en español;
     - `NOT_FOUND`;
     - `CONFLICT`: incluye `tournamentId`, `expectedVersion` y `currentVersion`;
+    - `UNAUTHENTICATED`: sin sesión o con un token inválido, vencido o revocado;
+    - `FORBIDDEN`: `Origin` no permitido en `refreshToken` o `logout`;
+    - `TOO_MANY_REQUESTS`: rate limit de autenticación superado;
     - `INTERNAL_SERVER_ERROR`: mensaje genérico; el detalle queda sólo en el log.
 
   ```graphql
+  mutation { register(input: { email: "ana@ejemplo.cl", password: "una contraseña larga" }) { accessToken } }
   mutation { createTournament(input: { name: "Liga", teamNames: ["A", "B", "C", "D"], legs: 2, tieBreakers: ["goalDifference"] }) { id version } }
   mutation { simulateChampionship(tournamentId: "<id>", expectedVersion: 1) { simulatedCount tournament { version standings { position teamName points } } } }
   ```
@@ -156,9 +171,9 @@ curl http://localhost:3000/health
 
 ### MongoDB
 
-- `docker-compose.yml` (raíz): imagen `mongo:8.0.38` con `--replSet rs0`, volumen `cancha-mongo-data` y un healthcheck que inicia el replica set la primera vez. Las transacciones de MongoDB exigen un replica set. `npm run db:up` lo levanta y espera a que esté sano; `npm run db:down` lo detiene sin borrar el volumen (`docker compose down -v` lo borra). El miembro se anuncia como `localhost:27017`, válido para conectarse desde el host con `directConnection=true`.
+- `docker-compose.yml` (raíz): imagen `mongo:8.0.38` con `--replSet rs0`, volumen `cancha-mongo-data` y un healthcheck que inicia el replica set la primera vez. Las transacciones de MongoDB exigen un replica set. `npm run db:up` lo levanta y espera a que esté sano; `npm run db:down` lo detiene sin borrar el volumen; `npm run db:reset` borra el volumen y levanta una base vacía. El miembro se anuncia como `localhost:27017`, válido para conectarse desde el host con `directConnection=true`.
 - `MongoTournamentRepository` (`apps/api/src/infrastructure/persistence/`) guarda la biblioteca de torneos con las mismas validaciones y garantías que el adaptador de `localStorage`, pero con transacciones reales: `saveWithActivity`, `saveManyWithActivity`, `recordActivity` y `deleteById` escriben el torneo y su evento de actividad en una sola transacción o no escriben nada.
-- Colecciones: `tournaments` (un documento por torneo, `_id` = id del torneo, `_version`, `_saveSeq`, `_savedAt`), `activity` (`_id` = id del evento, `_seq` = orden de registro), `counters` (secuencias) y `library_state` (torneo activo y versión de la biblioteca). Índices: `tournaments._saveSeq`, `activity._seq` (único) y `activity.tournamentId + _seq`; se crean al arrancar la API.
+- Colecciones: `tournaments` (un documento por torneo, `_id` = id del torneo, `_version`, `_saveSeq`, `_savedAt`), `activity` (`_id` = id del evento, `_seq` = orden de registro), `counters` (secuencias) y `library_state` (torneo activo y versión de la biblioteca). Índices: `tournaments._saveSeq`, `activity._seq` (único) y `activity.tournamentId + _seq`; se crean al arrancar la API. Autenticación: `users` (email único), `sessions` (una por login, revocable) y `refresh_tokens` (hash del token, un solo uso); sus índices, incluidos los TTL que limpian lo vencido, se crean antes del primer registro o login.
 - **Concurrencia optimista**: cada torneo tiene una versión. Si dos clientes leen la misma versión y ambos guardan, el segundo recibe `TournamentVersionConflictError` ("otro cliente lo modificó (versión esperada N, versión actual M). Recarga el torneo y vuelve a aplicar tus cambios.") y su transacción completa se descarta.
 - **Unidad de trabajo** (`apps/api/src/library/library-unit-of-work.ts`): `LibraryUnitOfWork.run(casoDeUso, { expectedVersions })` funciona así:
   1. Carga la biblioteca de Mongo en un `InMemoryTournamentRepository`.

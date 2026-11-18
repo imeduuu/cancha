@@ -1,6 +1,8 @@
 import { GraphQLError, type GraphQLFormattedError } from "graphql";
 import { describe, expect, it, vi } from "vitest";
 import { Logger } from "@nestjs/common";
+import { ThrottlerException } from "@nestjs/throttler";
+import { AuthenticationError, ForbiddenOriginError } from "../auth/auth.errors.js";
 import {
   LibraryVersionConflictError,
   TournamentVersionConflictError,
@@ -35,6 +37,16 @@ describe("createFormatError", () => {
       message: "Escribe el nombre del campeonato.",
       path: ["campo"],
       extensions: { code: "VALIDATION" },
+    });
+  });
+
+  it("sesión inválida ⇒ UNAUTHENTICATED, origen ⇒ FORBIDDEN, rate limit ⇒ TOO_MANY_REQUESTS", () => {
+    expect(production(...fromResolver(new AuthenticationError("Sin sesión.")))).toMatchObject({
+      message: "Sin sesión.", extensions: { code: "UNAUTHENTICATED" },
+    });
+    expect(production(...fromResolver(new ForbiddenOriginError())).extensions).toEqual({ code: "FORBIDDEN" });
+    expect(production(...fromResolver(new ThrottlerException("Demasiados intentos.")))).toMatchObject({
+      message: "Demasiados intentos.", extensions: { code: "TOO_MANY_REQUESTS" },
     });
   });
 

@@ -1,4 +1,9 @@
+import { createTournamentBackup } from "@cancha/core/application/services/tournament-archive";
+import { createTournament } from "@cancha/core/application/use-cases/create-tournament";
+import { simulateChampionship } from "@cancha/core/application/use-cases/simulate-championship";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { graphqlBodyLimit } from "../bootstrap.js";
+import { InMemoryTournamentRepository } from "../infrastructure/persistence/in-memory-tournament-repository.js";
 import { replicaSetStartupTimeoutMs } from "../test-utils/mongo-replica-set.js";
 import { startGraphqlApp, type GraphqlTestApp } from "../test-utils/graphql-app.js";
 
@@ -138,6 +143,35 @@ describe("JSON v7 por GraphQL: importar, restaurar y exportar", () => {
     expect(after.tournaments).toEqual(before.tournaments);
     expect(after.activity.slice(before.activity.length).map(({ action }) => action)).toEqual(["tournament-import-rejected"]);
   });
+
+  it("restaura un respaldo realista grande (60 torneos simulados, con sangría como lo descarga la web)", async () => {
+    // La misma biblioteca con que se midió graphqlBodyLimit: 10 temporadas × 6 competiciones.
+    const library = new InMemoryTournamentRepository();
+    const teams = (count: number) => Array.from({ length: count }, (_, index) => `Club Deportivo Número ${index + 1}`);
+    const competitions: [string, number, number][] = [
+      ["Brasileirão", 20, 2], ["Liga Profesional", 28, 1], ["Primera Chile", 16, 2],
+      ["Primera B", 16, 2], ["Segunda", 14, 2], ["Copa", 32, 1],
+    ];
+    for (let season = 0; season < 10; season++) {
+      for (const [name, teamCount, legs] of competitions) {
+        const tournament = createTournament({
+          name: `${name} ${2020 + season}`, teamNames: teams(teamCount), legs, tieBreakers: ["goalDifference", "goalsFor"],
+        }, library);
+        simulateChampionship(tournament, "pendingOnly", library);
+      }
+    }
+    const backup = JSON.stringify(createTournamentBackup(library.findAll(), undefined, library.findActivity()), null, 2);
+    const bodyBytes = Buffer.byteLength(JSON.stringify({ variables: { backup } }));
+    expect(bodyBytes).toBeGreaterThan(7 * 1024 * 1024);
+    expect(bodyBytes * 3).toBeLessThan(Number.parseInt(graphqlBodyLimit, 10) * 1024 * 1024);
+
+    const restored = await gql<{ restoreBackup: { added: number; skipped: number } }>(`
+      mutation Restore($backup: String!) { restoreBackup(backup: $backup, mode: REPLACE) { added skipped } }
+    `, { backup });
+    expect(restored.errors).toBeUndefined();
+    expect(restored.data!.restoreBackup).toEqual({ added: 60, skipped: 0 });
+    expect((await exportLibrary()).tournaments).toHaveLength(60);
+  }, 120_000);
 
   it("exportar un torneo inexistente es NOT_FOUND", async () => {
     const response = await gql(`{ exportTournament(id: "no-existe") }`);

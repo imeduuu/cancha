@@ -13,6 +13,7 @@
     "dev:api": "npm run build -w @cancha/core && npm run start:dev -w @cancha/api",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
+    "db:reset": "docker compose down --volumes && docker compose up -d --wait",
     "build": "npm run build --workspaces --if-present",
     "test": "npm test --workspaces --if-present",
     "test:flows": "npm run test:flows -w @cancha/web",
