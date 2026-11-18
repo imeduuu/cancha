@@ -124,7 +124,8 @@ it("serves the real application on a free port and denies other hosts and projec
     s = await f.start(); const base = `http://127.0.0.1:${server.httpServer.address().port}`;
     expect(server.httpServer.address().port).not.toBe(port);
     expect(server.config.env.VITE_CANCHA_PRIVATE_PROBE).toBeUndefined();
-    expect(Object.keys(server.config.server.proxy)).toEqual(["/official-source", "/third-division-source", "/argentina-cup-source", "/brazil-cup-source"]);
+    // /graphql existe en la configuración de Vite (fase 5D), pero el acceso temporal no lo expone: la lista de abajo lo exige 403.
+    expect(Object.keys(server.config.server.proxy)).toEqual(["/official-source", "/third-division-source", "/argentina-cup-source", "/brazil-cup-source", "/graphql"]);
     expect((await fetch(base)).status).toBe(200);
     const statusForHost = host => new Promise((resolve, reject) => {
       httpGet(base, { headers: { Host: host } }, response => { response.resume(); resolve(response.statusCode); }).on("error", reject);
@@ -132,7 +133,7 @@ it("serves the real application on a free port and denies other hosts and projec
     expect(server.config.server.allowedHosts).toContain(".trycloudflare.com");
     expect(await statusForHost("unrelated.example.org")).toBe(403);
     expect(await statusForHost("generated.trycloudflare.com")).toBe(200);
-    for (const path of ["/.env", "/package.json", "/README.md", "/docs/source-incidents.md", "/scripts/dev-public.mjs", "/@fs/C:/Windows/win.ini", "/src/test-utils/fixtures/live/anfa-pending.json", coreFsPrefix + "domain/services/second-division-test-fixtures.ts", coreFsPrefix + "test-utils/season-closure-fixtures.ts"]) {
+    for (const path of ["/.env", "/package.json", "/README.md", "/docs/source-incidents.md", "/scripts/dev-public.mjs", "/@fs/C:/Windows/win.ini", "/graphql", "/src/test-utils/fixtures/live/anfa-pending.json", coreFsPrefix + "domain/services/second-division-test-fixtures.ts", coreFsPrefix + "test-utils/season-closure-fixtures.ts"]) {
       expect((await fetch(base + path)).status, path).toBe(403);
     }
     const queue = [base + "/src/main.tsx"], visited = new Set();
