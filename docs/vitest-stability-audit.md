@@ -93,3 +93,32 @@ El fallo original sigue pendiente de explicación. Las ejecuciones finales aprob
 
 Referencias oficiales para las opciones empleadas: [maxWorkers](https://vitest.dev/config/maxworkers) y [fileParallelism](https://vitest.dev/config/fileparallelism). Los valores predeterminados mencionados arriba se comprobaron también en el código instalado de Vitest y Testing Library.
 
+
+## Actualización del 18 de noviembre de 2026: timeouts globales de web
+
+Esta actualización cambia lo decidido arriba sobre los timeouts. Desde la auditoría se repitieron los timeouts de 5.000 ms en recorridos de App con jsdom al correr la suite completa con la máquina cargada: `app-checkpoints`, `app-closure`, `app-archive` y, sobre todo, el recorrido documental de `app-decisions`. Están registrados en `docs/sports-decisions-center.md`, `docs/draw-pots-and-restrictions.md`, `docs/constraint-based-group-generator.md` y `docs/club-associations-and-affiliations.md`. Esas pruebas pasan aisladas y fallan con carga. Se tratan como límites demasiado justos para recorridos que montan varios paneles diferidos, no como una regresión funcional.
+
+Cambios (sólo en `apps/web`):
+
+- `vitest.config.ts`: `testTimeout: 15_000` global (antes, 5.000 ms por defecto).
+- `src/test-utils/setup-jest-dom.ts` (el `setupFiles` existente): `configure({ asyncUtilTimeout: 3000 })` de `@testing-library/react`, así que `findBy*`/`waitFor` esperan hasta 3 s (antes, 1.000 ms). Un `{ timeout }` explícito en la consulta sigue teniendo prioridad; por ejemplo, los de 10 s de `app-competitions`.
+- `src/presentation/app-decisions.test.tsx`: se quitaron el timeout individual de 15 s del recorrido documental y su comentario; ahora lo cubre el valor global.
+
+Las esperas siguen siendo consultas sobre estados observables. No se agregaron reintentos, pausas fijas, precarga de módulos ni límites de workers. Un fallo real todavía falla, sólo que más tarde.
+
+### Validación
+
+Windows x64, ejecuciones consecutivas sin solapamiento, workers por defecto. `npm test` corre core, web y api.
+
+| Orden | Comando | Duración total | Resultado |
+| --- | --- | --- | --- |
+| 1 | `npm test` | 167 s (web 114,32 s) | core 663/663; **web 590/591, 1 fallo**; api 157/157 |
+| 2 | `npm test` | 151 s (web 100,15 s) | core 663/663; web 591/591; api 157/157 |
+| 3 | `npm test` | 152 s (web 98,45 s) | core 663/663; web 591/591; api 157/157 |
+| 4 | `npm run test:flows` | 51 s (Vitest 47,57 s) | 10 archivos; 92/92 |
+| 5 | `npm run test:flows` | 50 s (Vitest 46,52 s) | 10 archivos; 92/92 |
+| 6 | `npm run test:flows` | 51 s (Vitest 47,14 s) | 10 archivos; 92/92 |
+
+No hubo ningún timeout en los recorridos de App en las seis ejecuciones.
+
+El único fallo, en la ejecución 1, no tiene relación con estos timeouts: `scripts/dev-public.test.mjs › bounds stalled requests and reports timeout` (`expected 1 to be greater than 1`). Esa prueba usa temporizadores reales con una ventana total de 50 ms y 10 ms por petición, y exige al menos dos intentos. Con la máquina cargada, el primer intento consumió toda la ventana. Ni `testTimeout` ni `asyncUtilTimeout` la afectan, y queda pendiente: habría que hacerla determinista, por ejemplo con temporizadores falsos o un reloj inyectado, en lugar de ampliar sus márgenes.
