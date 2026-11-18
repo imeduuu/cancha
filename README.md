@@ -116,8 +116,43 @@ curl http://localhost:3000/health
   mutation { createTournament(input: { name: "Liga", teamNames: ["A", "B", "C", "D"], legs: 2, tieBreakers: ["goalDifference"] }) { id version } }
   mutation { simulateChampionship(tournamentId: "<id>", expectedVersion: 1) { simulatedCount tournament { version standings { position teamName points } } } }
   ```
+- **JSON v7 en el servidor**: se usa el mismo parseo y la misma validación que la web. Nada se importa a medias: un archivo inválido o de una versión futura se rechaza sin escribir.
+  - Exportar: `exportTournament(id)` devuelve un archivo `cancha-tournament` y `exportLibrary` un respaldo `cancha-backup` con el historial.
+  - `importTournament(archive, decision: ADD | COPY | UPDATE)` recibe el texto del archivo. Si falla, sólo se registra el evento `tournament-import-rejected`.
+  - `restoreBackup(backup, mode: MERGE | REPLACE)` agrega los torneos nuevos o reemplaza la biblioteca y el historial, en una sola transacción.
+  - Diferencias con la web: el servidor ignora los universos deportivos del respaldo y todavía no guarda una copia de recuperación antes de reemplazar (llega con los puntos de guardado, fase 4).
 - `dev:api` vuelve a compilar core sólo al iniciar: si cambias `packages/core`, reinícialo. `npm run build` compila core antes que la API.
 - `npm run lint` impide que `apps/api` importe `apps/web` o rutas relativas a `packages/`.
+
+### Casos de uso expuestos por GraphQL (fase 3)
+
+| Caso de uso de core (`application/use-cases/`) | Operación GraphQL |
+| --- | --- |
+| `create-tournament` | `createTournament` |
+| `update-match-result` | `updateMatchResult` |
+| `simulate-tournament-selection` (nuevo; usa `simulate-fixtures` y `persist-tournament-progress`) | `simulateMatchday`, `simulateLeg` |
+| `simulate-championship` | `simulateChampionship` |
+| `manage-tournaments` (`renameTournament`, `duplicateTournament`) | `renameTournament`, `duplicateTournament` |
+| `set-tournament-archived` | `setTournamentArchived` |
+| `import-tournament-archive` (+ `parseTournamentArchive`) | `importTournament` |
+| `restore-tournament-backup` (nuevo; plan en `services/library-restore`) | `restoreBackup` |
+| Puerto: `deleteById`, `setActiveTournamentId` | `deleteTournament`, `setActiveTournament` |
+| Servicios: `createTournamentArchive`, `createTournamentBackup` | `exportTournament`, `exportLibrary` |
+| Consultas: `calculateStandingsWithResolution`, `seasonOverview` y lectura del puerto | `library`, `tournaments`, `tournament`, `activeTournament`, `activity` |
+
+`advance-tournament-progress` y `persist-tournament-progress` se ejecutan dentro de las simulaciones.
+
+### Pendientes (fase 5)
+
+| Grupo | Casos de uso | Qué falta |
+| --- | --- | --- |
+| Edición de partidos | `update-fixture-details`, `update-fixture-schedule`, `update-fixture-operational-state`, `update-match-goal-scorers` | Son síncronos y directos: tipos de entrada (alineaciones, eventos, horario) y una mutación cada uno. |
+| Reglas y registros | `update-season-rules`, `update-tournament-records` (reglamentos y plantel), `update-team-affiliation`, `register-national-cup-regulation` | Entradas grandes y versionadas: decidir entre tipos de entrada o un `JSON` validado por core. |
+| Resoluciones oficiales | `record-official-resolution` (registrar y revocar) | Entrada de resolución y política de `advanceProgression`. |
+| Temporadas | `create-tournament-season`, `create-linked-division-seasons`, `simulate-argentina-half` | Síncronos; requieren definir sus entradas (selección de copa nacional, equipos entrantes). |
+| Revisar → confirmar | `plan-season`, `prepare-continental-edition`, `prepare-stage-draw` (sorteo y calendario), `configure-stage-draw`, `confirm-season-closure`, `record-club-affiliation`, `review-sports-resolution`, `simulate-season-scope`, `program-season-calendar` | La revisión se ata a la confirmación con un `WeakMap` en memoria, así que no puede repartirse entre dos peticiones HTTP. Opciones: revisar y confirmar en la misma unidad de trabajo, o un token de revisión firmado con la versión de la biblioteca. |
+| Asíncronos | `import-official-tournament`, `import-planned-season-calendar`, `generate-local-groups` | La unidad de trabajo sólo admite casos de uso síncronos. Además, las fuentes oficiales (`OfficialLeagueSource`) necesitan adaptadores de servidor con acceso de red (hoy son proxies de Vite). |
+| Puntos de guardado | `services/save-checkpoints` | Por usuario: fase 4 (autenticación). |
 
 ### MongoDB
 

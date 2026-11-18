@@ -2,8 +2,11 @@ import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { TieBreaker } from "@cancha/core/domain/value-objects/tie-breaker";
 import type { KnockoutResolution } from "@cancha/core/domain/entities/tournament";
 import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
+import { createTournamentArchive, createTournamentBackup, parseTournamentArchive } from "@cancha/core/application/services/tournament-archive";
 import { createTournament } from "@cancha/core/application/use-cases/create-tournament";
+import { importTournamentArchive } from "@cancha/core/application/use-cases/import-tournament-archive";
 import { duplicateTournament, renameTournament } from "@cancha/core/application/use-cases/manage-tournaments";
+import { restoreTournamentBackup } from "@cancha/core/application/use-cases/restore-tournament-backup";
 import { setTournamentArchived } from "@cancha/core/application/use-cases/set-tournament-archived";
 import { simulateChampionship } from "@cancha/core/application/use-cases/simulate-championship";
 import {
@@ -18,13 +21,17 @@ import {
   ActivityEventModel,
   CreateTournamentInput,
   DuplicateModeInput,
+  ImportDecisionInput,
   LibraryInfoModel,
   MatchResultInput,
+  RestoreModeInput,
+  RestoreResultModel,
   SimulationModeInput,
   SimulationResultModel,
   TournamentModel,
   TournamentSummaryModel,
 } from "./models.js";
+import { JsonScalar } from "./json.scalar.js";
 import { toActivityEventModel, toTournamentModel, toTournamentSummary } from "./tournament-mapper.js";
 
 function findTournament(repository: TournamentLibraryRepository, id: string): Tournament {
@@ -218,6 +225,44 @@ export class LibraryResolver {
       repository.setActiveTournamentId(id);
     });
     return { libraryVersion: run.libraryVersion, activeTournamentId: id };
+  }
+
+  // ---------- JSON v7: importar, restaurar y exportar ----------
+
+  @Query(() => JsonScalar, { description: "Archivo `cancha-tournament` v7 de un torneo." })
+  async exportTournament(@Args("id", { type: () => ID }) id: string): Promise<unknown> {
+    const run = await this.unitOfWork.read(repository => createTournamentArchive(findTournament(repository, id)));
+    return run.result;
+  }
+
+  @Query(() => JsonScalar, { description: "Respaldo `cancha-backup` v7 de la biblioteca completa, con su historial." })
+  async exportLibrary(): Promise<unknown> {
+    const run = await this.unitOfWork.read(repository =>
+      createTournamentBackup(repository.findAll(), undefined, repository.findActivity?.() ?? []));
+    return run.result;
+  }
+
+  @Mutation(() => TournamentModel, { description: "Importa un archivo `cancha-tournament` (texto JSON, v0 a v7)." })
+  async importTournament(
+    @Args("archive", { type: () => String }) archive: string,
+    @Args("decision", { type: () => ImportDecisionInput }) decision: ImportDecisionInput,
+  ): Promise<TournamentModel> {
+    return this.mutate(repository => {
+      const imported = importTournamentArchive(parseTournamentArchive(archive), decision, repository);
+      if (!imported) throw new Error("No se importó el torneo.");
+      return imported;
+    });
+  }
+
+  @Mutation(() => RestoreResultModel, {
+    description: "Restaura un respaldo `cancha-backup` (texto JSON, v0 a v7) sin importación parcial.",
+  })
+  async restoreBackup(
+    @Args("backup", { type: () => String }) backup: string,
+    @Args("mode", { type: () => RestoreModeInput }) mode: RestoreModeInput,
+  ): Promise<RestoreResultModel> {
+    const run = await this.unitOfWork.run(repository => restoreTournamentBackup(backup, mode, repository));
+    return { ...run.result, libraryVersion: run.libraryVersion };
   }
 
   // ---------- Apoyo ----------

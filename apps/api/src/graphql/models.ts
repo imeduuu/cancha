@@ -22,6 +22,32 @@ registerEnumType(DuplicateModeInput, {
   description: "COPY conserva los resultados; RESET los reinicia.",
 });
 
+export enum ImportDecisionInput {
+  ADD = "add",
+  COPY = "copy",
+  UPDATE = "update",
+}
+registerEnumType(ImportDecisionInput, {
+  name: "ImportDecision",
+  description: "ADD agrega un torneo nuevo; COPY lo importa con ids nuevos; UPDATE reemplaza el torneo con el mismo id.",
+});
+
+export enum RestoreModeInput {
+  MERGE = "merge",
+  REPLACE = "replace",
+}
+registerEnumType(RestoreModeInput, {
+  name: "RestoreMode",
+  description: "MERGE agrega los torneos cuyo id no existe; REPLACE reemplaza la biblioteca y el historial completos.",
+});
+
+@ObjectType("RestoreResult")
+export class RestoreResultModel {
+  @Field(() => Int) added!: number;
+  @Field(() => Int) skipped!: number;
+  @Field(() => Int) libraryVersion!: number;
+}
+
 @ObjectType({ description: "Marcador de un tramo del partido." })
 export class MatchScoreModel {
   @Field(() => Int) homeGoals!: number;

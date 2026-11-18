@@ -1,34 +1,15 @@
-import "reflect-metadata";
-import type { INestApplication } from "@nestjs/common";
-import { NestFactory } from "@nestjs/core";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { replicaSetStartupTimeoutMs, startTestReplicaSet, type TestReplicaSet } from "../test-utils/mongo-replica-set.js";
+import { replicaSetStartupTimeoutMs } from "../test-utils/mongo-replica-set.js";
+import { startGraphqlApp, type GraphqlTestApp } from "../test-utils/graphql-app.js";
 
-let replicaSet: TestReplicaSet;
-let app: INestApplication;
-const databaseName = `graphql_${process.pid}_${Date.now()}`;
+let api: GraphqlTestApp;
 
-beforeAll(async () => {
-  replicaSet = await startTestReplicaSet();
-  Object.assign(process.env, { NODE_ENV: "test", MONGODB_URI: replicaSet.uri, MONGODB_DB: databaseName });
-  const { AppModule } = await import("../app.module.js");
-  app = await NestFactory.create(AppModule, { logger: false });
-  await app.init();
-}, replicaSetStartupTimeoutMs);
+beforeAll(async () => { api = await startGraphqlApp("graphql"); }, replicaSetStartupTimeoutMs);
+afterAll(async () => { await api?.stop(); });
 
-afterAll(async () => {
-  await app?.close();
-  await replicaSet?.stop();
-});
-
-interface GraphqlError { message: string; extensions?: Record<string, unknown> }
-interface GraphqlResponse<T> { data?: T | null; errors?: GraphqlError[] }
-
-async function gql<T = Record<string, never>>(query: string, variables: Record<string, unknown> = {}) {
-  const response = await request(app.getHttpServer()).post("/graphql").send({ query, variables });
-  return response.body as GraphqlResponse<T>;
-}
+const gql = <T = Record<string, never>>(query: string, variables?: Record<string, unknown>) =>
+  api.gql<T>(query, variables);
 
 const TOURNAMENT_FIELDS = `
   id name version playedMatches totalMatches status
@@ -186,7 +167,7 @@ describe("API GraphQL (supertest + replica set en memoria)", () => {
     const introspection = await gql("{ __schema { queryType { name } } }");
     expect(introspection.errors![0].message).toMatch(/introspection/i);
 
-    const landing = await request(app.getHttpServer()).get("/graphql").set("Accept", "text/html");
+    const landing = await request(api.app.getHttpServer()).get("/graphql").set("Accept", "text/html");
     expect(landing.text).not.toMatch(/graphiql/i);
     expect(landing.status).toBeGreaterThanOrEqual(400);
   });

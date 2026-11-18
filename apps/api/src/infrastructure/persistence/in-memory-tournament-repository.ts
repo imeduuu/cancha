@@ -2,6 +2,12 @@ import { isActivityEvent, type ActivityEvent } from "@cancha/core/domain/entitie
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
 import { createActivityEvent } from "@cancha/core/application/services/activity-log";
+import {
+  planLibraryRestore,
+  validateLibraryRestore,
+  type LibraryRestoreMode,
+  type LibraryRestoreResult,
+} from "@cancha/core/application/services/library-restore";
 import { getTournamentStorageIssue } from "@cancha/core/application/validation/tournament-storage";
 
 /** Estado de una biblioteca en memoria. Varias instancias pueden compartirlo (p. ej. `reopen` del contrato). */
@@ -69,6 +75,8 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
   /** id → orden del último guardado/eliminación en esta instancia. */
   private readonly touched = new Map<string, true>();
   private readonly newEvents: ActivityEvent[] = [];
+  /** Se restauró un respaldo en modo reemplazar: la biblioteca y el historial se escriben completos. */
+  private replaced = false;
 
   constructor(private readonly state: InMemoryLibraryState = emptyInMemoryLibrary()) {
     this.initialIds = new Set(state.tournaments.map(({ id }) => id));
@@ -132,8 +140,51 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
     this.state.activeTournamentId = id;
   }
 
+  /** Restaura un respaldo con el mismo plan que localStorage (sin universos ni copia de recuperación). */
+  importTournaments(
+    tournaments: readonly Tournament[],
+    mode: LibraryRestoreMode,
+    activity: readonly ActivityEvent[] = [],
+  ): LibraryRestoreResult {
+    validateLibraryRestore(tournaments, activity);
+    const plan = planLibraryRestore({
+      mode,
+      incoming: tournaments,
+      incomingActivity: activity,
+      existing: this.state.tournaments,
+      existingActivity: this.state.activity,
+      activeTournamentId: this.state.activeTournamentId,
+    });
+    if (mode === "replace") {
+      this.replaced = true;
+      this.state.tournaments = plan.tournaments.map(toPlainJson);
+      this.state.activity = plan.activity.map(toPlainJson);
+    } else {
+      this.state.tournaments = plan.tournaments.map(toPlainJson);
+      // El primero restaurado debe quedar como el último guardado (primero en findAll).
+      for (const tournament of [...plan.imported].reverse()) this.touch(tournament.id);
+      for (const event of plan.activity) this.append(event);
+    }
+    this.state.activeTournamentId = plan.activeTournamentId;
+    return { added: plan.added, skipped: plan.skipped };
+  }
+
   /** Cambios de esta instancia respecto del estado inicial. */
   changes(): LibraryChanges {
+    const activeTournament = this.state.activeTournamentId !== this.initialActiveId
+      ? { activeTournament: { id: this.state.activeTournamentId } }
+      : {};
+    if (this.replaced) {
+      return {
+        // findAll devuelve primero lo último guardado: se escriben en orden inverso.
+        saved: [...this.state.tournaments].reverse(),
+        deleted: [],
+        events: [...this.state.activity],
+        ...activeTournament,
+        replaceLibrary: true,
+        replaceActivity: true,
+      };
+    }
     const saved: Tournament[] = [];
     const deleted: string[] = [];
     for (const id of this.touched.keys()) {
@@ -145,9 +196,7 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
       saved,
       deleted,
       events: [...this.newEvents],
-      ...(this.state.activeTournamentId !== this.initialActiveId
-        ? { activeTournament: { id: this.state.activeTournamentId } }
-        : {}),
+      ...activeTournament,
     };
   }
 

@@ -14,6 +14,15 @@ export interface TournamentLibraryRepository extends TournamentRepository {
   deleteById(id: string): void;
   getActiveTournamentId(): string | null;
   setActiveTournamentId(id: string | null): void;
+  /**
+   * Restaura un respaldo (ver application/services/library-restore.ts): todo o
+   * nada, registra library-restored y ajusta el torneo activo.
+   */
+  importTournaments?(
+    tournaments: readonly Tournament[],
+    mode: "merge" | "replace",
+    activity?: readonly ActivityEvent[],
+  ): { added: number; skipped: number };
   readRawTournamentDataForRecovery?(): string;
   getRecoverySnapshotStatus?(): { available: boolean; warning?: string };
 }

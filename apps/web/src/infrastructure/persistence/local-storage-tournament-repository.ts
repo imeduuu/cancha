@@ -8,6 +8,7 @@ import type {
 } from "@cancha/core/domain/entities/tournament";
 import { isActivityEvent, type ActivityEvent } from "@cancha/core/domain/entities/activity-event";
 import { createActivityEvent } from "@cancha/core/application/services/activity-log";
+import { planLibraryRestore, validateLibraryRestore } from "@cancha/core/application/services/library-restore";
 import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
 import type { Fixture, Matchday } from "@cancha/core/domain/entities/tournament";
 import { tieBreakerOptions } from "@cancha/core/domain/value-objects/tie-breaker";
@@ -772,29 +773,7 @@ export class LocalStorageTournamentRepository implements TournamentLibraryReposi
     restoredUniverses?: SportsUniverseLibrary,
   ): { added: number; skipped: number } {
     this.assertWriteLease();
-    const incomingIds = new Set<string>();
-    for (const tournament of tournaments) {
-      if (!isTournament(tournament)) {
-        throw new Error("No se importó el respaldo: la estructura de uno de los torneos no es válida.");
-      }
-      const issues = validateTournamentIntegrity(tournament);
-      if (issues.length > 0) {
-        throw new Error(`No se importó "${tournament.name || tournament.id}": ${issues[0]}`);
-      }
-      const playerIssue = validateTournamentPlayerData(tournament);
-      if (playerIssue) throw new Error(`No se importó "${tournament.name}": ${playerIssue}`);
-      const regulationsIssue = getMatchRegulationsIssue(tournament);
-      if (regulationsIssue) throw new Error(`No se importó "${tournament.name}": ${regulationsIssue}`);
-      const detailIssue = getFixtureDetailsIssue(tournament);
-      if (detailIssue) throw new Error(`No se importó "${tournament.name}": ${detailIssue}`);
-      if (incomingIds.has(tournament.id)) {
-        throw new Error(`No se importó el respaldo: el identificador "${tournament.id}" está duplicado.`);
-      }
-      incomingIds.add(tournament.id);
-    }
-    if (!restoredActivity.every(isActivityEvent)) {
-      throw new Error("No se importó el respaldo: el historial contiene eventos inválidos.");
-    }
+    validateLibraryRestore(tournaments, restoredActivity, isTournament);
 
     const previousSerialized = this.readSerializedTournaments();
     const previousSerializedActivity = this.readSerializedActivity();
@@ -834,56 +813,36 @@ export class LocalStorageTournamentRepository implements TournamentLibraryReposi
         existing.push(tournament);
       }
     }
-    const imported = mode === "replace"
-      ? [...tournaments]
-      : tournaments.filter(({ id }) => !existingIds.has(id));
-    const skipped = mode === "replace" ? 0 : tournaments.length - imported.length;
-    const nextTournaments = mode === "replace" ? imported : [...imported, ...existing];
-    const resultingTournamentIds = new Set(nextTournaments.map(({ id }) => id));
-    const universeCandidate = mode === "replace"
-      ? validateSportsUniverseLibrary(
-        restoredUniverses ?? emptySportsUniverseLibrary(),
-        resultingTournamentIds,
-      )
-      : mergeSportsUniverseLibraries(
-        this.getSportsUniverseLibrary(),
-        restoredUniverses,
-        new Set(imported.map(({ id }) => id)),
-        resultingTournamentIds,
-      );
-    const existingActivity = mode === "merge" ? this.findActivity() : [];
-    const event = {
-      id: crypto.randomUUID(),
-      occurredAt: new Date().toISOString(),
-      action: "library-restored" as const,
-      tournamentId: imported[0]?.id ?? "library",
-      ...(imported[0]?.competitionId ? { competitionId: imported[0].competitionId } : {}),
-      tournamentName: imported[0]?.name ?? "Biblioteca",
-      ...(imported[0]?.season !== undefined ? { season: imported[0].season } : {}),
-      entityType: "tournament" as const,
-      summary: `Se restauró un respaldo (${mode}) con ${imported.length} competiciones agregadas.`,
-      after: { mode, added: imported.length, skipped },
-    } satisfies ActivityEvent;
-    const nextActivity = [...existingActivity];
-    for (const importedEvent of restoredActivity) {
-      if (!nextActivity.some(({ id }) => id === importedEvent.id)) {
-        nextActivity.push({ ...importedEvent, imported: true });
-      }
-    }
-    if (!nextActivity.some(({ id }) => id === event.id)) nextActivity.push(event);
-    const nextUniverses = validateSportsUniverseRelations(
-      universeCandidate,
-      nextTournaments,
-      nextActivity,
-    );
+    let nextUniverses = emptySportsUniverseLibrary();
+    const plan = planLibraryRestore({
+      mode,
+      incoming: tournaments,
+      incomingActivity: restoredActivity,
+      existing,
+      existingActivity: mode === "merge" ? this.findActivity() : [],
+      activeTournamentId: mode === "merge" ? this.getActiveTournamentId() : null,
+      // El torneo activo debe quedar dentro del universo deportivo resultante.
+      selectable: (nextTournaments, nextActivity, imported) => {
+        const resultingTournamentIds = new Set(nextTournaments.map(({ id }) => id));
+        const universeCandidate = mode === "replace"
+          ? validateSportsUniverseLibrary(
+            restoredUniverses ?? emptySportsUniverseLibrary(),
+            resultingTournamentIds,
+          )
+          : mergeSportsUniverseLibraries(
+            this.getSportsUniverseLibrary(),
+            restoredUniverses,
+            new Set(imported.map(({ id }) => id)),
+            resultingTournamentIds,
+          );
+        nextUniverses = validateSportsUniverseRelations(universeCandidate, nextTournaments, nextActivity);
+        return tournamentsInUniverse(nextTournaments, nextUniverses);
+      },
+    });
+    const nextTournaments = plan.tournaments;
+    const nextActivity = plan.activity;
+    const nextActiveId = plan.activeTournamentId;
     const serializedUniverses = JSON.stringify(nextUniverses);
-    const currentActiveId = mode === "merge" ? this.getActiveTournamentId() : null;
-    const scopedNextTournaments = tournamentsInUniverse(nextTournaments, nextUniverses);
-    const nextActiveId = mode === "merge"
-      && currentActiveId
-      && scopedNextTournaments.some(({ id }) => id === currentActiveId)
-      ? currentActiveId
-      : scopedNextTournaments[0]?.id ?? null;
     const previousRecovery = this.readSerializedRecoverySnapshot();
     const recoverySnapshot = mode === "replace" && !skipRecoveryCopy
       ? this.createRecoverySnapshot(
@@ -910,7 +869,7 @@ export class LocalStorageTournamentRepository implements TournamentLibraryReposi
       this.setActiveTournamentId(previousActiveId);
       throw error;
     }
-    return { added: imported.length, skipped };
+    return { added: plan.added, skipped: plan.skipped };
   }
 
   hasRecoverableSnapshot(): boolean {
