@@ -4,6 +4,8 @@ import type { AsyncTournamentLibraryRepository } from "@cancha/core/application/
 import { createActivityEvent } from "@cancha/core/application/services/activity-log";
 import { getTournamentStorageIssue } from "@cancha/core/application/validation/tournament-storage";
 import type { LibraryChanges } from "@cancha/core/application/services/in-memory-library";
+import type { SportsUniverseLibrary } from "@cancha/core/domain/entities/sports-universe";
+import { emptySportsUniverseLibrary, validateSportsUniverseLibrary } from "@cancha/core/application/services/sports-universes";
 import {
   MongoServerError,
   type ClientSession,
@@ -63,10 +65,12 @@ interface CounterDocument { _id: ScopedId; seq: number }
  * `library_state`: por usuario, `active-tournament` guarda el torneo activo y
  * `library` la versión de su biblioteca (+1 en cada escritura).
  */
-interface LibraryStateDocument { _id: ScopedId; tournamentId?: string | null; _version?: number }
+interface LibraryStateDocument { _id: ScopedId; tournamentId?: string | null; _version?: number; library?: unknown }
 
 const activeTournamentStateId = "active-tournament";
 const libraryVersionStateId = "library";
+/** Universos deportivos del usuario (`library`: SportsUniverseLibrary). */
+const universesStateId = "universes";
 const transactionOptions: TransactionOptions = {
   readConcern: { level: "snapshot" },
   writeConcern: { w: "majority" },
@@ -113,6 +117,8 @@ export interface LibrarySnapshot {
   readonly versions: ReadonlyMap<string, number>;
   readonly activity: ActivityEvent[];
   readonly activeTournamentId: string | null;
+  /** Ninguno si nunca se guardaron. */
+  readonly universes: SportsUniverseLibrary;
   /** 0 si la biblioteca nunca se escribió. */
   readonly libraryVersion: number;
 }
@@ -250,11 +256,13 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
       const activity = await this.readActivity(session);
       const active = await this.libraryState.findOne({ _id: this.key(activeTournamentStateId) }, { session });
       const library = await this.libraryState.findOne({ _id: this.key(libraryVersionStateId) }, { session });
+      const universes = await this.readUniverses(session);
       return {
         tournaments,
         versions,
         activity,
         activeTournamentId: active?.tournamentId ?? null,
+        universes,
         libraryVersion: library?._version ?? 0,
       };
     });
@@ -300,7 +308,9 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
         ? await this.writeTournaments(changes.saved, session, read.versions)
         : new Map<string, number>();
       if (changes.replaceActivity) await this.activity.deleteMany(this.scope(), { session });
+      else await this.reattributeActivity(changes.activityUniverseIds ?? {}, session);
       for (const event of changes.events) await this.appendActivity(event, session);
+      if (changes.universes) await this.writeUniverses(changes.universes, session);
       if (changes.activeTournament) {
         await this.libraryState.updateOne(
           { _id: this.key(activeTournamentStateId) },
@@ -377,12 +387,23 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
         throw new TournamentVersionConflictError(id, expected, document._version, tournament.name);
       }
       await this.bumpLibraryVersion(session);
-      await this.appendActivity(createActivityEvent(tournament, {
-        action: "tournament-deleted",
-        entityType: "tournament",
-        summary: `Se eliminó la competición "${tournament.name}".`,
-        before: { archived: tournament.archived ?? false },
-      }), session);
+      // Igual que localStorage: el evento conserva el universo y la asignación se retira.
+      const universes = await this.readUniverses(session);
+      const universeId = universes.assignments[id];
+      await this.appendActivity({
+        ...createActivityEvent(tournament, {
+          action: "tournament-deleted",
+          entityType: "tournament",
+          summary: `Se eliminó la competición "${tournament.name}".`,
+          before: { archived: tournament.archived ?? false },
+        }),
+        ...(universeId ? { universeId } : {}),
+      }, session);
+      if (universeId) {
+        const assignments = { ...universes.assignments };
+        delete assignments[id];
+        await this.writeUniverses({ ...universes, assignments }, session);
+      }
     });
     this.versions.delete(id);
   }
@@ -537,6 +558,41 @@ export class MongoTournamentRepository implements AsyncTournamentLibraryReposito
   }
 
   /** Igual que localStorage: un evento con un id ya registrado (en la biblioteca del usuario) no se duplica. */
+  private async readUniverses(session?: ClientSession): Promise<SportsUniverseLibrary> {
+    const state = await this.libraryState.findOne({ _id: this.key(universesStateId) }, { session });
+    if (state?.library === undefined) return emptySportsUniverseLibrary();
+    try {
+      return validateSportsUniverseLibrary(state.library);
+    } catch {
+      throw new Error("Los universos deportivos guardados están dañados.");
+    }
+  }
+
+  private async writeUniverses(universes: SportsUniverseLibrary, session: ClientSession): Promise<void> {
+    await this.libraryState.updateOne(
+      { _id: this.key(universesStateId) },
+      { $set: { library: toPlainJson(universes) } },
+      { upsert: true, session },
+    );
+  }
+
+  /**
+   * Reatribución derivada por la unidad de trabajo (`reattributeActivityToUniverses`):
+   * sólo cambia `universeId` de eventos existentes; el resto del evento no se toca.
+   */
+  private async reattributeActivity(
+    universeIds: Readonly<Record<string, string | null>>,
+    session: ClientSession,
+  ): Promise<void> {
+    for (const [id, universeId] of Object.entries(universeIds)) {
+      await this.activity.updateOne(
+        { _id: this.key(id) },
+        universeId === null ? { $unset: { universeId: "" } } : { $set: { universeId } },
+        { session },
+      );
+    }
+  }
+
   private async appendActivity(event: ActivityEvent, session: ClientSession): Promise<void> {
     if (await this.activity.findOne({ _id: this.key(event.id) }, { session, projection: { _id: 1 } })) return;
     const { id, ...fields } = toPlainJson(event);

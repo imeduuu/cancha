@@ -10,7 +10,10 @@ import {
   setTournamentUniverseAssignments,
   tournamentsInUniverse,
   validateSportsUniverseRelations,
+  activityUniverseChanges,
+  reattributeActivityToUniverses,
 } from "./sports-universes";
+import { scenarioUniverseIds, universeReattributionScenario } from "../../test-utils/universe-reattribution-fixtures";
 import { buildClubProfiles } from "./club-history";
 import { createTournamentBackup, parseTournamentBackupWithActivity } from "./tournament-archive";
 
@@ -243,5 +246,30 @@ describe("sports universes", () => {
       tournaments: [source],
       activity: [],
     })).universes).toBeUndefined();
+  });
+});
+
+describe("reattributeActivityToUniverses", () => {
+  it("reatribuye el escenario de referencia y sólo cambia universeId", () => {
+    const scenario = universeReattributionScenario();
+    const after = reattributeActivityToUniverses(scenario.before, scenario.after, scenario.activity);
+    expect(scenarioUniverseIds(scenario, after)).toEqual(scenario.expectedUniverseIds);
+    after.forEach((event, index) => {
+      const { universeId: _a, ...rest } = event;
+      const { universeId: _b, ...original } = scenario.activity[index];
+      void _a; void _b;
+      expect(rest).toEqual(original);
+    });
+    expect(activityUniverseChanges(scenario.activity, after)).toEqual({
+      "evento-a": "universo-dos",
+      "evento-b": null,
+      "evento-d-viejo-uno": null,
+    });
+  });
+
+  it("sin cambios de asignaciones ni universos eliminados devuelve los mismos eventos", () => {
+    const scenario = universeReattributionScenario();
+    const same = reattributeActivityToUniverses(scenario.before, { ...scenario.before }, scenario.activity);
+    same.forEach((event, index) => expect(event).toBe(scenario.activity[index]));
   });
 });

@@ -9,15 +9,18 @@ import {
   isLibraryLevelActivityAction,
   libraryLevelActivityActions,
   validateLibraryChanges,
-  type LoadedLibraryIds,
+  type LoadedLibrary,
 } from "./library-changes";
+import { emptySportsUniverseLibrary } from "../services/sports-universes";
+import { scenarioUniverseIds, universeReattributionScenario } from "../../test-utils/universe-reattribution-fixtures";
 
 const league = (id: string): Tournament => ({ ...closureLeague(id), name: `Liga ${id}` });
 const event = (tournament: Pick<Tournament, "id" | "name">, summary = "Se actualizó el reglamento."): ActivityEvent =>
   createActivityEvent(tournament, { action: "regulations-updated", entityType: "tournament", summary });
-const loaded = (tournamentIds: string[] = ["a"], activityIds: string[] = []): LoadedLibraryIds => ({
-  tournamentIds: new Set(tournamentIds),
-  activityIds: new Set(activityIds),
+const loaded = (tournamentIds: string[] = ["a"], activityIds: string[] = []): LoadedLibrary => ({
+  tournaments: tournamentIds.map(league),
+  activity: activityIds.map(id => ({ ...event(league(tournamentIds[0] ?? "a")), id })),
+  universes: emptySportsUniverseLibrary(),
 });
 describe("validateLibraryChanges", () => {
   it("acepta un envío válido y lo devuelve normalizado", () => {
@@ -107,5 +110,42 @@ describe("validateLibraryChanges", () => {
     expect(carriesTournamentSnapshot({ a: [{ b: league("a") }] })).toBe(true);
     expect(carriesTournamentSnapshot({ id: "x", teams: [] })).toBe(false);
     expect(carriesTournamentSnapshot("texto")).toBe(false);
+  });
+
+  describe("universos deportivos", () => {
+    const scenario = universeReattributionScenario();
+    const library: LoadedLibrary = { tournaments: scenario.tournaments, activity: scenario.activity, universes: scenario.before };
+
+    it("un cambio de universos se valida y reatribuye el historial existente con la regla de core", () => {
+      const result = validateLibraryChanges({ saved: [], deleted: [], events: [], universes: scenario.after }, library);
+      expect(result.universes).toEqual(scenario.after);
+      const reattributed = scenario.activity.map(item => {
+        const universeId = result.activityUniverseIds?.[item.id];
+        if (universeId === undefined) return item;
+        const { universeId: _old, ...rest } = item;
+        void _old;
+        return universeId === null ? rest : { ...rest, universeId };
+      });
+      expect(scenarioUniverseIds(scenario, reattributed)).toEqual(scenario.expectedUniverseIds);
+    });
+
+    it("un cliente no puede enviar activityUniverseIds", () => {
+      expect(() => validateLibraryChanges({ saved: [], deleted: [], events: [], activityUniverseIds: { "evento-a": null } }, library))
+        .toThrow(/"activityUniverseIds" no es válido/);
+    });
+
+    it("universos inválidos o que no cuadran con la biblioteca resultante son un error", () => {
+      expect(() => validateLibraryChanges({ saved: [], deleted: [], events: [], universes: { version: 9 } }, library))
+        .toThrow(/No se guardaron los cambios: Los datos de universos deportivos no son válidos/);
+      // Eliminar un torneo asignado sin retirar su asignación deja una asignación huérfana.
+      expect(() => validateLibraryChanges({ saved: [], deleted: [scenario.tournaments[0].id], events: [] }, library))
+        .toThrow(/universos deportivos no son válidos/);
+    });
+
+    it("sin universos en el envío no se reatribuye nada", () => {
+      const result = validateLibraryChanges({ saved: [], deleted: [], events: [] }, library);
+      expect(result.universes).toBeUndefined();
+      expect(result.activityUniverseIds).toBeUndefined();
+    });
   });
 });

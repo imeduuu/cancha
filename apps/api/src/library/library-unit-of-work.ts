@@ -1,4 +1,3 @@
-import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
 import { isRejectionEvent } from "@cancha/core/application/services/activity-log";
 import { validateLibraryChanges } from "@cancha/core/application/validation/library-changes";
 import type { ClientSession } from "mongodb";
@@ -91,7 +90,7 @@ export class LibraryUnitOfWork {
    */
   async read<T>(
     userId: string,
-    work: (repository: TournamentLibraryRepository, view: LibraryView) => T,
+    work: (repository: InMemoryTournamentRepository, view: LibraryView) => T,
   ): Promise<UnitOfWorkResult<T>> {
     const snapshot = await this.createRepository(userId).loadLibrary();
     const result = this.execute(work, new InMemoryTournamentRepository(this.stateOf(snapshot)), snapshot);
@@ -105,7 +104,7 @@ export class LibraryUnitOfWork {
    */
   async run<T>(
     userId: string,
-    work: (repository: TournamentLibraryRepository, view: LibraryView) => T,
+    work: (repository: InMemoryTournamentRepository, view: LibraryView) => T,
     options: UnitOfWorkOptions = {},
   ): Promise<UnitOfWorkResult<T>> {
     for (let attempt = 1; ; attempt++) {
@@ -158,8 +157,9 @@ export class LibraryUnitOfWork {
       throw new LibraryVersionConflictError(expectedLibraryVersion, snapshot.libraryVersion);
     }
     const normalized = validateLibraryChanges(changes, {
-      tournamentIds: new Set(snapshot.versions.keys()),
-      activityIds: new Set(snapshot.activity.map(({ id }) => id)),
+      tournaments: snapshot.tournaments,
+      activity: snapshot.activity,
+      universes: snapshot.universes,
     });
     if (!hasLibraryChanges(normalized)) {
       return { committed: false, libraryVersion: snapshot.libraryVersion, versions: snapshot.versions };
@@ -172,7 +172,7 @@ export class LibraryUnitOfWork {
   }
 
   private execute<T>(
-    work: (repository: TournamentLibraryRepository, view: LibraryView) => T,
+    work: (repository: InMemoryTournamentRepository, view: LibraryView) => T,
     repository: InMemoryTournamentRepository,
     snapshot: LibrarySnapshot,
   ): T {
@@ -188,6 +188,7 @@ export class LibraryUnitOfWork {
       tournaments: [...snapshot.tournaments],
       activity: [...snapshot.activity],
       activeTournamentId: snapshot.activeTournamentId,
+      universes: snapshot.universes,
     };
   }
 

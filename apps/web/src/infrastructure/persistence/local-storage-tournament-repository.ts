@@ -27,7 +27,8 @@ import { validateMatchRegulations, validateTournamentMatchRegulations } from "@c
 import type { SportsUniverseLibrary } from "@cancha/core/domain/entities/sports-universe";
 import {
   emptySportsUniverseLibrary,
-  mergeSportsUniverseLibraries,
+  reattributeActivityToUniverses,
+  restoredSportsUniverses,
   tournamentsInUniverse,
   validateSportsUniverseLibrary,
   validateSportsUniverseRelations,
@@ -823,19 +824,14 @@ export class LocalStorageTournamentRepository implements TournamentLibraryReposi
       activeTournamentId: mode === "merge" ? this.getActiveTournamentId() : null,
       // El torneo activo debe quedar dentro del universo deportivo resultante.
       selectable: (nextTournaments, nextActivity, imported) => {
-        const resultingTournamentIds = new Set(nextTournaments.map(({ id }) => id));
-        const universeCandidate = mode === "replace"
-          ? validateSportsUniverseLibrary(
-            restoredUniverses ?? emptySportsUniverseLibrary(),
-            resultingTournamentIds,
-          )
-          : mergeSportsUniverseLibraries(
-            this.getSportsUniverseLibrary(),
-            restoredUniverses,
-            new Set(imported.map(({ id }) => id)),
-            resultingTournamentIds,
-          );
-        nextUniverses = validateSportsUniverseRelations(universeCandidate, nextTournaments, nextActivity);
+        nextUniverses = restoredSportsUniverses({
+          mode,
+          current: mode === "replace" ? emptySportsUniverseLibrary() : this.getSportsUniverseLibrary(),
+          restored: restoredUniverses,
+          importedTournamentIds: new Set(imported.map(({ id }) => id)),
+          tournaments: nextTournaments,
+          activity: nextActivity,
+        });
         return tournamentsInUniverse(nextTournaments, nextUniverses);
       },
     });
@@ -1225,43 +1221,10 @@ export class LocalStorageTournamentRepository implements TournamentLibraryReposi
       currentTournaments,
       this.findActivity(),
     );
-    const changedTournamentIds = new Set([
-      ...Object.keys(previousLibrary.assignments),
-      ...Object.keys(validated.assignments),
-    ].filter((id) =>
-      (previousLibrary.assignments[id] ?? null) !== (validated.assignments[id] ?? null),
-    ));
-    const remainingUniverseIds = new Set(validated.universes.map(({ id }) => id));
-    const removedUniverseIds = new Set(previousLibrary.universes
-      .map(({ id }) => id)
-      .filter((id) => !remainingUniverseIds.has(id)));
-    if (changedTournamentIds.size === 0 && removedUniverseIds.size === 0) {
-      this.writeStoredSportsUniverses(JSON.stringify(validated));
-      return;
-    }
-
     const previousActivity = this.readSerializedActivity();
     const previousUniverses = this.readSerializedSportsUniverses();
     const events = this.findActivity();
-    if(events.some(event=>(event.action==="association-recorded" || event.action==="club-affiliation-recorded") && isRecord(event.after) && typeof event.after.universeId==="string" && removedUniverseIds.has(event.after.universeId)))throw new Error("No se eliminó el universo: conserva asociaciones o afiliaciones históricas. No se trasladan automáticamente a otra partida.");
-    const updatedEvents = events.map((event) => {
-      // Metadata retains its declared universe even when a tournament is moved.
-      if(event.action==="association-recorded" || event.action==="club-affiliation-recorded")return event;
-      const after = event.after;
-      const referencedIds = [event.tournamentId];
-      if (event.action === "season-created" && isRecord(after)
-        && Array.isArray(after.tournamentIds)) {
-        referencedIds.push(...after.tournamentIds.filter(
-          (id): id is string => typeof id === "string",
-        ));
-      }
-      const affectedId = referencedIds.find((id) => changedTournamentIds.has(id));
-      const removesOldUniverse = !!event.universeId && removedUniverseIds.has(event.universeId);
-      if (!affectedId && !removesOldUniverse) return event;
-      const newUniverseId = affectedId ? validated.assignments[affectedId] : undefined;
-      const { universeId: _oldUniverseId, ...unassignedEvent } = event;
-      return newUniverseId ? { ...unassignedEvent, universeId: newUniverseId } : unassignedEvent;
-    });
+    const updatedEvents = reattributeActivityToUniverses(previousLibrary, validated, events);
     try {
       if (JSON.stringify(updatedEvents) !== JSON.stringify(events)) {
         this.writeActivityEvents(updatedEvents);

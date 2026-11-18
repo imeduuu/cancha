@@ -9,6 +9,15 @@ import {
   type LibraryRestoreResult,
 } from "./library-restore";
 import { getTournamentStorageIssue } from "../validation/tournament-storage";
+import type { SportsUniverseLibrary } from "../../domain/entities/sports-universe";
+import {
+  activityUniverseChanges,
+  emptySportsUniverseLibrary,
+  reattributeActivityToUniverses,
+  restoredSportsUniverses,
+  tournamentsInUniverse,
+  validateSportsUniverseRelations,
+} from "./sports-universes";
 
 /** Estado de una biblioteca en memoria. Varias instancias pueden compartirlo (p. ej. `reopen` del contrato). */
 export interface InMemoryLibraryState {
@@ -17,6 +26,8 @@ export interface InMemoryLibraryState {
   /** En orden de registro. */
   activity: ActivityEvent[];
   activeTournamentId: string | null;
+  /** Universos deportivos; ausente equivale a ninguno. */
+  universes?: SportsUniverseLibrary;
 }
 
 /**
@@ -36,6 +47,14 @@ export interface LibraryChanges {
   readonly replaceLibrary?: boolean;
   /** El historial completo se reemplazó por `events`. */
   readonly replaceActivity?: boolean;
+  /** Presente sólo si cambiaron (o si se reemplazó la biblioteca). */
+  readonly universes?: SportsUniverseLibrary;
+  /**
+   * Nuevo `universeId` (null = sin universo) de eventos que YA existían, derivado
+   * con `reattributeActivityToUniverses` al cambiar los universos. Lo calcula quien
+   * confirma (la unidad de trabajo del servidor); un cliente no puede enviarlo.
+   */
+  readonly activityUniverseIds?: Readonly<Record<string, string | null>>;
 }
 
 export function hasLibraryChanges(changes: LibraryChanges): boolean {
@@ -44,11 +63,13 @@ export function hasLibraryChanges(changes: LibraryChanges): boolean {
     || changes.events.length > 0
     || changes.activeTournament !== undefined
     || changes.replaceLibrary === true
-    || changes.replaceActivity === true;
+    || changes.replaceActivity === true
+    || changes.universes !== undefined
+    || Object.keys(changes.activityUniverseIds ?? {}).length > 0;
 }
 
 export function emptyInMemoryLibrary(): InMemoryLibraryState {
-  return { tournaments: [], activity: [], activeTournamentId: null };
+  return { tournaments: [], activity: [], activeTournamentId: null, universes: emptySportsUniverseLibrary() };
 }
 
 /** Igual que los adaptadores persistentes: se guarda exactamente la forma JSON. */
@@ -78,10 +99,34 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
   private readonly newEvents: ActivityEvent[] = [];
   /** Se restauró un respaldo en modo reemplazar: la biblioteca y el historial se escriben completos. */
   private replaced = false;
+  private readonly initialUniverses: string;
+  /** Eventos que ya existían al crear la instancia y cuyo universeId cambió en ella. */
+  private readonly reattributed: Record<string, string | null> = {};
 
   constructor(private readonly state: InMemoryLibraryState = emptyInMemoryLibrary()) {
     this.initialIds = new Set(state.tournaments.map(({ id }) => id));
     this.initialActiveId = state.activeTournamentId;
+    this.initialUniverses = JSON.stringify(this.getSportsUniverseLibrary());
+  }
+
+  getSportsUniverseLibrary(): SportsUniverseLibrary {
+    return this.state.universes ?? emptySportsUniverseLibrary();
+  }
+
+  /** Igual que localStorage: valida las relaciones y reatribuye el historial con la regla de core. */
+  setSportsUniverseLibrary(library: SportsUniverseLibrary): void {
+    const validated = validateSportsUniverseRelations(library, this.state.tournaments, this.state.activity);
+    const before = this.state.activity;
+    const after = reattributeActivityToUniverses(this.getSportsUniverseLibrary(), validated, before);
+    const fresh = new Set(this.newEvents.map(({ id }) => id));
+    for (const [id, universeId] of Object.entries(activityUniverseChanges(before, after))) {
+      if (!fresh.has(id)) this.reattributed[id] = universeId;
+    }
+    this.state.activity = after;
+    // Los eventos nuevos se envían ya reatribuidos.
+    const byId = new Map(after.map(event => [event.id, event]));
+    this.newEvents.splice(0, this.newEvents.length, ...this.newEvents.map(event => byId.get(event.id) ?? event));
+    this.state.universes = toPlainJson(validated);
   }
 
   findAll(): Tournament[] {
@@ -122,12 +167,23 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
   deleteById(id: string): void {
     const tournament = this.state.tournaments.find(item => item.id === id);
     if (!tournament) throw new Error("No se encontró el campeonato que quieres eliminar.");
-    const event = createActivityEvent(tournament, {
-      action: "tournament-deleted",
-      entityType: "tournament",
-      summary: `Se eliminó la competición "${tournament.name}".`,
-      before: { archived: tournament.archived ?? false },
-    });
+    // Igual que localStorage: el evento conserva el universo y la asignación se retira.
+    const library = this.getSportsUniverseLibrary();
+    const universeId = library.assignments[id];
+    const event: ActivityEvent = {
+      ...createActivityEvent(tournament, {
+        action: "tournament-deleted",
+        entityType: "tournament",
+        summary: `Se eliminó la competición "${tournament.name}".`,
+        before: { archived: tournament.archived ?? false },
+      }),
+      ...(universeId ? { universeId } : {}),
+    };
+    if (universeId) {
+      const assignments = { ...library.assignments };
+      delete assignments[id];
+      this.state.universes = { ...library, assignments };
+    }
     this.state.tournaments = this.state.tournaments.filter(item => item.id !== id);
     this.touch(id);
     this.append(event);
@@ -141,14 +197,33 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
     this.state.activeTournamentId = id;
   }
 
-  /** Restaura un respaldo con el mismo plan que localStorage (sin universos ni copia de recuperación). */
+  /**
+   * Restaura un respaldo con el mismo plan y los mismos universos que localStorage
+   * (sin copia de recuperación: `_skipRecoveryCopy` sólo conserva la firma).
+   */
   importTournaments(
     tournaments: readonly Tournament[],
     mode: LibraryRestoreMode,
     activity: readonly ActivityEvent[] = [],
+    _skipRecoveryCopy?: boolean,
+    restoredUniverses?: SportsUniverseLibrary,
   ): LibraryRestoreResult {
+    void _skipRecoveryCopy;
     validateLibraryRestore(tournaments, activity);
+    let nextUniverses = emptySportsUniverseLibrary();
     const plan = planLibraryRestore({
+      // El torneo activo debe quedar dentro del universo deportivo resultante.
+      selectable: (nextTournaments, nextActivity, imported) => {
+        nextUniverses = restoredSportsUniverses({
+          mode,
+          current: this.getSportsUniverseLibrary(),
+          restored: restoredUniverses,
+          importedTournamentIds: new Set(imported.map(({ id }) => id)),
+          tournaments: nextTournaments,
+          activity: nextActivity,
+        });
+        return tournamentsInUniverse(nextTournaments, nextUniverses);
+      },
       mode,
       incoming: tournaments,
       incomingActivity: activity,
@@ -167,6 +242,7 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
       for (const event of plan.activity) this.append(event);
     }
     this.state.activeTournamentId = plan.activeTournamentId;
+    this.state.universes = toPlainJson(nextUniverses);
     return { added: plan.added, skipped: plan.skipped };
   }
 
@@ -175,6 +251,9 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
     const activeTournament = this.state.activeTournamentId !== this.initialActiveId
       ? { activeTournament: { id: this.state.activeTournamentId } }
       : {};
+    const universes = this.replaced || JSON.stringify(this.getSportsUniverseLibrary()) !== this.initialUniverses
+      ? { universes: this.getSportsUniverseLibrary() }
+      : {};
     if (this.replaced) {
       return {
         // findAll devuelve primero lo último guardado: se escriben en orden inverso.
@@ -182,6 +261,7 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
         deleted: [],
         events: [...this.state.activity],
         ...activeTournament,
+        ...universes,
         replaceLibrary: true,
         replaceActivity: true,
       };
@@ -198,6 +278,8 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
       deleted,
       events: [...this.newEvents],
       ...activeTournament,
+      ...universes,
+      ...(Object.keys(this.reattributed).length > 0 ? { activityUniverseIds: { ...this.reattributed } } : {}),
     };
   }
 

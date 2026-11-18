@@ -8,7 +8,8 @@ import { parseTournamentBackupWithActivity } from "../services/tournament-archiv
  * reemplazando la biblioteca, sin importación parcial. Un archivo que no se
  * puede leer se rechaza sin escribir; si la restauración falla, se registra el
  * rechazo en el historial (como en la web) y se relanza el error.
- * Los universos deportivos del respaldo se ignoran: son propios de la web.
+ * Los universos deportivos del respaldo se restauran con la misma regla que la
+ * web (`restoredSportsUniverses`), si el repositorio los admite.
  */
 export function restoreTournamentBackup(
   text: string,
@@ -21,7 +22,7 @@ export function restoreTournamentBackup(
     throw new Error("No se restauró el respaldo: este almacenamiento no permite restaurar respaldos.");
   }
   try {
-    return repository.importTournaments(backup.tournaments, mode, backup.activity);
+    return repository.importTournaments(backup.tournaments, mode, backup.activity, false, backup.universes);
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Error desconocido al restaurar el respaldo.";
     recordRejectedImport(repository, reason, backup.tournaments[0]);

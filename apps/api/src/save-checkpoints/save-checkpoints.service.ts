@@ -6,7 +6,6 @@ import {
   verifySaveCheckpoint,
   type CheckpointComparison,
 } from "@cancha/core/application/services/save-checkpoints";
-import { emptySportsUniverseLibrary } from "@cancha/core/application/services/sports-universes";
 import { parseTournamentBackupWithActivity } from "@cancha/core/application/services/tournament-archive";
 import { restoreTournamentBackup } from "@cancha/core/application/use-cases/restore-tournament-backup";
 import type { LibraryRestoreResult } from "@cancha/core/application/services/library-restore";
@@ -52,7 +51,8 @@ export class SaveCheckpointsService {
   async create(userId: string, name: string, description = ""): Promise<SaveCheckpointSummary> {
     const read = await this.unitOfWork.read(userId, repository => ({
       tournaments: repository.findAll(),
-      activity: repository.findActivity?.() ?? [],
+      activity: repository.findActivity(),
+      universes: repository.getSportsUniverseLibrary(),
     }));
     const checkpoint = await createSaveCheckpoint(read.result, name, description);
     const version = await this.createStore(userId).add(checkpoint);
@@ -65,7 +65,7 @@ export class SaveCheckpointsService {
     const run = await this.unitOfWork.read(userId, repository => compareCheckpointLibrary(point, {
       tournaments: repository.findAll(),
       activity: repository.findActivity?.() ?? [],
-      universes: emptySportsUniverseLibrary(),
+      universes: repository.getSportsUniverseLibrary(),
     }));
     return { checkpoint: summaryOf(record, version), comparison: run.result, libraryVersion: run.libraryVersion };
   }

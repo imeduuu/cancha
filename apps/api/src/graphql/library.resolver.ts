@@ -74,13 +74,14 @@ export class LibraryResolver {
   }
 
   @Query(() => JsonScalar, {
-    description: "Biblioteca completa para la réplica del cliente con sesión: { tournaments, activity, activeTournamentId, libraryVersion, versions }.",
+    description: "Biblioteca completa para la réplica del cliente con sesión: { tournaments, activity, activeTournamentId, universes, libraryVersion, versions }.",
   })
   async librarySnapshot(@CurrentUser() user: SessionUser): Promise<unknown> {
     const run = await this.unitOfWork.read(user.id, repository => ({
       tournaments: repository.findAll(),
       activity: repository.findActivity?.() ?? [],
       activeTournamentId: repository.getActiveTournamentId(),
+      universes: repository.getSportsUniverseLibrary(),
     }));
     const versions = Object.fromEntries(run.result.tournaments.map(({ id }) => [id, versionOf(run, id)]));
     return { ...run.result, libraryVersion: run.libraryVersion, versions };
@@ -283,7 +284,7 @@ export class LibraryResolver {
   @Query(() => JsonScalar, { description: "Respaldo `cancha-backup` v7 de la biblioteca completa, con su historial." })
   async exportLibrary(@CurrentUser() user: SessionUser): Promise<unknown> {
     const run = await this.unitOfWork.read(user.id, repository =>
-      createTournamentBackup(repository.findAll(), undefined, repository.findActivity?.() ?? []));
+      createTournamentBackup(repository.findAll(), undefined, repository.findActivity(), repository.getSportsUniverseLibrary()));
     return run.result;
   }
 

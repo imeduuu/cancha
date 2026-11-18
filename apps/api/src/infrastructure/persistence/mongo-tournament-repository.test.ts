@@ -2,6 +2,8 @@ import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event"
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import { createActivityEvent } from "@cancha/core/application/services/activity-log";
 import { closureLeague } from "@cancha/core/test-utils/season-closure-fixtures";
+import { scenarioUniverseIds, universeReattributionScenario } from "@cancha/core/test-utils/universe-reattribution-fixtures";
+import { emptySportsUniverseLibrary } from "@cancha/core/application/services/sports-universes";
 import type { Db } from "mongodb";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { replicaSetStartupTimeoutMs, startTestReplicaSet, type TestReplicaSet } from "../../test-utils/mongo-replica-set.js";
@@ -282,6 +284,43 @@ describe("MongoTournamentRepository (específico de MongoDB)", () => {
       expect((await open().findAll()).map(({ id, name }) => [id, name])).toEqual([["a", "Liga a"]]);
       expect((await open().findActivity()).map(({ summary }) => summary)).toEqual(["Original."]);
       expect(await open().libraryVersion()).toBe(snapshot.libraryVersion);
+    });
+
+    it("guarda los universos y la reatribución sólo cambia universeId en los documentos de actividad", async () => {
+      const scenario = universeReattributionScenario();
+      const setup = open();
+      const initial = await setup.loadLibrary();
+      expect(initial.universes).toEqual(emptySportsUniverseLibrary());
+      await setup.commit({
+        saved: [...scenario.tournaments].reverse(), deleted: [], events: scenario.activity, universes: scenario.before,
+      }, initial);
+
+      const activity = database.collection(tournamentCollectionNames.activity);
+      const rawBefore = await activity.find(userScope(userA)).sort({ _seq: 1 }).toArray();
+      const repository = open();
+      const snapshot = await repository.loadLibrary();
+      expect(snapshot.universes).toEqual(scenario.before);
+
+      await repository.commit({
+        saved: [], deleted: [], events: [], universes: scenario.after,
+        activityUniverseIds: { "evento-a": "universo-dos", "evento-b": null, "evento-d-viejo-uno": null },
+      }, snapshot);
+
+      const rawAfter = await activity.find(userScope(userA)).sort({ _seq: 1 }).toArray();
+      const strip = ({ universeId: _u, ...rest }: Record<string, unknown>) => { void _u; return rest; };
+      expect(rawAfter.map(strip)).toEqual(rawBefore.map(strip));
+      expect(scenarioUniverseIds(scenario, await open().findActivity())).toEqual(scenario.expectedUniverseIds);
+      expect((await open().loadLibrary()).universes).toEqual(scenario.after);
+    });
+
+    it("deleteById retira la asignación del universo y deja el universo en el evento", async () => {
+      const scenario = universeReattributionScenario();
+      const setup = open();
+      await setup.commit({ saved: scenario.tournaments, deleted: [], events: [], universes: scenario.before }, await setup.loadLibrary());
+      const [a] = scenario.tournaments;
+      await open().deleteById(a.id);
+      expect((await open().loadLibrary()).universes.assignments).not.toHaveProperty(a.id);
+      expect((await open().findActivity()).at(-1)).toMatchObject({ action: "tournament-deleted", universeId: "universo-uno" });
     });
 
     it("replaceLibrary reemplaza todos los torneos y replaceActivity el historial", async () => {

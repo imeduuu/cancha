@@ -356,3 +356,84 @@ export function mergeSportsUniverseLibraries(
   }, resultingTournamentIds);
   return next;
 }
+
+/**
+ * Regla única (localStorage, réplica en memoria y servidor) para reatribuir el
+ * historial cuando cambian los universos: los eventos de un torneo que cambió de
+ * universo pasan al nuevo (o quedan sin universo), y los de un universo eliminado
+ * pierden su `universeId`. Sólo cambia `universeId`; el resto de cada evento queda
+ * igual. Las asociaciones y afiliaciones conservan el universo que declararon y,
+ * por eso, impiden eliminar ese universo.
+ *
+ * Devuelve los mismos objetos cuando no hay nada que reatribuir.
+ */
+export function reattributeActivityToUniverses(
+  previous: SportsUniverseLibrary,
+  next: SportsUniverseLibrary,
+  events: readonly ActivityEvent[],
+): ActivityEvent[] {
+  const changedTournamentIds = new Set([
+    ...Object.keys(previous.assignments),
+    ...Object.keys(next.assignments),
+  ].filter((id) => (previous.assignments[id] ?? null) !== (next.assignments[id] ?? null)));
+  const remainingUniverseIds = new Set(next.universes.map(({ id }) => id));
+  const removedUniverseIds = new Set(previous.universes
+    .map(({ id }) => id)
+    .filter((id) => !remainingUniverseIds.has(id)));
+  if (changedTournamentIds.size === 0 && removedUniverseIds.size === 0) return [...events];
+  if (events.some((event) => (event.action === "association-recorded" || event.action === "club-affiliation-recorded")
+    && isRecord(event.after) && typeof event.after.universeId === "string" && removedUniverseIds.has(event.after.universeId))) {
+    throw new Error("No se eliminó el universo: conserva asociaciones o afiliaciones históricas. No se trasladan automáticamente a otra partida.");
+  }
+  return events.map((event) => {
+    // Metadata retains its declared universe even when a tournament is moved.
+    if (event.action === "association-recorded" || event.action === "club-affiliation-recorded") return event;
+    const after = event.after;
+    const referencedIds = [event.tournamentId];
+    if (event.action === "season-created" && isRecord(after) && Array.isArray(after.tournamentIds)) {
+      referencedIds.push(...after.tournamentIds.filter((id): id is string => typeof id === "string"));
+    }
+    const affectedId = referencedIds.find((id) => changedTournamentIds.has(id));
+    const removesOldUniverse = !!event.universeId && removedUniverseIds.has(event.universeId);
+    if (!affectedId && !removesOldUniverse) return event;
+    const newUniverseId = affectedId ? next.assignments[affectedId] : undefined;
+    const { universeId: _oldUniverseId, ...unassignedEvent } = event;
+    void _oldUniverseId;
+    return newUniverseId ? { ...unassignedEvent, universeId: newUniverseId } : unassignedEvent;
+  });
+}
+
+/** `universeId` de cada evento que `reattributeActivityToUniverses` cambió (null = quedó sin universo). */
+export function activityUniverseChanges(
+  before: readonly ActivityEvent[],
+  after: readonly ActivityEvent[],
+): Record<string, string | null> {
+  const changes: Record<string, string | null> = {};
+  after.forEach((event, index) => {
+    const original = before[index];
+    if (original && original.id === event.id && original.universeId !== event.universeId) {
+      changes[event.id] = event.universeId ?? null;
+    }
+  });
+  return changes;
+}
+
+/**
+ * Universos resultantes de restaurar un respaldo, igual en todos los adaptadores:
+ * reemplazar toma los del respaldo (o ninguno); agregar los fusiona con los
+ * actuales y sólo asigna los torneos importados. Valida sus relaciones.
+ */
+export function restoredSportsUniverses(input: {
+  readonly mode: "merge" | "replace";
+  readonly current: SportsUniverseLibrary;
+  readonly restored?: SportsUniverseLibrary;
+  readonly importedTournamentIds: ReadonlySet<string>;
+  readonly tournaments: readonly Tournament[];
+  readonly activity: readonly ActivityEvent[];
+}): SportsUniverseLibrary {
+  const resultingTournamentIds = new Set(input.tournaments.map(({ id }) => id));
+  const candidate = input.mode === "replace"
+    ? validateSportsUniverseLibrary(input.restored ?? emptySportsUniverseLibrary(), resultingTournamentIds)
+    : mergeSportsUniverseLibraries(input.current, input.restored, input.importedTournamentIds, resultingTournamentIds);
+  return validateSportsUniverseRelations(candidate, input.tournaments, input.activity);
+}

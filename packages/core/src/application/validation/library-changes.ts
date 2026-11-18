@@ -1,6 +1,12 @@
 import { isActivityEvent, type ActivityAction, type ActivityEvent } from "../../domain/entities/activity-event";
 import type { Tournament } from "../../domain/entities/tournament";
+import type { SportsUniverseLibrary } from "../../domain/entities/sports-universe";
 import type { LibraryChanges } from "../services/in-memory-library";
+import {
+  activityUniverseChanges,
+  reattributeActivityToUniverses,
+  validateSportsUniverseRelations,
+} from "../services/sports-universes";
 import { getTournamentStorageIssue } from "./tournament-storage";
 
 /**
@@ -19,13 +25,15 @@ export function isLibraryLevelActivityAction(action: string): boolean {
   return (libraryLevelActivityActions as readonly string[]).includes(action);
 }
 
-/** Lo que ya existe en la biblioteca del usuario contra la que se valida el envío. */
-export interface LoadedLibraryIds {
-  readonly tournamentIds: ReadonlySet<string>;
-  readonly activityIds: ReadonlySet<string>;
+/** La biblioteca del usuario, tal como se cargó, contra la que se valida el envío. */
+export interface LoadedLibrary {
+  readonly tournaments: readonly Tournament[];
+  readonly activity: readonly ActivityEvent[];
+  readonly universes: SportsUniverseLibrary;
 }
 
-const allowedKeys = new Set(["saved", "deleted", "events", "activeTournament"]);
+/** `activityUniverseIds` no está: lo deriva el servidor, un cliente no puede enviarlo. */
+const allowedKeys = new Set(["saved", "deleted", "events", "activeTournament", "universes"]);
 
 function fail(reason: string): never {
   throw new Error(`No se guardaron los cambios: ${reason}`);
@@ -58,10 +66,19 @@ export function carriesTournamentSnapshot(value: unknown, depth = 0): boolean {
  * id ya está registrado (la actividad sólo se agrega; un id conocido se ignora y
  * nunca reemplaza al guardado). Lanza `Error` con el motivo, sin escrituras.
  *
+ * Los universos se validan siempre contra la biblioteca resultante (p. ej. eliminar
+ * un torneo asignado exige enviar los universos sin esa asignación). Si el envío
+ * los cambia, el historial existente se reatribuye con la misma regla que
+ * localStorage y el resultado sale en `activityUniverseIds`: sólo `universeId`.
+ *
  * No admite `replaceLibrary` ni `replaceActivity`: reemplazar la biblioteca sólo
  * se hace restaurando un respaldo.
  */
-export function validateLibraryChanges(changes: unknown, loaded: LoadedLibraryIds): LibraryChanges {
+export function validateLibraryChanges(changes: unknown, library: LoadedLibrary): LibraryChanges {
+  const loaded = {
+    tournamentIds: new Set(library.tournaments.map(({ id }) => id)),
+    activityIds: new Set(library.activity.map(({ id }) => id)),
+  };
   if (!isRecord(changes)) fail("el envío no tiene el formato esperado.");
   if ("replaceLibrary" in changes || "replaceActivity" in changes) {
     fail("reemplazar la biblioteca o el historial sólo se puede restaurando un respaldo.");
@@ -124,10 +141,34 @@ export function validateLibraryChanges(changes: unknown, loaded: LoadedLibraryId
     active = { id };
   }
 
+  const resultingTournaments = [
+    ...(saved as Tournament[]),
+    ...library.tournaments.filter(({ id }) => !savedIds.has(id) && !deletedIds.has(id)),
+  ];
+  const universesChanged = "universes" in changes;
+  let universes: SportsUniverseLibrary | undefined;
+  let activityUniverseIds: Record<string, string | null> = {};
+  try {
+    const validated = validateSportsUniverseRelations(
+      universesChanged ? changes.universes : library.universes,
+      resultingTournaments,
+      [...library.activity, ...newEvents],
+    );
+    if (universesChanged) {
+      universes = validated;
+      const reattributed = reattributeActivityToUniverses(library.universes, validated, library.activity);
+      activityUniverseIds = activityUniverseChanges(library.activity, reattributed);
+    }
+  } catch (error) {
+    fail(error instanceof Error ? error.message : "los universos deportivos no son válidos.");
+  }
+
   return {
     saved: saved as Tournament[],
     deleted: [...deletedIds],
     events: newEvents,
     ...(active ? { activeTournament: active } : {}),
+    ...(universes ? { universes } : {}),
+    ...(Object.keys(activityUniverseIds).length > 0 ? { activityUniverseIds } : {}),
   };
 }

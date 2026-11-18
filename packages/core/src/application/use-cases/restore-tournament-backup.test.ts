@@ -22,12 +22,13 @@ function repository(importTournaments?: TournamentLibraryRepository["importTourn
 const backup = () => JSON.stringify(createTournamentBackup([contractTournament("a")], () => new Date("2026-05-01T00:00:00.000Z")));
 
 describe("restoreTournamentBackup", () => {
-  it("parsea el respaldo y delega en importTournaments con el modo y el historial", () => {
+  it("parsea el respaldo y delega en importTournaments con el modo, el historial y los universos", () => {
     const importTournaments = vi.fn(() => ({ added: 1, skipped: 0 }));
     const { repo } = repository(importTournaments);
 
     expect(restoreTournamentBackup(backup(), "replace", repo)).toEqual({ added: 1, skipped: 0 });
-    expect(importTournaments).toHaveBeenCalledWith([expect.objectContaining({ id: "a" })], "replace", []);
+    // Un respaldo sin universos los entrega como ausentes (el repositorio decide: reemplazar = ninguno).
+    expect(importTournaments).toHaveBeenCalledWith([expect.objectContaining({ id: "a" })], "replace", [], false, undefined);
   });
 
   it("un archivo ilegible se rechaza sin escribir nada", () => {
