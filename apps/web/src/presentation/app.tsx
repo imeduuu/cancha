@@ -60,6 +60,7 @@ import {
 } from "@cancha/core/application/use-cases/manage-tournaments";
 import { importTournamentArchive } from "@cancha/core/application/use-cases/import-tournament-archive";
 import { LocalStorageTournamentRepository } from "../infrastructure/persistence/local-storage-tournament-repository";
+import type { LibraryBackend } from "../infrastructure/persistence/library-backend";
 import { StandingsTable } from "./components/standings-table";
 import { SimulationScopeDialog } from "./components/simulation-scope-dialog";
 import { SetupTournamentForm } from "./components/setup-tournament-form";
@@ -100,8 +101,16 @@ const MatchCalendar = lazy(() => import("./components/match-calendar").then(modu
 const CalendarProgrammingCenter = lazy(() => import("./components/calendar-programming-center").then(module => ({ default: module.CalendarProgrammingCenter })));
 const SecondDivisionPanel = lazy(() => import("./components/second-division-panel").then(module => ({ default: module.SecondDivisionPanel })));
 
-export function App() {
-  return <SessionDraftProvider><Application /></SessionDraftProvider>;
+export interface AppProps {
+  /**
+   * Biblioteca que usa la aplicación durante toda su vida (para cambiarla, vuelve a
+   * montar con otra `key`). Sin indicarla: localStorage, el modo sin sesión.
+   */
+  readonly libraryBackend?: LibraryBackend;
+}
+
+export function App({ libraryBackend }: AppProps = {}) {
+  return <SessionDraftProvider><Application libraryBackend={libraryBackend} /></SessionDraftProvider>;
 }
 
 const SportsDecisionsCenter = lazy(()=>import("./components/sports-decisions-center").then(m=>({default:m.SportsDecisionsCenter})));
@@ -109,8 +118,8 @@ const DrawAndBracketCenter = lazy(()=>import("./components/draw-and-bracket-cent
 const HistoricalArchive = lazy(() => import("./components/historical-archive").then(module => ({default: module.HistoricalArchive})));
 const SeasonClosureCenter = lazy(() => import("./components/season-closure-center").then(module => ({default: module.SeasonClosureCenter})));
 
-function Application() {
-  const repository = useMemo(() => new LocalStorageTournamentRepository(true), []);
+function Application({ libraryBackend }: AppProps) {
+  const [repository] = useState<LibraryBackend>(() => libraryBackend ?? new LocalStorageTournamentRepository(true));
   const [initialSnapshot] = useState(() => { try { return repository.snapshot(); } catch { return null; } });
   const acknowledgedLibrary = useRef(initialSnapshot);
   const writing = useRef(false);

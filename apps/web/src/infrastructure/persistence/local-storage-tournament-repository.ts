@@ -1,5 +1,6 @@
 import type { LibraryWriteLease } from "@cancha/core/application/ports/library-write-lease";
 import { assertLibraryWriteLease, libraryStorageSnapshot, sportingStorageKeys, withLibraryWriteLock } from "./library-write-lock";
+import type { LibraryBackend } from "./library-backend";
 import { isOfficialResolution } from "@cancha/core/domain/services/official-resolution-validation";
 import type {
   MatchResult,
@@ -713,7 +714,7 @@ function getMatchRegulationsIssue(tournament: Tournament): string | undefined {
   return validateTournamentMatchRegulations(tournament);
 }
 
-export class LocalStorageTournamentRepository implements TournamentLibraryRepository {
+export class LocalStorageTournamentRepository implements TournamentLibraryRepository, LibraryBackend {
   private writeLease = false;
   private writeFailure: unknown;
   constructor(private readonly requireWriteCoordination = true) {}
