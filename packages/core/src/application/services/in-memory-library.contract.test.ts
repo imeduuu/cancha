@@ -1,9 +1,9 @@
-import { describeTournamentRepositoryContract } from "@cancha/core/test-utils/tournament-repository-contract";
+import { describeTournamentRepositoryContract } from "../../test-utils/tournament-repository-contract";
 import {
   emptyInMemoryLibrary,
   InMemoryTournamentRepository,
   type InMemoryLibraryState,
-} from "./in-memory-tournament-repository.js";
+} from "./in-memory-library";
 
 // `reopen` crea otra instancia sobre el mismo estado, como otra pestaña sobre el mismo localStorage.
 let state: InMemoryLibraryState = emptyInMemoryLibrary();

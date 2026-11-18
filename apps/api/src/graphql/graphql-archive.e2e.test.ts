@@ -3,7 +3,7 @@ import { createTournament } from "@cancha/core/application/use-cases/create-tour
 import { simulateChampionship } from "@cancha/core/application/use-cases/simulate-championship";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { graphqlBodyLimit } from "../bootstrap.js";
-import { InMemoryTournamentRepository } from "../infrastructure/persistence/in-memory-tournament-repository.js";
+import { InMemoryTournamentRepository } from "@cancha/core/application/services/in-memory-library";
 import { replicaSetStartupTimeoutMs } from "../test-utils/mongo-replica-set.js";
 import { startGraphqlApp, type GraphqlTestApp } from "../test-utils/graphql-app.js";
 

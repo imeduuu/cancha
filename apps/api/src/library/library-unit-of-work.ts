@@ -1,11 +1,12 @@
 import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
+import { isRejectionEvent } from "@cancha/core/application/services/activity-log";
 import type { ClientSession } from "mongodb";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import {
   hasLibraryChanges,
   InMemoryTournamentRepository,
   type LibraryChanges,
-} from "../infrastructure/persistence/in-memory-tournament-repository.js";
+} from "@cancha/core/application/services/in-memory-library";
 import {
   LibraryVersionConflictError,
   TournamentVersionConflictError,
@@ -167,7 +168,7 @@ export class LibraryUnitOfWork {
 
   /** El caso de uso falló: sólo se conservan sus eventos de rechazo (p. ej. tournament-import-rejected). */
   private async persistRejections(userId: string, changes: LibraryChanges): Promise<void> {
-    const rejected = changes.events.filter(event => event.outcome === "rejected");
+    const rejected = changes.events.filter(isRejectionEvent);
     if (rejected.length === 0) return;
     try {
       const store = this.createRepository(userId);

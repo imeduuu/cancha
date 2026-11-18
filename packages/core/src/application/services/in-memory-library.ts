@@ -1,14 +1,14 @@
-import { isActivityEvent, type ActivityEvent } from "@cancha/core/domain/entities/activity-event";
-import type { Tournament } from "@cancha/core/domain/entities/tournament";
-import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
-import { createActivityEvent } from "@cancha/core/application/services/activity-log";
+import { isActivityEvent, type ActivityEvent } from "../../domain/entities/activity-event";
+import type { Tournament } from "../../domain/entities/tournament";
+import type { TournamentLibraryRepository } from "../ports/tournament-repository";
+import { createActivityEvent } from "./activity-log";
 import {
   planLibraryRestore,
   validateLibraryRestore,
   type LibraryRestoreMode,
   type LibraryRestoreResult,
-} from "@cancha/core/application/services/library-restore";
-import { getTournamentStorageIssue } from "@cancha/core/application/validation/tournament-storage";
+} from "./library-restore";
+import { getTournamentStorageIssue } from "../validation/tournament-storage";
 
 /** Estado de una biblioteca en memoria. Varias instancias pueden compartirlo (p. ej. `reopen` del contrato). */
 export interface InMemoryLibraryState {
@@ -68,6 +68,7 @@ function storageIssue(tournament: Tournament): string | undefined {
  * Biblioteca síncrona en memoria con el mismo contrato que localStorage y Mongo.
  * La usa la unidad de trabajo del servidor: se carga desde Mongo, los casos de uso
  * de core se ejecutan sin cambios sobre ella y después se escriben sus `changes()`.
+ * La web con sesión hace lo mismo sobre la biblioteca descargada del servidor (fase 5).
  */
 export class InMemoryTournamentRepository implements TournamentLibraryRepository {
   private readonly initialIds: ReadonlySet<string>;

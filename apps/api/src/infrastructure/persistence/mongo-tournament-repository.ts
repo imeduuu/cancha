@@ -3,7 +3,7 @@ import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { AsyncTournamentLibraryRepository } from "@cancha/core/application/ports/async-tournament-repository";
 import { createActivityEvent } from "@cancha/core/application/services/activity-log";
 import { getTournamentStorageIssue } from "@cancha/core/application/validation/tournament-storage";
-import type { LibraryChanges } from "./in-memory-tournament-repository.js";
+import type { LibraryChanges } from "@cancha/core/application/services/in-memory-library";
 import {
   MongoServerError,
   type ClientSession,

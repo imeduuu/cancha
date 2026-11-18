@@ -69,6 +69,14 @@ export function recordActivity(
   repository.recordActivity(event);
 }
 
+/**
+ * Evento que documenta una operación rechazada (p. ej. una importación inválida).
+ * Se conserva aunque la operación que lo produjo no escriba nada más.
+ */
+export function isRejectionEvent(event: ActivityEvent): boolean {
+  return event.outcome === "rejected";
+}
+
 export function recordRejectedImport(
   repository: TournamentRepository,
   reason: string,
