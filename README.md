@@ -63,7 +63,11 @@ En la tabla anual argentina se destaca al líder como Campeón de Liga; los pues
 
 Las bases oficiales consultadas para estos puestos están publicadas por la [ANFP para Primera B 2026](https://www.anfp.cl/wp-content/uploads/2026/01/Bases-Primera-B-2026_VF_1.pdf) y [Segunda División 2026](https://www.anfp.cl/wp-content/uploads/2026/03/Bases-Segunda-Division-2026-2.pdf).
 
-Como los sitios oficiales chilenos no habilitan CORS para una aplicación externa, Vite reenvía `/official-source` a Campeonato Chileno y `/third-division-source` a ANFA Tercera División durante `npm run dev` y `npm run preview` (configuración en `apps/web/vite.config.ts`, que también reenvía `/argentina-cup-source` y `/brazil-cup-source`). La API de ESPN sí admite consultas desde el navegador. Un despliegue estático debe configurar en su servidor un proxy equivalente para las rutas chilenas.
+Campeonato Chileno (ANFP), ANFA Tercera División, Copa Argentina y CBF no habilitan CORS, así que la web los consulta por el mismo origen en `/official-source`, `/third-division-source`, `/argentina-cup-source` y `/brazil-cup-source`. Las sirve siempre el mismo proxy cerrado, `@cancha/official-source-proxy`, con destino fijo por sitio, sólo GET, sin cabeceras del cliente, timeout, tamaño máximo, caché y rate limit:
+- en producción, la API (el *rewrite* de la web debe incluir esas cuatro rutas, además de `/graphql`);
+- en `npm run dev` y `npm run preview`, un plugin de `apps/web/vite.config.ts` con el mismo módulo, así que el modo sin sesión importa sin levantar la API.
+
+La API de ESPN sí admite consultas desde el navegador y no pasa por el proxy. Ver [docs/official-source-proxy.md](docs/official-source-proxy.md).
 
 ## Reglas de clasificación y verificación
 
@@ -175,7 +179,7 @@ La web con sesión no los necesita: los ejecuta sobre su copia en memoria y env�
 | Resoluciones oficiales | `record-official-resolution` (registrar y revocar) | Entrada de resolución y política de `advanceProgression`. |
 | Temporadas | `create-tournament-season`, `create-linked-division-seasons`, `simulate-argentina-half` | Síncronos; requieren definir sus entradas (selección de copa nacional, equipos entrantes). |
 | Revisar → confirmar | `plan-season`, `prepare-continental-edition`, `prepare-stage-draw` (sorteo y calendario), `configure-stage-draw`, `confirm-season-closure`, `record-club-affiliation`, `review-sports-resolution`, `simulate-season-scope`, `program-season-calendar` | La revisión se ata a la confirmación con un `WeakMap` en memoria, así que no puede repartirse entre dos peticiones HTTP. Opciones: revisar y confirmar en la misma unidad de trabajo, o un token de revisión firmado con la versión de la biblioteca. |
-| Asíncronos | `import-official-tournament`, `import-planned-season-calendar`, `generate-local-groups` | La unidad de trabajo sólo admite casos de uso síncronos. Además, las fuentes oficiales (`OfficialLeagueSource`) necesitan adaptadores de servidor con acceso de red (hoy son proxies de Vite). |
+| Asíncronos | `import-official-tournament`, `import-planned-season-calendar`, `generate-local-groups` | La unidad de trabajo sólo admite casos de uso síncronos. Además, las fuentes oficiales (`OfficialLeagueSource`) se consultan desde el navegador a través del proxy de fuentes oficiales (fase 6); ejecutarlos en el servidor exigiría adaptadores `OfficialLeagueSource` de Node. |
 
 ### MongoDB
 

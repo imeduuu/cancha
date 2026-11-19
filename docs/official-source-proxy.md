@@ -13,7 +13,7 @@ Los sitios de ANFP (Campeonato Chileno), ANFA (Tercera División), Copa Argentin
 
 - **`packages/official-source-proxy`** (`@cancha/official-source-proxy`): toda la política. Usa sólo Node (`node:http`, `fetch`), sin Nest, Express, core, la API ni la web (ESLint lo exige). Tiene la misma condición `source` que core: Vite y `verify:live` leen `src/` y la API usa `dist/`.
 - **`apps/api/src/official-sources/`**: controlador delgado y público (`@Public()`) que pasa la petición al módulo con `clientKey: req.ip`. Los destinos se inyectan con `OFFICIAL_SOURCE_TARGETS`, que sólo las pruebas sobrescriben.
-- **Vite** (`npm run dev` / `preview`) y **`verify:live`** usan el mismo módulo (fase 6B).
+- **Vite** (`npm run dev` / `preview`) y **`verify:live`** usan el mismo módulo (ver "Desarrollo y verificación" al final).
 - `apps/web/src/**` no puede importarlo (ESLint): no entra en el bundle de la web.
 
 ## Política
@@ -109,3 +109,12 @@ curl -i "http://127.0.0.1:3000/third-division-source/assets/php/calendario_ta.ph
 curl -i --path-as-is "http://127.0.0.1:3000/official-source/../x"                        # 400
 curl -i -X POST "http://127.0.0.1:3000/official-source/"                                 # 405
 ```
+
+## Desarrollo y verificación con fuentes reales (fase 6B)
+
+- `npm run dev` y `npm run preview` sirven las cuatro rutas con el **mismo módulo**, a través del plugin `cancha-official-sources` de `apps/web/vite.config.ts`. El modo sin sesión importa sin levantar la API ni MongoDB, y se aplica la misma política que en producción. El proxy de Vite queda sólo para `/graphql`.
+  - Por qué no reenviar a la API: obligaría a levantar la API (y Mongo) para importar sin cuenta.
+  - Por qué no "API y, si no responde, directo": serían dos políticas distintas y los errores quedarían ocultos.
+- El cargador de configuración de Vite no aplica la condición `source` a un paquete del workspace. El plugin carga el módulo con `runnerImport` y `environments.inline.resolve.conditions = ["source", …]`, así que no hace falta compilar el paquete para `npm run dev`.
+- El middleware se instala después de la validación de `Host` de Vite, así que `dev:public` sigue rechazando hosts ajenos. A través del túnel todas las peticiones llegan desde `127.0.0.1`, por lo que el rate limit es compartido por los visitantes.
+- `npm run verify:live -- --via=direct|proxy|api[=URL]`: ver [live-importers-verification.md](live-importers-verification.md).

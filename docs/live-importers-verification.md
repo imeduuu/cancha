@@ -12,6 +12,24 @@ Tercera A fue consultada y parseada, pero no se considera una importación compr
 
 Se ejecutaron los adaptadores originales mediante Vite SSR y DOMParser de jsdom. Las rutas relativas se resolvieron con los mismos destinos HTTPS de los proxies configurados en Vite. Se mantuvo la validación TLS con los certificados del sistema. Las solicitudes fueron GET, sin cuentas ni credenciales.
 
+### Por dónde pasan las consultas (fase 6)
+
+`npm run verify:live` acepta `--via` para las cuatro fuentes sin CORS (ESPN va siempre directo):
+
+```bash
+npm run verify:live                                   # --via=direct: a los sitios oficiales, como en la ejecución de octubre
+npm run verify:live -w @cancha/web -- --via=proxy     # @cancha/official-source-proxy en el mismo proceso (misma política que la API, sin levantarla)
+npm run verify:live -w @cancha/web -- --via=api       # a través de la API en CANCHA_API_URL o http://127.0.0.1:3000 (npm run dev:api)
+npm run verify:live -w @cancha/web -- --via=api=https://api.example.cl --only=primera,copa-brasil --output=/tmp/live.json
+```
+
+El informe registra `via` en la raíz y en cada solicitud. Con `proxy` o `api` también registra `sourceCache` (`hit`/`miss`, de `X-Cancha-Source-Cache`). Un fallo del origen aparece como HTTP 502 o 504 del proxy, igual que lo vería la web.
+
+Comprobación parcial del 19 de noviembre de 2026 con `--via=proxy`:
+- Pasaron Copa Argentina (63 partidos), Copa do Brasil (155 partidos, con `RSC: 1` a través del proxy) y ANFP Primera (240 partidos). La respuesta mayor midió 1,40 MB, por debajo del máximo de 5 MiB.
+- ANFA Tercera A falló: `calendario_ta.php` respondió **404 también con `--via=direct`**. Es un cambio del sitio, no del proxy, y queda pendiente revisar el importador de ANFA.
+- Ese informe no reemplazó `live-importers-results.json`.
+
 Cada respuesta aceptada pasó por `importOfficialTournament`, las validaciones deportivas y la progresión existentes, con un repositorio aislado que no guarda datos. No se abrió `LocalStorageTournamentRepository`, no se accedió a localStorage y no se modificaron torneos, resultados ni actividad del usuario. Solo se escribieron código, documentación y muestras de pruebas. También se compararon los participantes y marcadores publicados con el resultado de la importación: en las 16 importaciones aceptadas no quedaron encuentros publicados cambiados u omitidos después de las correcciones.
 
 Las capturas técnicas están en [live-importers-results.json](live-importers-results.json), con URL de cada solicitud, hora, HTTP, tamaño y resumen de estructura. [live-importers-before.json](live-importers-before.json) conserva la primera ejecución anterior a las correcciones. No se guardaron respuestas completas con jugadores, fotos u otros campos innecesarios.

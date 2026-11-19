@@ -125,7 +125,12 @@ it("serves the real application on a free port and denies other hosts and projec
     expect(server.httpServer.address().port).not.toBe(port);
     expect(server.config.env.VITE_CANCHA_PRIVATE_PROBE).toBeUndefined();
     // /graphql existe en la configuración de Vite (fase 5D), pero el acceso temporal no lo expone: la lista de abajo lo exige 403.
-    expect(Object.keys(server.config.server.proxy)).toEqual(["/official-source", "/third-division-source", "/argentina-cup-source", "/brazil-cup-source", "/graphql"]);
+    // Las fuentes oficiales ya no son proxies de Vite: las sirve el plugin con @cancha/official-source-proxy (fase 6).
+    expect(Object.keys(server.config.server.proxy)).toEqual(["/graphql"]);
+    expect(server.config.plugins.map(plugin => plugin.name)).toContain("cancha-official-sources");
+    const sourcePost = await fetch(base + "/official-source/ligas/", { method: "POST" });
+    expect(sourcePost.status).toBe(405);
+    expect(await sourcePost.text()).toBe("Las fuentes oficiales sólo admiten consultas GET.");
     expect((await fetch(base)).status).toBe(200);
     const statusForHost = host => new Promise((resolve, reject) => {
       httpGet(base, { headers: { Host: host } }, response => { response.resume(); resolve(response.statusCode); }).on("error", reject);

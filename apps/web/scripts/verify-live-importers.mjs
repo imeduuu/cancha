@@ -7,17 +7,29 @@ const dom = new JSDOM("");
 globalThis.DOMParser = dom.window.DOMParser;
 const nativeFetch = globalThis.fetch;
 const requests = new Map();
-const proxies = {
-  "/official-source": "https://www.campeonatochileno.cl",
-  "/third-division-source": "https://anfaterceradivision.cl",
-  "/argentina-cup-source": "https://www.copaargentina.org",
-  "/brazil-cup-source": "https://www.cbf.com.br",
-};
+// Cómo llegan las consultas a las fuentes sin CORS (ESPN va siempre directo):
+//   --via=direct (por defecto)  a los sitios oficiales, sin proxy;
+//   --via=proxy                 a través de @cancha/official-source-proxy en este proceso (misma política que la API, sin levantarla);
+//   --via=api[=URL]             a través de la API (CANCHA_API_URL o http://127.0.0.1:3000): prueba el despliegue real.
+const [via, viaUrl] = (process.argv.find(arg => arg.startsWith("--via="))?.slice(6) ?? "direct").split(/=(.*)/s);
+if (!["direct", "proxy", "api"].includes(via)) throw new Error(`--via debe ser direct, proxy o api[=URL] (se recibió "${via}").`);
+const { officialSourceTargets, createOfficialSourceProxy } = await server.ssrLoadModule("@cancha/official-source-proxy");
+const sources = via === "proxy" ? createOfficialSourceProxy({ rateLimit: 0, fetch: nativeFetch }) : undefined;
+const apiBase = via === "api" ? (viaUrl || process.env.CANCHA_API_URL || "http://127.0.0.1:3000").replace(/\/+$/, "") : undefined;
 const cache = new Map();
+/** URL real de la consulta y si pasa por el proxy en este proceso. */
 function target(input) {
   const path = String(input);
-  for (const [prefix, host] of Object.entries(proxies)) if (path.startsWith(prefix + "/")) return host + path.slice(prefix.length);
-  return path;
+  for (const [prefix, host] of Object.entries(officialSourceTargets)) {
+    if (!path.startsWith(prefix + "/")) continue;
+    if (via === "api") return { url: apiBase + path };
+    if (via === "proxy") return { url: path, inProcess: true };
+    return { url: host + path.slice(prefix.length) };
+  }
+  return { url: path };
+}
+function lowerCaseHeaders(headers = {}) {
+  return Object.fromEntries(Object.entries(headers instanceof Headers ? Object.fromEntries(headers) : headers).map(([name, value]) => [name.toLowerCase(), String(value)]));
 }
 function summarize(body) {
   try {
@@ -42,12 +54,15 @@ function summarize(body) {
   }
 }
 globalThis.fetch = async (input, init = {}) => {
-  const url = target(input);const key = url + JSON.stringify(init.headers ?? {});
+  const { url, inProcess } = target(input);const key = url + JSON.stringify(init.headers ?? {});
   if (!cache.has(key)) cache.set(key,(async()=>{
-    const record = { url, startedAt:new Date().toISOString() };requests.set(key,record);
+    const record = { url, via: inProcess || apiBase && url.startsWith(apiBase) ? via : "direct", startedAt:new Date().toISOString() };requests.set(key,record);
     try {
-      const response = await nativeFetch(url,{...init,signal:AbortSignal.timeout(25000)});
-      const body = await response.text();Object.assign(record,{status:response.status,finalUrl:response.url,bytes:Buffer.byteLength(body),...summarize(body)});
+      const response = inProcess
+        ? await sources.respond({ method: "GET", url, headers: lowerCaseHeaders(init.headers) }).then(r => new Response(r.body, { status: r.status, headers: r.headers }))
+        : await nativeFetch(url,{...init,signal:AbortSignal.timeout(25000)});
+      const sourceCache = response.headers.get("x-cancha-source-cache");
+      const body = await response.text();Object.assign(record,{status:response.status,finalUrl:response.url || url,bytes:Buffer.byteLength(body),...(sourceCache ? {sourceCache} : {}),...summarize(body)});
       return { body, status:response.status,headers:response.headers };
     } catch(error) {record.error=String(error)+(error.cause ? `: ${String(error.cause)}` : "");throw error;}
   })());
@@ -98,5 +113,5 @@ try {
  globalThis.fetch=nativeFetch;dom.window.close();await server.close();
  await mkdir("docs",{recursive:true});
  process.exitCode=results.some(r=>r.import!=="passed"||r.changedPublishedMatches?.length)?1:0;
- await writeFile(process.argv.find(arg=>arg.startsWith("--output="))?.slice(9) ?? "../../docs/live-importers-results.json",JSON.stringify({checkedAt:new Date().toISOString(),libraryAccess:"none; isolated in-memory repository",results,requests:[...requests.values()]},null,2)+"\n");
+ await writeFile(process.argv.find(arg=>arg.startsWith("--output="))?.slice(9) ?? "../../docs/live-importers-results.json",JSON.stringify({checkedAt:new Date().toISOString(),via,...(apiBase ? {api:apiBase} : {}),libraryAccess:"none; isolated in-memory repository",results,requests:[...requests.values()]},null,2)+"\n");
 }

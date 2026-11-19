@@ -66,7 +66,7 @@ npm run dev                               # web en http://127.0.0.1:5173; /graph
 
 ## Limitaciones conocidas
 
-- **Importar desde fuentes oficiales desplegado requiere la fase 6.** Los importadores siguen en el navegador y usan los proxies de Vite, que no existen en un despliegue estático.
+- **Importar desde fuentes oficiales desplegado** (fase 6): los importadores siguen en el navegador y consultan `/official-source`, `/third-division-source`, `/argentina-cup-source` y `/brazil-cup-source` por el mismo origen. En producción las sirve la API, así que el *rewrite* debe incluirlas junto a `/graphql`. En desarrollo, el plugin de Vite usa el mismo proxy (`docs/official-source-proxy.md`).
 - Sin conexión no se puede escribir con sesión; no hay cola de cambios pendientes.
 - Dos dispositivos que editan torneos distintos al mismo tiempo también ven el aviso de cambios externos: la web no reintenta sola, porque la acción se decidió con datos que ya cambiaron.
 - La biblioteca de la cuenta se carga completa al abrirla y el servidor la carga completa en cada escritura: O(biblioteca del usuario).
