@@ -1,0 +1,113 @@
+# CI de Cancha: lint, build y pruebas (core, proxy, web y API con MongoDB en
+# memoria) y un recorrido de Playwright sólo en Chromium. Ver README ("CI").
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Sólo lectura del repositorio: el workflow no publica nada.
+permissions:
+  contents: read
+
+# Una corrida nueva de la misma rama (o PR) cancela la anterior.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Node >= 22.15: los scripts de la web usan --use-system-ca.
+  NODE_VERSION: "22"
+  # Binario de mongod para mongodb-memory-server (pruebas de apps/api).
+  MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.cache/mongodb-binaries
+
+jobs:
+  checks:
+    name: Lint, build y pruebas
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # La versión vive sólo en config.mongodbMemoryServer.version de
+      # apps/api/package.json (igual que la imagen de docker-compose.yml).
+      - name: Versión de MongoDB de las pruebas
+        id: mongo
+        run: echo "version=$(node -p "require('./apps/api/package.json').config.mongodbMemoryServer.version")" >> "$GITHUB_OUTPUT"
+
+      - name: Caché del binario de MongoDB
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MONGOMS_DOWNLOAD_DIR }}
+          key: mongodb-binaries-${{ runner.os }}-${{ runner.arch }}-${{ steps.mongo.outputs.version }}
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # Incluye los recorridos de App (test:flows) y la API con mongodb-memory-server.
+      - name: Pruebas
+        run: npm test
+
+  e2e:
+    name: Playwright (Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Versión de Playwright
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Caché de navegadores de Playwright
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+
+      - name: Instalar Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Dependencias del sistema de Chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Playwright (chromium-desktop y chromium-mobile)
+        run: npm run test:e2e -w @cancha/web -- --project=chromium-desktop --project=chromium-mobile
+
+      - name: Subir reporte de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14

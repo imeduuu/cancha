@@ -1,5 +1,7 @@
 # Cancha — Simulador de campeonatos
 
+[![CI](https://github.com/imeduuu/cancha/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/imeduuu/cancha/actions/workflows/ci.yml)
+
 Aplicación web para configurar campeonatos de fútbol y generar sus calendarios. Esta primera versión permite definir equipos, ruedas y orden de desempate; los campeonatos creados se guardan en el navegador. Con una cuenta (opcional), la biblioteca se guarda en el servidor y se abre desde cualquier navegador: ver [Cuenta y biblioteca en el servidor](#cuenta-y-biblioteca-en-el-servidor).
 
 ## Empezar
@@ -355,6 +357,17 @@ npm run test:e2e
 ```
 
 Playwright ejecuta los recorridos en perfiles aislados con un servidor local dedicado, sin túnel público ni acceso a la biblioteca personal. `npm run test:e2e:session` prueba en Chromium la biblioteca con sesión contra la API real (compilada, con MongoDB en memoria y sin Docker). Incluye Chromium, Firefox y WebKit en resoluciones de escritorio, notebook, tablet y móvil. `npm run test:flows` conserva los recorridos de integración con jsdom. [Instalación, cobertura, correcciones visuales y límites](docs/browser-audit.md).
+
+## Integración continua (CI)
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) se ejecuta en cada `push` y `pull_request` a `main`, con permisos de sólo lectura (`contents: read`). Una corrida nueva de la misma rama o PR cancela la anterior.
+
+| Job | Qué hace |
+| --- | --- |
+| `checks` | `npm ci`, `npm run lint`, `npm run build` y `npm test`, que incluye los recorridos de `test:flows` y la API contra un MongoDB en memoria. El binario de `mongod` se cachea con la versión de `config.mongodbMemoryServer.version` de `apps/api/package.json` como clave. |
+| `e2e` | Playwright sólo en `chromium-desktop` y `chromium-mobile`, con los navegadores cacheados por versión de Playwright. Si falla, sube `playwright-report/` y `test-results/` como artefacto `playwright-report` (14 días). |
+
+Firefox, WebKit y las demás resoluciones (`npm run test:e2e`) y `test:e2e:session` se siguen ejecutando en local. Para validar el workflow sin instalar nada: `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7` (en Git Bash de Windows, con `MSYS_NO_PATHCONV=1` y `$(pwd -W)`).
 
 ## Centro de competiciones y temporadas
 
