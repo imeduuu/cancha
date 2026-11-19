@@ -8,9 +8,8 @@ import {
 import type { SaveCheckpoint } from "@cancha/core/domain/entities/save-checkpoint";
 import type { CheckpointService } from "../persistence/checkpoint-service";
 import { ApiConflictError, ApiNotFoundError, ApiValidationError } from "./graphql-client";
+import { operations } from "./operations";
 import type { LibraryApi, SessionLibraryBackend } from "./session-library-backend";
-
-const fields = "id name description createdAt updatedAt tournamentCount universeCount activityCount sizeBytes version revision backupVersion digest";
 
 interface ServerCheckpoint {
   readonly id: string;
@@ -78,7 +77,7 @@ export class ServerCheckpointService implements CheckpointService {
   ) {}
 
   async list(): Promise<unknown[]> {
-    const { saveCheckpoints } = await this.api.request<{ saveCheckpoints: ServerCheckpoint[] }>(`{ saveCheckpoints { ${fields} } }`);
+    const { saveCheckpoints } = await this.api.request<{ saveCheckpoints: ServerCheckpoint[] }>(operations.saveCheckpoints);
     return saveCheckpoints.map(toRow);
   }
 
@@ -112,7 +111,7 @@ export class ServerCheckpointService implements CheckpointService {
       throw new Error("La revisión del punto está obsoleta. La biblioteca cambió; revisa nuevamente.");
     }
     const { createSaveCheckpoint: created } = await this.api.request<{ createSaveCheckpoint: ServerCheckpoint }>(
-      `mutation Create($name: String!, $description: String) { createSaveCheckpoint(name: $name, description: $description) { ${fields} } }`,
+      operations.createSaveCheckpoint,
       { name: review.checkpoint.name, description: review.checkpoint.description },
     );
     this.creations.delete(review);
@@ -130,7 +129,7 @@ export class ServerCheckpointService implements CheckpointService {
   async delete(id: string, expected: unknown, confirmed: boolean): Promise<void> {
     if (!confirmed) throw new Error("Se requiere confirmar la eliminación del punto.");
     try {
-      await this.api.request(`mutation Delete($id: ID!, $version: Int!) { deleteSaveCheckpoint(id: $id, expectedVersion: $version) }`,
+      await this.api.request(operations.deleteSaveCheckpoint,
         { id, version: versionOf(expected) });
     } catch (error) {
       if (error instanceof ApiConflictError) throw new Error("El punto cambió. Actualiza la lista antes de eliminarlo.");
@@ -142,7 +141,7 @@ export class ServerCheckpointService implements CheckpointService {
   async reviewRestoration(id: string): Promise<CheckpointRestoreReview> {
     const { saveCheckpointPreview: preview } = await this.api.request<{
       saveCheckpointPreview: { checkpoint: ServerCheckpoint; comparison: CheckpointComparison; libraryVersion: number };
-    }>(`query Preview($id: ID!) { saveCheckpointPreview(id: $id) { checkpoint { ${fields} } comparison libraryVersion } }`, { id });
+    }>(operations.saveCheckpointPreview, { id });
     const review = { checkpoint: toRow(preview.checkpoint), libraryToken: `servidor:v${preview.libraryVersion}`, comparison: preview.comparison };
     this.restores.set(review, { version: preview.checkpoint.version, libraryVersion: preview.libraryVersion });
     return review;
@@ -155,9 +154,7 @@ export class ServerCheckpointService implements CheckpointService {
     let restored: { added: number; skipped: number };
     try {
       ({ restoreSaveCheckpoint: restored } = await this.api.request<{ restoreSaveCheckpoint: { added: number; skipped: number } }>(
-        `mutation Restore($id: ID!, $version: Int!, $libraryVersion: Int!) {
-          restoreSaveCheckpoint(id: $id, expectedVersion: $version, expectedLibraryVersion: $libraryVersion) { added skipped }
-        }`,
+        operations.restoreSaveCheckpoint,
         { id: review.checkpoint.id, version: expected.version, libraryVersion: expected.libraryVersion },
       ));
     } catch (error) {
@@ -179,7 +176,7 @@ export class ServerCheckpointService implements CheckpointService {
 
   private async content(id: string): Promise<unknown> {
     const { saveCheckpointContent } = await this.api.request<{ saveCheckpointContent: unknown }>(
-      `query Content($id: ID!) { saveCheckpointContent(id: $id) }`, { id },
+      operations.saveCheckpointContent, { id },
     );
     return saveCheckpointContent;
   }

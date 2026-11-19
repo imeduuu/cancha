@@ -55,7 +55,7 @@ Las interfaces están en `packages/core/src/application/ports/` y sus implementa
 
 ### Repositorio de torneos
 
-`TournamentRepository` y `TournamentLibraryRepository` (`tournament-repository.ts`) definen cómo se guardan y leen los torneos, la biblioteca y el historial de actividad. En el navegador lo implementa `LocalStorageTournamentRepository`; en el servidor, `InMemoryTournamentRepository` (dentro de la unidad de trabajo, ver más abajo). `LocalStorageTournamentRepository` usa las claves `cancha.tournaments`, `cancha.activity`, `cancha.sportsUniverses` y `cancha.recovery`, además de la selección activa.
+`TournamentRepository` y `TournamentLibraryRepository` (`tournament-repository.ts`) definen cómo se guardan y leen los torneos, la biblioteca y el historial de actividad. En el navegador sin sesión lo implementa `LocalStorageTournamentRepository`; en el servidor, `InMemoryTournamentRepository` (dentro de la unidad de trabajo, ver más abajo), que con sesión también usa la web como réplica de la biblioteca de la cuenta (ver «Biblioteca con sesión»). `LocalStorageTournamentRepository` usa las claves `cancha.tournaments`, `cancha.activity`, `cancha.sportsUniverses` y `cancha.recovery`, además de la selección activa.
 
 - **`saveWithActivity(tournament, event)`** es la forma de guardar cualquier cambio que deba quedar registrado: escribe el torneo y su evento de actividad de manera coordinada. Si falla una de las escrituras, el adaptador intenta revertir ambas; si la reversión también falla, el error lo indica explícitamente. No equivale a una transacción del navegador.
 - Los casos de uso guardan mediante el servicio `saveWithActivity` de `application/services/activity-log.ts`. Ese servicio rechaza el guardado si el repositorio no ofrece escritura coordinada, en lugar de guardar el torneo y el evento por separado (lo que podría dejar uno sin el otro). También añade al evento las resoluciones oficiales que el cambio haya invalidado.
@@ -154,6 +154,15 @@ En el servidor no se usan ni `SaveCheckpointStore` ni `LibraryWriteLease`: las t
 - **Misma lógica que la web**: crear, verificar (huella SHA-256 y coherencia con los metadatos) y comparar con la biblioteca actual son funciones de core (`save-checkpoints.ts`), extraídas de la clase de la web sin cambiar su comportamiento.
 - **Revisar y confirmar sin memoria compartida**: en la web, la revisión de una restauración se ata a su confirmación con un `WeakMap`, lo que no sirve entre dos peticiones HTTP. En el servidor, la vista previa devuelve la versión del punto y la de la biblioteca, y la restauración exige ambas. La unidad de trabajo compara la versión de biblioteca antes de ejecutar (`expectedLibraryVersion`), y el compare-and-set del punto se hace dentro de la misma transacción que reemplaza la biblioteca (`beforeCommit`). Ese compare-and-set es una escritura, para que un borrado concurrente choque con la restauración en vez de pasar inadvertido. Si algo cambió, no se escribe nada.
 - `MongoSaveCheckpointStore` (`apps/api/src/save-checkpoints/`) guarda cada punto con `_id: { userId, id }` y `_version`, como la biblioteca. Un punto de otro usuario responde `NOT_FOUND`.
+
+### Biblioteca con sesión
+
+La aplicación usa la biblioteca a través de `LibraryBackend` (`apps/web/src/infrastructure/persistence/library-backend.ts`): el puerto de core más la coordinación de escrituras (`snapshot`, `coordinate`), los universos, la restauración y la recuperación local. Tiene dos implementaciones, y la aplicación monta una u otra con su propia `key`:
+
+- **Sin sesión**: `LocalStorageTournamentRepository`, con Web Locks entre pestañas. Es el comportamiento de siempre.
+- **Con sesión**: `SessionLibraryBackend` (`apps/web/src/infrastructure/api/`), una réplica en memoria de la biblioteca de la cuenta. Cada `coordinate` ejecuta la acción síncrona sobre un borrador `InMemoryTournamentRepository` y envía sus `changes()` con `commitLibraryChanges`, atado a la versión de biblioteca leída. El servidor valida todo el envío con `validateLibraryChanges` (core) y lo escribe en una transacción; un `CONFLICT` recarga la réplica y muestra el aviso de cambios externos. Las restauraciones van por `restoreBackup`.
+
+Los puntos de guardado siguen la misma separación: `CheckpointService` (`checkpoint-service.ts`) lo cumplen `SaveCheckpoints` sobre IndexedDB y `ServerCheckpointService` sobre la API. Detalle completo en [la biblioteca con sesión](session-library.md).
 
 ### Coordinación entre pestañas
 

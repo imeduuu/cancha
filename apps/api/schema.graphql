@@ -1,0 +1,385 @@
+type ActivityEvent {
+  action: String!
+  after: JSON
+  before: JSON
+  entityId: String
+  entityType: String
+  id: ID!
+  imported: Boolean!
+  note: String
+  occurredAt: String!
+  outcome: String
+  season: Int
+  summary: String!
+  tournamentId: ID!
+  tournamentName: String!
+}
+
+"""
+Sesión iniciada. El refresh token viaja sólo en la cookie HttpOnly `cancha_refresh`, nunca en el cuerpo.
+"""
+type AuthPayload {
+  """JWT de 15 minutos: envíalo como `Authorization: Bearer <token>`."""
+  accessToken: String!
+
+  """Fecha ISO 8601 en que vence el access token."""
+  accessTokenExpiresAt: String!
+  user: User!
+}
+
+input CreateTournamentInput {
+  legs: Int!
+  name: String!
+  pointsSystem: PointsSystemInput
+  teamNames: [String!]!
+
+  """
+  Criterios de desempate de core (p. ej. goalDifference, goalsFor, wins).
+  """
+  tieBreakers: [String!]!
+}
+
+input CredentialsInput {
+  email: String!
+  password: String!
+}
+
+"""COPY conserva los resultados; RESET los reinicia."""
+enum DuplicateMode {
+  COPY
+  RESET
+}
+
+type Fixture {
+  awayTeamId: ID!
+  awayTeamName: String!
+  homeTeamId: ID!
+  homeTeamName: String!
+  id: ID!
+  result: MatchResult
+}
+
+"""
+ADD agrega un torneo nuevo; COPY lo importa con ids nuevos; UPDATE reemplaza el torneo con el mismo id.
+"""
+enum ImportDecision {
+  ADD
+  COPY
+  UPDATE
+}
+
+"""Valor JSON arbitrario (objeto, lista, texto, número, booleano o null)."""
+scalar JSON
+
+"""Resultado de confirmar un conjunto de cambios de la biblioteca."""
+type LibraryCommit {
+  """false si el envío no cambiaba nada (no se escribió)."""
+  committed: Boolean!
+  libraryVersion: Int!
+
+  """Versión vigente de cada torneo de la biblioteca."""
+  versions: [TournamentVersion!]!
+}
+
+type LibraryInfo {
+  activeTournamentId: ID
+
+  """Versión de la biblioteca: sube con cada escritura."""
+  libraryVersion: Int!
+}
+
+type MatchResult {
+  awayGoals: Int!
+  extraTime: MatchScoreModel
+  homeGoals: Int!
+  penalties: MatchScoreModel
+}
+
+input MatchResultInput {
+  awayGoals: Int!
+  extraTime: MatchScoreInput
+  homeGoals: Int!
+  penalties: MatchScoreInput
+}
+
+input MatchScoreInput {
+  awayGoals: Int!
+  homeGoals: Int!
+}
+
+"""Marcador de un tramo del partido."""
+type MatchScoreModel {
+  awayGoals: Int!
+  homeGoals: Int!
+}
+
+type Matchday {
+  fixtures: [Fixture!]!
+
+  """Posición en el calendario (la usa simulateMatchday)."""
+  index: Int!
+  leg: Int!
+  number: Int!
+  phaseName: String
+}
+
+type Mutation {
+  """
+  Confirma los cambios que el cliente calculó sobre su réplica, si la biblioteca sigue en `expectedLibraryVersion`. Valida todo lo que llega; no admite reemplazar la biblioteca (usa restoreBackup).
+  """
+  commitLibraryChanges(changes: JSON!, expectedLibraryVersion: Int!): LibraryCommit!
+
+  """Guarda una copia completa de la biblioteca actual."""
+  createSaveCheckpoint(description: String, name: String!): SaveCheckpoint!
+  createTournament(input: CreateTournamentInput!): Tournament!
+  deleteSaveCheckpoint(expectedVersion: Int!, id: ID!): Boolean!
+
+  """Elimina el torneo y registra tournament-deleted."""
+  deleteTournament(expectedVersion: Int!, tournamentId: ID!): Boolean!
+
+  """Crea una copia independiente; devuelve el torneo nuevo."""
+  duplicateTournament(expectedVersion: Int!, mode: DuplicateMode!, tournamentId: ID!): Tournament!
+
+  """Importa un archivo `cancha-tournament` (texto JSON, v0 a v7)."""
+  importTournament(archive: String!, decision: ImportDecision!): Tournament!
+
+  """Inicia una sesión nueva."""
+  login(input: CredentialsInput!): AuthPayload!
+
+  """Cierra la sesión actual: revoca sus refresh tokens y su access token."""
+  logout: Boolean!
+
+  """
+  Canjea la cookie del refresh token (de un solo uso) por un access token nuevo y la rota.
+  """
+  refreshToken: AuthPayload!
+
+  """Crea una cuenta e inicia sesión."""
+  register(input: CredentialsInput!): AuthPayload!
+  renameTournament(expectedVersion: Int!, name: String!, tournamentId: ID!): Tournament!
+
+  """
+  Restaura un respaldo `cancha-backup` (texto JSON, v0 a v7) sin importación parcial.
+  """
+  restoreBackup(
+    backup: String!
+
+    """
+    Si se indica y la biblioteca ya no está en esa versión: CONFLICT sin escribir nada.
+    """
+    expectedLibraryVersion: Int
+    mode: RestoreMode!
+  ): RestoreResult!
+
+  """
+  Reemplaza la biblioteca y el historial por los del punto. Exige la versión del punto y la de la biblioteca que mostró saveCheckpointPreview; si cualquiera cambió, CONFLICT sin escribir nada.
+  """
+  restoreSaveCheckpoint(expectedLibraryVersion: Int!, expectedVersion: Int!, id: ID!): RestoreResult!
+
+  """Cambia el torneo activo (null lo deja sin torneo activo)."""
+  setActiveTournament(tournamentId: ID): LibraryInfo!
+  setTournamentArchived(archived: Boolean!, expectedVersion: Int!, tournamentId: ID!): Tournament!
+
+  """Simula el campeonato completo, con sus etapas generadas."""
+  simulateChampionship(expectedVersion: Int!, mode: SimulationMode! = PENDING_ONLY, tournamentId: ID!): SimulationResult!
+
+  """Simula todos los partidos de una rueda."""
+  simulateLeg(expectedVersion: Int!, leg: Int!, mode: SimulationMode! = PENDING_ONLY, tournamentId: ID!): SimulationResult!
+
+  """Simula una jornada (por su `index` en matchdays)."""
+  simulateMatchday(expectedVersion: Int!, matchdayIndex: Int!, mode: SimulationMode! = PENDING_ONLY, tournamentId: ID!): SimulationResult!
+  updateMatchResult(expectedVersion: Int!, fixtureId: ID!, knockoutResolution: String, result: MatchResultInput!, tournamentId: ID!): Tournament!
+}
+
+input PointsSystemInput {
+  draw: Int!
+  loss: Int!
+  win: Int!
+}
+
+type Query {
+  """El torneo activo, o null si no hay uno vigente."""
+  activeTournament: Tournament
+
+  """Historial de actividad, lo más reciente primero."""
+  activity(limit: Int, tournamentId: ID): [ActivityEvent!]!
+
+  """
+  Respaldo `cancha-backup` v7 de la biblioteca completa, con su historial.
+  """
+  exportLibrary: JSON!
+
+  """Archivo `cancha-tournament` v7 de un torneo."""
+  exportTournament(id: ID!): JSON!
+
+  """Versión de la biblioteca y torneo activo."""
+  library: LibraryInfo!
+
+  """
+  Biblioteca completa para la réplica del cliente con sesión: { tournaments, activity, activeTournamentId, universes, libraryVersion, versions }.
+  """
+  librarySnapshot: JSON!
+
+  """Usuario de la sesión actual."""
+  me: User!
+
+  """Respaldo `cancha-backup` v7 del punto, verificado (para descargarlo)."""
+  saveCheckpointContent(id: ID!): JSON!
+
+  """
+  Verifica el punto y lo compara con la biblioteca actual antes de restaurarlo.
+  """
+  saveCheckpointPreview(id: ID!): SaveCheckpointPreview!
+
+  """Puntos de guardado, lo más reciente primero."""
+  saveCheckpoints: [SaveCheckpoint!]!
+  tournament(id: ID!): Tournament!
+
+  """Listado resumido, lo último guardado primero."""
+  tournaments(includeArchived: Boolean! = true): [TournamentSummary!]!
+}
+
+"""
+MERGE agrega los torneos cuyo id no existe; REPLACE reemplaza la biblioteca y el historial completos.
+"""
+enum RestoreMode {
+  MERGE
+  REPLACE
+}
+
+type RestoreResult {
+  added: Int!
+  libraryVersion: Int!
+  skipped: Int!
+}
+
+"""Punto de guardado: copia completa de la biblioteca (respaldo JSON v7)."""
+type SaveCheckpoint {
+  activityCount: Int!
+
+  """Versión del formato cancha-backup del contenido (7)."""
+  backupVersion: Int!
+
+  """Fecha ISO 8601 en que se capturó la biblioteca."""
+  createdAt: String!
+  description: String!
+
+  """
+  Huella SHA-256 (hex) del contenido: comprueba integridad, no autenticidad.
+  """
+  digest: String!
+  id: ID!
+  name: String!
+
+  """Revisión de los metadatos del punto."""
+  revision: Int!
+
+  """Tamaño del respaldo en bytes."""
+  sizeBytes: Int!
+  tournamentCount: Int!
+  universeCount: Int!
+  updatedAt: String!
+
+  """Versión para compare-and-set: envíala como expectedVersion."""
+  version: Int!
+}
+
+type SaveCheckpointPreview {
+  checkpoint: SaveCheckpoint!
+
+  """
+  Diferencias con la biblioteca actual (CheckpointComparison de @cancha/core).
+  """
+  comparison: JSON!
+
+  """
+  Versión de la biblioteca comparada: envíala como expectedLibraryVersion al restaurar.
+  """
+  libraryVersion: Int!
+}
+
+"""
+PENDING_ONLY simula sólo partidos sin resultado; OVERWRITE reemplaza también los existentes.
+"""
+enum SimulationMode {
+  OVERWRITE
+  PENDING_ONLY
+}
+
+type SimulationResult {
+  simulatedCount: Int!
+  tournament: Tournament!
+}
+
+type Standing {
+  draws: Int!
+  goalDifference: Int!
+  goalsAgainst: Int!
+  goalsFor: Int!
+  losses: Int!
+  played: Int!
+  points: Int!
+  position: Int!
+  teamId: ID!
+  teamName: String!
+  wins: Int!
+}
+
+type Tournament {
+  archived: Boolean!
+  competitionId: String
+
+  """Documento completo del torneo (tipo Tournament de @cancha/core)."""
+  document: JSON!
+  format: String
+  id: ID!
+  matchdays: [Matchday!]!
+  name: String!
+  playedMatches: Int!
+  season: Int
+
+  """Tabla general calculada por core con los desempates configurados."""
+  standings: [Standing!]!
+
+  """Finalizado, En curso, Incompleto o Indeterminado."""
+  status: String!
+  teamCount: Int!
+  totalMatches: Int!
+
+  """Empates en la tabla que los criterios configurados no resuelven."""
+  unresolvedTies: Int!
+
+  """Versión para concurrencia optimista: envíala como expectedVersion."""
+  version: Int!
+}
+
+"""Fila del listado de la biblioteca."""
+type TournamentSummary {
+  archived: Boolean!
+  competitionId: String
+  format: String
+  id: ID!
+  name: String!
+  playedMatches: Int!
+  season: Int
+
+  """Finalizado, En curso, Incompleto o Indeterminado."""
+  status: String!
+  teamCount: Int!
+  totalMatches: Int!
+
+  """Versión para concurrencia optimista: envíala como expectedVersion."""
+  version: Int!
+}
+
+type TournamentVersion {
+  id: ID!
+  version: Int!
+}
+
+type User {
+  """Fecha ISO 8601 de creación de la cuenta."""
+  createdAt: String!
+  email: String!
+  id: ID!
+}

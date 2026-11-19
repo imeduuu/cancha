@@ -14,3 +14,5 @@ coverage/
 # docs/ se versiona salvo los artefactos de validación (logs, trazas y scripts con rutas locales)
 docs/validation/
 CLAUDE.md
+playwright-report-session/
+test-results-session/

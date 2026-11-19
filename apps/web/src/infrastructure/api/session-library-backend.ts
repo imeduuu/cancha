@@ -11,6 +11,7 @@ import { emptySportsUniverseLibrary } from "@cancha/core/application/services/sp
 import { createTournamentBackup } from "@cancha/core/application/services/tournament-archive";
 import type { CheckpointService } from "../persistence/checkpoint-service";
 import type { LibraryBackend } from "../persistence/library-backend";
+import { operations } from "./operations";
 import { ServerCheckpointService } from "./server-checkpoint-service";
 import {
   ApiConflictError,
@@ -48,14 +49,10 @@ export const libraryChangedRemotelyMessage =
   "La biblioteca cambió en otra pestaña o dispositivo. Conservamos tus borradores. Actualiza la vista y revisa nuevamente antes de guardar.";
 const coordinatedWriteMessage = "Esta operación requiere una escritura coordinada. Actualiza la vista y vuelve a intentarlo.";
 
-const snapshotQuery = "{ librarySnapshot }";
-const versionQuery = "{ library { libraryVersion } }";
-const commitMutation = `mutation CommitLibraryChanges($changes: JSON!, $expectedLibraryVersion: Int!) {
-  commitLibraryChanges(changes: $changes, expectedLibraryVersion: $expectedLibraryVersion) { committed libraryVersion }
-}`;
-const restoreMutation = `mutation RestoreBackup($backup: String!, $mode: RestoreModeInput!, $expectedLibraryVersion: Int) {
-  restoreBackup(backup: $backup, mode: $mode, expectedLibraryVersion: $expectedLibraryVersion) { added skipped libraryVersion }
-}`;
+const snapshotQuery = operations.librarySnapshot;
+const versionQuery = operations.libraryVersion;
+const commitMutation = operations.commitLibraryChanges;
+const restoreMutation = operations.restoreBackup;
 
 function toConfirmed(library: ServerLibrary): ConfirmedLibrary {
   if (!Array.isArray(library?.tournaments) || !Array.isArray(library.activity) || !Number.isSafeInteger(library.libraryVersion)) {

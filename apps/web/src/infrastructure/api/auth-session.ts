@@ -3,6 +3,7 @@ import {
   type GraphqlClient,
   type GraphqlVariables,
 } from "./graphql-client";
+import { operations } from "./operations";
 import { hasSessionHint, sessionHintKey } from "./session-hint";
 
 export { sessionHintKey };
@@ -39,7 +40,6 @@ interface AuthPayload {
   readonly user: AccountUser;
 }
 
-const authFields = "accessToken accessTokenExpiresAt user { id email createdAt }";
 
 /** Subconjunto de Storage usado para la pista (inyectable en pruebas). */
 export type HintStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -137,7 +137,7 @@ export class AuthSession {
     this.signOutLocally();
     if (!token) return;
     try {
-      await this.client.request<{ logout: boolean }>("mutation { logout }", undefined, { token });
+      await this.client.request<{ logout: boolean }>(operations.logout, undefined, { token });
     } catch (error) {
       if (!(error instanceof ApiUnauthenticatedError)) throw error;
     }
@@ -162,7 +162,7 @@ export class AuthSession {
   /** Rota el refresh token. Deduplicado en la pestaña y serializado entre pestañas. */
   refresh(): Promise<AccountUser> {
     if (this.refreshing) return this.refreshing;
-    const rotate = () => this.client.request<{ refreshToken: AuthPayload }>(`mutation { refreshToken { ${authFields} } }`);
+    const rotate = () => this.client.request<{ refreshToken: AuthPayload }>(operations.refreshToken);
     const pending = (this.locks ? this.locks.request(authRefreshLockName, { mode: "exclusive" }, rotate) : rotate())
       .then(({ refreshToken }) => this.apply(refreshToken))
       .catch((error: unknown) => {
@@ -176,7 +176,7 @@ export class AuthSession {
 
   private async authenticate(operation: "register" | "login", email: string, password: string): Promise<AccountUser> {
     const data = await this.client.request<Record<typeof operation, AuthPayload>>(
-      `mutation Authenticate($input: CredentialsInput!) { ${operation}(input: $input) { ${authFields} } }`,
+      operations[operation],
       { input: { email, password } },
     );
     return this.apply(data[operation]);

@@ -1,6 +1,6 @@
 # Cancha — Simulador de campeonatos
 
-Aplicación web para configurar campeonatos de fútbol y generar sus calendarios. Esta primera versión permite definir equipos, ruedas y orden de desempate; los campeonatos creados se guardan en el navegador.
+Aplicación web para configurar campeonatos de fútbol y generar sus calendarios. Esta primera versión permite definir equipos, ruedas y orden de desempate; los campeonatos creados se guardan en el navegador. Con una cuenta (opcional), la biblioteca se guarda en el servidor y se abre desde cualquier navegador: ver [Cuenta y biblioteca en el servidor](#cuenta-y-biblioteca-en-el-servidor).
 
 ## Empezar
 
@@ -135,7 +135,9 @@ npm run db:reset                          # BORRA el volumen de MongoDB y levant
   - Exportar: `exportTournament(id)` devuelve un archivo `cancha-tournament` y `exportLibrary` un respaldo `cancha-backup` con el historial.
   - `importTournament(archive, decision: ADD | COPY | UPDATE)` recibe el texto del archivo. Si falla, sólo se registra el evento `tournament-import-rejected`.
   - `restoreBackup(backup, mode: MERGE | REPLACE)` agrega los torneos nuevos o reemplaza la biblioteca y el historial, en una sola transacción.
-  - Diferencias con la web: el servidor ignora los universos deportivos del respaldo y no guarda automáticamente una copia de recuperación antes de reemplazar. Para tener una, crea antes un punto de guardado.
+  - Los universos deportivos del respaldo se restauran con la misma regla que la web, y `exportLibrary` los incluye. Diferencia con la web: el servidor no guarda automáticamente una copia de recuperación antes de reemplazar; para tener una, crea antes un punto de guardado. `restoreBackup` acepta `expectedLibraryVersion` para no reemplazar una biblioteca que cambió.
+- **Biblioteca con sesión** (fase 5): `librarySnapshot` devuelve la biblioteca completa del usuario y `commitLibraryChanges(changes, expectedLibraryVersion)` confirma los cambios que la web calculó sobre su copia en memoria. El servidor valida todo lo que llega (torneos, eventos, referencias y universos) y lo escribe en una transacción; si la biblioteca cambió, responde `CONFLICT` sin escribir. Ver [docs/session-library.md](docs/session-library.md).
+- **Esquema publicado**: `apps/api/schema.graphql`. Una prueba exige que coincida con el esquema real; regenéralo con `UPDATE_GRAPHQL_SCHEMA=1 npm test -w @cancha/api -- src/graphql/schema-snapshot.e2e.test.ts`. La web valida contra él todas sus operaciones.
 - **Puntos de guardado** (por usuario): `createSaveCheckpoint(name, description)` guarda una copia completa de la biblioteca y su historial (respaldo JSON v7 con huella SHA-256). `saveCheckpoints` los lista, `saveCheckpointContent(id)` descarga el respaldo verificado y `deleteSaveCheckpoint(id, expectedVersion)` elimina uno.
   - Para restaurar: `saveCheckpointPreview(id)` verifica el punto, lo compara con la biblioteca actual y devuelve la versión del punto y la de la biblioteca. Después, `restoreSaveCheckpoint(id, expectedVersion, expectedLibraryVersion)` reemplaza la biblioteca en una sola transacción.
   - Si la biblioteca o el punto cambiaron desde la vista previa, responde `CONFLICT` sin escribir nada. Un punto alterado en la base no pasa la verificación (`VALIDATION`).
@@ -161,7 +163,9 @@ npm run db:reset                          # BORRA el volumen de MongoDB y levant
 
 `advance-tournament-progress` y `persist-tournament-progress` se ejecutan dentro de las simulaciones.
 
-### Pendientes (fase 5)
+### Sin operación GraphQL propia
+
+La web con sesión no los necesita: los ejecuta sobre su copia en memoria y envía los cambios con `commitLibraryChanges`. Siguen pendientes sólo para clientes que quieran que el servidor haga el cálculo.
 
 | Grupo | Casos de uso | Qué falta |
 | --- | --- | --- |
@@ -214,11 +218,24 @@ Los archivos se validan como JSON, estructura, versión, resultados y referencia
 
 Si el ID de un torneo importado ya existe, se puede cancelar, generar una copia con ID de torneo/equipos/partidos nuevos o actualizar explícitamente el existente. La restauración primero valida todos los torneos: **Agregar** conserva la biblioteca y omite colisiones de ID sin reemplazarlas; **Reemplazar biblioteca** reemplaza el conjunto completo tras confirmación y permite recuperar una biblioteca local dañada. Si el respaldo entrante no es válido, no se modifica nada; la opción de agregar también se bloquea si la biblioteca actual está dañada para no descartar registros. La colección y la selección activa se escriben con reversión si falla el almacenamiento. La exportación del respaldo se desactiva cuando se detectaron registros locales dañados, para no presentar una copia incompleta como completa. No se realizan transferencias a servidores externos.
 
+## Cuenta y biblioteca en el servidor
+
+Crear una cuenta es opcional. Sin sesión, todo sigue igual que antes: la biblioteca vive en este navegador.
+
+- **Cuenta** (cabecera): crear una cuenta con email y contraseña (al menos 12 caracteres), ingresar y cerrar sesión. La sesión se recuerda en este navegador.
+- **Llevar la biblioteca del navegador a la cuenta**: al ingresar, si este navegador tiene torneos, se ofrece subirlos (cuenta vacía), agregarlos o reemplazar la biblioteca de la cuenta. Reemplazar pide confirmación y guarda antes un punto de guardado en la cuenta. La biblioteca del navegador no se borra ni se modifica, y vuelve a aparecer al cerrar sesión.
+- **Con sesión**, todas las funciones trabajan sobre la biblioteca de la cuenta, que se guarda en el servidor después de cada operación. El centro de guardado usa los puntos de la cuenta (hasta 20).
+- **Dos pestañas o dispositivos**: si otro cambió la biblioteca, la escritura no se aplica y aparece el aviso de cambios externos para actualizar la vista; nada se sobrescribe a ciegas.
+- Con sesión no se puede trabajar sin conexión: una operación sin red no se guarda.
+- Para desarrollar con cuenta, levanta la API (`npm run db:up`, `npm run dev:api`) y la web (`npm run dev`): Vite reenvía `/graphql` a la API.
+
+Detalles, decisiones y verificación: [docs/session-library.md](docs/session-library.md).
+
 ## Guardado, estado de persistencia y recuperación
 
-Las operaciones confirmadas se escriben inmediatamente en `localStorage`; no existe una cola de guardado diferido ni una segunda escritura de auto-guardado. La interfaz indica que un cambio quedó guardado solo después de que la operación de escritura termina correctamente. Al fallar, muestra un estado de error y conserva el estado previo en memoria; `localStorage` ofrece escrituras síncronas por clave, pero no una transacción nativa entre torneo, actividad y selección.
+Sin sesión, las operaciones confirmadas se escriben inmediatamente en `localStorage` (con sesión, en el servidor: ver la sección anterior); no existe una cola de guardado diferido ni una segunda escritura de auto-guardado. La interfaz indica que un cambio quedó guardado solo después de que la operación de escritura termina correctamente. Al fallar, muestra un estado de error y conserva el estado previo en memoria; `localStorage` ofrece escrituras síncronas por clave, pero no una transacción nativa entre torneo, actividad y selección.
 
-El único adaptador de persistencia instanciado por la aplicación es `LocalStorageTournamentRepository`. Los casos de uso auditados requieren `saveWithActivity`; un repositorio sin esa capacidad falla antes de guardar el torneo, en vez de usar el fallback no atómico `save` seguido por `recordActivity`. El adaptador local escribe torneo e historial coordinadamente y trata de revertir ambos valores si falla una escritura. Si el propio rollback falla, el error lo informa explícitamente. Esto no equivale a una transacción del navegador ni a una garantía centralizada.
+Sin sesión, el adaptador de persistencia de la aplicación es `LocalStorageTournamentRepository` (con sesión, la réplica de la biblioteca de la cuenta: ver [docs/session-library.md](docs/session-library.md)). Los casos de uso auditados requieren `saveWithActivity`; un repositorio sin esa capacidad falla antes de guardar el torneo, en vez de usar el fallback no atómico `save` seguido por `recordActivity`. El adaptador local escribe torneo e historial coordinadamente y trata de revertir ambos valores si falla una escritura. Si el propio rollback falla, el error lo informa explícitamente. Esto no equivale a una transacción del navegador ni a una garantía centralizada.
 
 Antes de una restauración explícita que reemplace la biblioteca, se guarda `cancha.recovery` solo si la biblioteca y su historial previos pasan la validación. Desde la biblioteca se ofrece recuperar esa copia tras una confirmación explícita, mediante el mismo flujo validado y transaccional. La copia solo está disponible mientras torneos, actividad y selección activa sigan coincidiendo exactamente con el estado creado por ese reemplazo; una escritura posterior la invalida para evitar restaurar sobre trabajo nuevo. No se crea copia recuperable desde datos previos corruptos o inválidos. Si el almacenamiento está lleno y no se puede crear la copia de una biblioteca válida, el reemplazo no comienza. La importación/restauración conserva su validación integral y no modifica parcialmente los datos ante respaldo inválido.
 
@@ -332,7 +349,7 @@ npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
-Playwright ejecuta los recorridos en perfiles aislados con un servidor local dedicado, sin túnel público ni acceso a la biblioteca personal. Incluye Chromium, Firefox y WebKit en resoluciones de escritorio, notebook, tablet y móvil. `npm run test:flows` conserva los recorridos de integración con jsdom. [Instalación, cobertura, correcciones visuales y límites](docs/browser-audit.md).
+Playwright ejecuta los recorridos en perfiles aislados con un servidor local dedicado, sin túnel público ni acceso a la biblioteca personal. `npm run test:e2e:session` prueba en Chromium la biblioteca con sesión contra la API real (compilada, con MongoDB en memoria y sin Docker). Incluye Chromium, Firefox y WebKit en resoluciones de escritorio, notebook, tablet y móvil. `npm run test:flows` conserva los recorridos de integración con jsdom. [Instalación, cobertura, correcciones visuales y límites](docs/browser-audit.md).
 
 ## Centro de competiciones y temporadas
 

@@ -19,6 +19,7 @@
     "noUnusedParameters": true
   },
   "include": [
-    "e2e/**/*.ts"
+    "e2e/**/*.ts",
+    "e2e-session/**/*.ts"
   ]
 }

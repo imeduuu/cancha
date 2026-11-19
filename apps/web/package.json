@@ -12,7 +12,8 @@
     "verify:live": "node --use-system-ca scripts/verify-live-importers.mjs",
     "test:flows": "vitest run src/presentation/app.test.tsx src/presentation/app-lazy.test.tsx src/presentation/app-journeys.test.tsx src/presentation/app-competitions.test.tsx src/presentation/components/deferred-panel.test.tsx src/presentation/app-checkpoints.test.tsx src/presentation/app-closure.test.tsx src/presentation/app-archive.test.tsx src/presentation/app-draws.test.tsx src/presentation/app-decisions.test.tsx",
     "dev:public": "node --use-system-ca scripts/dev-public.mjs",
-    "test:e2e": "tsc -p tsconfig.e2e.json && playwright test"
+    "test:e2e": "tsc -p tsconfig.e2e.json && playwright test",
+    "test:e2e:session": "tsc -p tsconfig.e2e.json && playwright test -c playwright.session.config.mjs"
   },
   "dependencies": {
     "@cancha/core": "*",
@@ -28,6 +29,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^6.1.2",
+    "graphql": "16.14.2",
     "jsdom": "^29.1.1",
     "typescript": "~5.7.2",
     "vite": "^8.3.4",

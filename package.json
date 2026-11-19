@@ -18,6 +18,7 @@
     "test": "npm test --workspaces --if-present",
     "test:flows": "npm run test:flows -w @cancha/web",
     "test:e2e": "npm run test:e2e -w @cancha/web",
+    "test:e2e:session": "npm run test:e2e:session -w @cancha/web",
     "lint": "eslint .",
     "preview": "npm run preview -w @cancha/web",
     "analyze:bundle": "npm run analyze:bundle -w @cancha/web",
