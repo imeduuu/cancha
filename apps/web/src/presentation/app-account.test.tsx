@@ -17,7 +17,8 @@ function fakeApi() {
   const state = { cookieValid: false, operations: [] as string[] };
   const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
     const { query, variables } = JSON.parse(String(init?.body)) as { query: string; variables?: { input?: { password?: string } } };
-    const operation = ["refreshToken", "register", "login", "logout"].find(name => query.includes(name)) ?? "otra";
+    const operation = ["refreshToken", "register", "login", "logout", "librarySnapshot"].find(name => query.includes(name))
+      ?? (query.includes("library") ? "library" : "otra");
     state.operations.push(operation);
     if (operation === "refreshToken") {
       return state.cookieValid ? json({ data: { refreshToken: payload() } }) : failure("La sesión no es válida.", "UNAUTHENTICATED");
@@ -30,6 +31,10 @@ function fakeApi() {
       return json({ data: { [operation]: payload() } });
     }
     if (operation === "logout") { state.cookieValid = false; return json({ data: { logout: true } }); }
+    if (operation === "librarySnapshot") {
+      return json({ data: { librarySnapshot: { tournaments: [], activity: [], activeTournamentId: null, libraryVersion: 0, versions: {} } } });
+    }
+    if (operation === "library") return json({ data: { library: { libraryVersion: 0, activeTournamentId: null } } });
     return failure("Operación desconocida.", "VALIDATION");
   });
   vi.stubGlobal("fetch", fetch);
@@ -67,9 +72,12 @@ describe("cuenta en la web (fase 5F)", () => {
     await interaction.type(within(panel).getByLabelText("Contraseña"), "una-contraseña-larga");
     await interaction.click(within(panel).getByRole("button", { name: "Registrarme" }));
 
-    expect(await within(panel).findByText(user.email)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: `Cuenta · ${user.email}` })).toBeInTheDocument();
-    expect(api.state.operations).toEqual(["register"]);
+    // Con sesión la aplicación se vuelve a montar sobre la biblioteca de la cuenta; el panel sigue abierto.
+    expect(await screen.findByRole("button", { name: `Cuenta · ${user.email}` })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Biblioteca de torneos" })).toBeInTheDocument();
+    const signedIn = await screen.findByRole("region", { name: "Cuenta" });
+    expect(await within(signedIn).findByText(user.email)).toBeInTheDocument();
+    expect(api.state.operations).toEqual(["register", "librarySnapshot"]);
     expect(Object.keys(localStorage).filter(key => key.startsWith("cancha.session"))).toEqual([sessionHintKey]);
     expect(localStorage.getItem(sessionHintKey)).toBe("1");
   });
@@ -94,11 +102,12 @@ describe("cuenta en la web (fase 5F)", () => {
     await interaction.type(within(panel).getByLabelText("Email"), user.email);
     await interaction.type(within(panel).getByLabelText("Contraseña"), "contraseña-correcta");
     await interaction.click(within(panel).getByRole("button", { name: "Entrar" }));
-    await interaction.click(await within(panel).findByRole("button", { name: "Cerrar sesión" }));
+    await screen.findByRole("heading", { name: "Biblioteca de torneos" });
+    await interaction.click(await within(await screen.findByRole("region", { name: "Cuenta" })).findByRole("button", { name: "Cerrar sesión" }));
 
     expect(await screen.findByRole("button", { name: "Cuenta" })).toBeInTheDocument();
     expect(localStorage.getItem(sessionHintKey)).toBeNull();
-    expect(api.state.operations).toEqual(["login", "logout"]);
+    expect(api.state.operations).toEqual(["login", "librarySnapshot", "logout"]);
   });
 
   it("con la pista, recupera la sesión al cargar; si la cookie ya no sirve, borra la pista", async () => {

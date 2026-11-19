@@ -43,4 +43,12 @@ export interface LibraryBackend extends TournamentLibraryRepository {
   getRecoverySnapshotStatus(): { available: boolean; warning?: string };
   restoreRecoverySnapshot(): { added: number; skipped: number };
   readRawTournamentDataForRecovery(): string;
+
+  /** "server" para la biblioteca de una cuenta; ausente = este navegador (localStorage). */
+  readonly origin?: "server";
+  /**
+   * Avisa cuando la biblioteca cambió fuera de esta vista (otro dispositivo u otra
+   * pestaña con sesión). localStorage no lo necesita: usa el evento `storage`.
+   */
+  subscribeExternalChanges?(listener: () => void): () => void;
 }

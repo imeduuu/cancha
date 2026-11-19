@@ -16,11 +16,11 @@ import {HeadToHeadAccess} from "./components/head-to-head-access";
 import {clubOccurrenceKey} from "@cancha/core/application/services/club-history";
 import { reviewContinentalEdition, confirmContinentalEdition } from "@cancha/core/application/use-cases/prepare-continental-edition";
 import { SessionDraftProvider, useClearSessionDrafts } from "./session-drafts";
-import { AccountProvider } from "./account-context";
+import { AccountProvider, useAccount } from "./account-context";
 import { AccountAccess } from "./components/account-access";
 import { DeferredPanel } from "./components/deferred-panel";
 import { publishedSeasonSource } from "../infrastructure/external-services/load-official-league-source";
-import { lazy, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { GoalScorer, Matchday, MatchSchedule, Tournament } from "@cancha/core/domain/entities/tournament";
 import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event";
 import type { SportsUniverseLibrary } from "@cancha/core/domain/entities/sports-universe";
@@ -112,7 +112,84 @@ export interface AppProps {
 }
 
 export function App({ libraryBackend }: AppProps = {}) {
-  return <AccountProvider><SessionDraftProvider><Application libraryBackend={libraryBackend} /></SessionDraftProvider></AccountProvider>;
+  return <AccountProvider><LibraryHost libraryBackend={libraryBackend} /></AccountProvider>;
+}
+
+type SessionLibrary =
+  | { readonly userId: string; readonly backend: LibraryBackend & { dispose(): void } }
+  | { readonly userId: string; readonly error: string };
+
+async function loadSessionLibrary(account: NonNullable<ReturnType<typeof useAccount>>, userId: string) {
+  const [{ SessionLibraryBackend }, session] = await Promise.all([
+    import("../infrastructure/api/session-library-backend"),
+    account.session(),
+  ]);
+  return SessionLibraryBackend.load(session, userId);
+}
+
+/**
+ * Elige la biblioteca (fase 5G): sin sesión, la de este navegador (localStorage), tal
+ * como antes; con sesión, la réplica de la biblioteca de la cuenta. Cada una se monta
+ * con su propia `key`, así que los borradores de sesión no pasan de una a otra.
+ */
+function LibraryHost({ libraryBackend }: AppProps) {
+  const account = useAccount();
+  const userId = account?.status === "signed-in" ? account.user?.id ?? null : null;
+  const [remote, setRemote] = useState<SessionLibrary | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const accountRef = useRef(account);
+  accountRef.current = account;
+
+  useEffect(() => {
+    const current = accountRef.current;
+    if (!userId || !current) { setRemote(null); return; }
+    let active = true;
+    let loaded: (LibraryBackend & { dispose(): void }) | null = null;
+    setRemote(null);
+    loadSessionLibrary(current, userId).then(
+      backend => {
+        if (!active) { backend.dispose(); return; }
+        loaded = backend;
+        setRemote({ userId, backend });
+      },
+      (error: unknown) => {
+        if (active) setRemote({ userId, error: error instanceof Error ? error.message : "Error desconocido." });
+      },
+    );
+    return () => { active = false; loaded?.dispose(); };
+  }, [userId, attempt]);
+
+  if (account?.status === "restoring") return <SessionShell><p role="status">Recuperando tu sesión…</p></SessionShell>;
+  if (!userId) {
+    return <SessionDraftProvider key="local"><Application key="local" libraryBackend={libraryBackend} /></SessionDraftProvider>;
+  }
+  if (!remote || remote.userId !== userId) return <SessionShell><p role="status">Cargando la biblioteca de tu cuenta…</p></SessionShell>;
+  if ("error" in remote) {
+    return <SessionShell>
+      <div role="alert">
+        <p>No se pudo cargar la biblioteca de tu cuenta. {remote.error}</p>
+        <p>Puedes reintentar o cerrar sesión desde Cuenta para usar la biblioteca de este navegador.</p>
+      </div>
+      <button type="button" onClick={() => setAttempt(value => value + 1)}>Reintentar</button>
+    </SessionShell>;
+  }
+  return <SessionDraftProvider key={`session:${userId}`}>
+    <Application key={`session:${userId}`} libraryBackend={remote.backend} />
+  </SessionDraftProvider>;
+}
+
+/** Cabecera mínima mientras se recupera la sesión o se carga la biblioteca de la cuenta. */
+function SessionShell({ children }: { readonly children: ReactNode }) {
+  return <main className="page-shell" aria-busy="true">
+    <header className="topbar">
+      <a className="brand" href="/" aria-label="Cancha, inicio">
+        <span className="brand-mark">C</span>
+        <span>cancha<span className="brand-period">.</span></span>
+      </a>
+      <div className="topbar-actions"><AccountAccess /></div>
+    </header>
+    <section className="session-shell">{children}</section>
+  </main>;
 }
 
 const SportsDecisionsCenter = lazy(()=>import("./components/sports-decisions-center").then(m=>({default:m.SportsDecisionsCenter})));
@@ -147,6 +224,10 @@ function Application({ libraryBackend }: AppProps) {
       throw error;
     } finally { writing.current = false; }
   }
+  useEffect(() => repository.subscribeExternalChanges?.(() => {
+    try { setExternalChange(repository.snapshot() !== acknowledgedLibrary.current); }
+    catch { setExternalChange(true); }
+  }), [repository]);
   useEffect(() => {
     const changed = (event: StorageEvent) => {
       if (event.key === null || sportingStorageKeys.some(key => key === event.key)) {
@@ -1187,7 +1268,7 @@ function Application({ libraryBackend }: AppProps) {
       acknowledge: () => setSaveRecoveryRequest(null), returnToOrigin: saveOrigin ? returnFromSaveRecovery : undefined}}>
     <SeasonSimulationNavigation.Provider value={target => {setSimulationTargetId(target?.id);setSimulationCenterOpen(true);}}><main className="page-shell" aria-busy={libraryLoading}>
       {feedback && screen !== "tournament" && <p role="status">{feedback}</p>}
-      {externalChange && <aside role="alert" aria-label="Cambios externos en la biblioteca" className="preview-panel"><p>La biblioteca cambió en otra pestaña. Tus borradores se conservan; las confirmaciones antiguas no se guardarán.</p><button type="button" onClick={refreshExternalLibrary}>Actualizar biblioteca conservando borradores</button><button type="button" onClick={reopenExternalLibrary}>Abrir biblioteca actual y cerrar formularios</button></aside>}
+      {externalChange && <aside role="alert" aria-label="Cambios externos en la biblioteca" className="preview-panel"><p>La biblioteca cambió en {repository.origin === "server" ? "otra pestaña o dispositivo" : "otra pestaña"}. Tus borradores se conservan; las confirmaciones antiguas no se guardarán.</p><button type="button" onClick={refreshExternalLibrary}>Actualizar biblioteca conservando borradores</button><button type="button" onClick={reopenExternalLibrary}>Abrir biblioteca actual y cerrar formularios</button></aside>}
       <header className="topbar">
         <a className="brand" href="/" aria-label="Cancha, inicio">
           <span className="brand-mark">C</span>

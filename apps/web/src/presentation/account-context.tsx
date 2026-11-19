@@ -22,6 +22,9 @@ export interface Account extends AccountState {
   logout(): Promise<void>;
   /** La sesión cargada (la usa la biblioteca con sesión). */
   session(): Promise<AuthSession>;
+  /** El panel de cuenta sigue abierto aunque la aplicación se vuelva a montar al ingresar o salir. */
+  readonly panelOpen: boolean;
+  setPanelOpen(open: boolean): void;
 }
 
 const AccountContext = createContext<Account | null>(null);
@@ -48,6 +51,7 @@ export function AccountProvider({ children, loadSession = loadBrowserSession }: 
 }) {
   const [state, setState] = useState<AccountState>(() => hasSessionHint() ? { status: "restoring", user: null } : anonymous);
   const loaded = useRef<Promise<AuthSession> | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const session = useCallback((): Promise<AuthSession> => {
     if (!loaded.current) {
@@ -80,6 +84,8 @@ export function AccountProvider({ children, loadSession = loadBrowserSession }: 
   const value = useMemo<Account>(() => ({
     ...state,
     session,
+    panelOpen,
+    setPanelOpen,
     async login(email, password) {
       const user = await (await session()).login(email, password);
       setState({ status: "signed-in", user });
@@ -95,7 +101,7 @@ export function AccountProvider({ children, loadSession = loadBrowserSession }: 
         setState(anonymous);
       }
     },
-  }), [state, session]);
+  }), [state, session, panelOpen]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

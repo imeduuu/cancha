@@ -935,3 +935,4 @@ button { cursor: pointer; }
 .account-panel label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
 .account-panel input { min-width: 0; }
 .account-access-button { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-shell { display: grid; gap: 12px; max-width: 640px; padding-block: 32px; }

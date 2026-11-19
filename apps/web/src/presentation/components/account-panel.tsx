@@ -59,7 +59,7 @@ export function AccountPanel({ onClose }: { readonly onClose: () => void }) {
 
     {account.status === "signed-in" && account.user && <>
       <p>Sesión iniciada como <strong>{account.user.email}</strong>.</p>
-      <p className="account-panel-note">Por ahora tu biblioteca sigue guardada sólo en este navegador.</p>
+      <p className="account-panel-note">Tu biblioteca se guarda en tu cuenta. La de este navegador no se modifica y vuelve a aparecer al cerrar sesión.</p>
       <button type="button" disabled={busy} onClick={() => { void logout(); }}>{busy ? "Cerrando sesión…" : "Cerrar sesión"}</button>
     </>}
 
