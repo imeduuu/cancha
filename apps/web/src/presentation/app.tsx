@@ -1584,7 +1584,8 @@ function Application({ libraryBackend }: AppProps) {
                 </DeferredPanel>
               ) : (
               <>
-              <div hidden={calendarView}>
+              <div className="tournament-board" hidden={calendarView}>
+              <div className="board-controls">
               <p className="preview-summary">
                 {tournament.teams.length} equipos <span>·</span>{" "}
                 {tournament.competitionType === "cup"
@@ -1703,6 +1704,8 @@ function Application({ libraryBackend }: AppProps) {
                   Simular campeonato
                 </button>
               </section>
+              </div>
+              <div className="board-extra">
               <DeferredPanel fallback={<p role="status">Cargando estadísticas…</p>}><TournamentStatisticsPanel
                 activity={scopedActivityEvents}
                 tournament={tournament}
@@ -1720,6 +1723,8 @@ function Application({ libraryBackend }: AppProps) {
                 tournaments={scopedTournaments} repository={scopedRepository}
                 onChange={(updated) => { setTournament(updated); setSavedTournaments(repository.findAll()); setPersistenceStatus("saved"); }}
                 onCreated={(created) => { assignNewTournaments(created.map(({id})=>id)); setSavedTournaments(repository.findAll()); setFeedback("Se crearon ambas temporadas con participantes actualizados. Calendarios y reglamentos pendientes."); setPersistenceStatus("saved"); }} /></DeferredPanel>}
+              </div>
+              <div className="board-standings">
               {isArgentinaTournament && (
                 <label className="table-view-select">
                   <span>Tabla que quieres consultar</span>
@@ -1799,6 +1804,8 @@ function Application({ libraryBackend }: AppProps) {
                     {" "}Si persiste el empate, se juega prórroga y luego penales.
                   </p>
                 )}
+              </div>
+              <div className="board-fixtures">
               {feedback && <p className="simulation-feedback" role="status">{feedback}</p>}
               <DeferredPanel fallback={<p role="status">Cargando partidos…</p>}><FixtureList
                 matchdays={visibleMatchdays}
@@ -1824,6 +1831,7 @@ function Application({ libraryBackend }: AppProps) {
                 playerRegistrations={tournament.playerRegistrations ?? []}
                 otherTournaments={scopedTournaments.filter(({ id }) => id !== tournament.id)}
               /></DeferredPanel>
+              </div>
               </div>
               {calendarInitialized && (
                 <div hidden={!calendarView}>

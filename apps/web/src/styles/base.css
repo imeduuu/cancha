@@ -1,0 +1,62 @@
+/* Base: reset, cuerpo, enlaces, foco visible y controles de formulario con los tokens. */
+* { box-sizing: border-box; }
+
+:root {
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--fg);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--bg-glow), var(--bg);
+  background-repeat: no-repeat;
+  color: var(--fg);
+}
+
+h1, h2, h3, h4, h5 { color: var(--fg); text-wrap: balance; }
+p, li, dd { text-wrap: pretty; }
+
+a { color: var(--accent-fg); text-underline-offset: 2px; }
+a:hover { color: var(--primary-hover); }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+select,
+textarea {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface);
+  color: var(--fg);
+}
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
+select option { background: var(--surface); color: var(--fg); }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+table { font-variant-numeric: tabular-nums; }
+code, pre { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+pre { color: var(--fg-soft); }
+summary { cursor: pointer; }
+fieldset { border-color: var(--line); }
+legend { color: var(--fg-soft); }
+hr { border: 0; border-top: 1px solid var(--line); }
+
+::selection { background: var(--primary); color: var(--on-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; scroll-behavior: auto !important; }
+}

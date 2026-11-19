@@ -1,0 +1,92 @@
+/* Componentes compartidos: botones, etiquetas, avisos y utilidades. Las pantallas los ajustan en styles.css. */
+
+/* Etiqueta superior (eyebrow) */
+.eyebrow {
+  font-family: var(--font-label);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Botón secundario compacto: la acción más usada de la app */
+.small-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: 6px var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  max-width: 100%;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.small-action:hover:not(:disabled) { border-color: var(--primary); background: var(--surface-3); }
+.small-action:disabled { cursor: not-allowed; opacity: .55; }
+.small-action[aria-pressed="true"], .small-action[aria-expanded="true"] { border-color: var(--primary); background: var(--surface-3); color: var(--accent-fg); }
+.secondary-action { background: var(--surface-2); }
+.primary-library-action { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.primary-library-action:hover:not(:disabled) { border-color: var(--primary-hover); background: var(--primary-hover); color: var(--on-primary); }
+.danger-library-action { border-color: var(--danger-line); background: var(--danger-bg); color: var(--danger-fg); }
+.danger-library-action:hover:not(:disabled) { border-color: var(--danger-fg); background: var(--danger-bg); color: var(--danger-fg); }
+
+/* Botón principal de formulario */
+.primary-button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  transition: background-color .15s ease;
+}
+.primary-button:hover:not(:disabled) { background: var(--primary-hover); }
+.primary-button:disabled { cursor: not-allowed; background: var(--muted-bg); color: var(--fg-soft); }
+.primary-button span { color: inherit; font-size: var(--fs-lg); }
+
+/* Botón de texto */
+.text-button { padding: 0; border: 0; background: none; color: var(--accent-fg); font-size: var(--fs-xs); font-weight: 700; }
+.text-button:hover:not(:disabled) { text-decoration: underline; }
+.text-button:disabled { cursor: not-allowed; opacity: .45; }
+
+/* Texto secundario y mensajes */
+.muted { color: var(--muted); font-size: var(--fs-xs); font-weight: 400; }
+.error-message { color: var(--danger-fg); font-size: var(--fs-sm); }
+
+/* Aviso de reglas o verificación */
+.rules-verification-note {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--warning-line);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--fg-soft);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+}
+.rules-verification-note strong { color: var(--warning-fg); }
+.rules-verification-note p { margin: 0 0 var(--space-1); max-width: var(--measure); }
+.rules-verification-note p:last-of-type { margin-bottom: 0; }
+.rules-verification-note details { margin-top: var(--space-2); }
+.rules-verification-note summary { font-weight: 700; color: var(--warning-fg); }
+.rules-verification-note ul { margin: var(--space-1) 0 0; padding-left: 18px; overflow-wrap: anywhere; }
+
+/* Solo para lectores de pantalla */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }

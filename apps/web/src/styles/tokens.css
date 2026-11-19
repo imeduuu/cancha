@@ -1,0 +1,289 @@
+/*
+ * Sistema de diseño de Cancha (fase 9) · dirección «Estadio nocturno».
+ * Único lugar con valores de color, tipografía, espaciado, radios y sombras.
+ * Oscuro por defecto; la versión clara se aplica con prefers-color-scheme: light
+ * o con data-theme="light" en <html> (data-theme="dark" fuerza el oscuro).
+ * Todo par texto/fondo cumple WCAG AA (≥ 4,5:1; ≥ 3:1 en bordes de zona).
+ */
+:root {
+  color-scheme: dark;
+
+  /* Tipografía */
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-label: var(--font-body);
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-num: var(--font-display);
+  --fs-2xs: 12px;
+  --fs-xs: 13px;
+  --fs-sm: 14px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 21px;
+  --fs-2xl: 26px;
+  --fs-3xl: 32px;
+  --fs-4xl: 40px;
+  --tracking-label: .09em;
+
+  /* Espaciado (escala de 4 px), radios y layout */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --page-max: 1680px;
+  --page-gutter: clamp(16px, 3vw, 48px);
+  --measure: 72ch;
+  --control-height: 40px;
+
+  /* Superficies y texto (oscuro) */
+  --bg: #0a110e;
+  --bg-glow: radial-gradient(1200px 420px at 85% -160px, rgb(74 222 128 / 10%), transparent 70%),
+    radial-gradient(900px 320px at 0% -120px, rgb(250 204 21 / 6%), transparent 70%);
+  --surface: #15211b;
+  --surface-2: #111b16;
+  --surface-3: #1c2d24;
+  --muted-bg: #2a3a31;
+  --fg: #eef5f0;
+  --fg-soft: #cddbd2;
+  --muted: #9fb2a7;
+  --line: #23342b;
+  --line-strong: #5d7f6c;
+
+  /* Marca y acción */
+  --primary: #22c55e;
+  --primary-hover: #4ade80;
+  --on-primary: #04130a;
+  --accent-fg: #6ee7a0;
+  --highlight: #facc15;
+  --on-highlight: #1a1400;
+  --highlight-fg: #facc15;
+  --focus: #facc15;
+
+  /* Barra superior (oscura también en el tema claro) */
+  --top-bg: #08100c;
+  --top-fg: #eef5f0;
+  --top-muted: #a9bbb0;
+  --top-line: #1f2d26;
+  --top-button-bg: #111b16;
+  --top-button-hover: #1c2d24;
+  --top-button-line: #2c4035;
+
+  /* Estados */
+  --danger-fg: #fca5a5;
+  --danger-bg: #2f1214;
+  --danger-line: #8a3a3c;
+  --warning-fg: #fcd34d;
+  --warning-bg: #2a2209;
+  --warning-line: #7a6118;
+  --info-fg: #7dd3fc;
+  --info-bg: #0b2433;
+  --info-line: #23597a;
+  --positive-fg: #6ee7a0;
+  --negative-fg: #fca5a5;
+
+  /* Tabla de posiciones */
+  --thead-bg: #0f1914;
+  --thead-fg: #a9bbb0;
+  --row-alt: #182620;
+  --row-hover: #1f3128;
+  --points-bg: #facc15;
+  --points-fg: #1a1400;
+  --points-head-bg: #eab308;
+
+  /* Zonas: barra lateral, tinte de fila y texto del número de puesto */
+  --zone-champion: #facc15;
+  --zone-champion-tint: #2b2608;
+  --zone-champion-fg: #fde047;
+  --zone-libertadores: #38bdf8;
+  --zone-libertadores-tint: #0b2433;
+  --zone-libertadores-fg: #7dd3fc;
+  --zone-libertadores-qualifying: #818cf8;
+  --zone-libertadores-qualifying-tint: #1b1d3a;
+  --zone-libertadores-qualifying-fg: #a5b4fc;
+  --zone-sudamericana: #fb923c;
+  --zone-sudamericana-tint: #2e1a0c;
+  --zone-sudamericana-fg: #fdba74;
+  --zone-playoff: #2dd4bf;
+  --zone-playoff-tint: #0a2a27;
+  --zone-playoff-fg: #5eead4;
+  --zone-relegation-playoff: #f472b6;
+  --zone-relegation-playoff-tint: #33122a;
+  --zone-relegation-playoff-fg: #f9a8d4;
+  --zone-relegation: #f87171;
+  --zone-relegation-tint: #2f1214;
+  --zone-relegation-fg: #fca5a5;
+
+  /* Ilustración de cancha (igual en ambos temas) */
+  --pitch-dark: #14532d;
+  --pitch-light: #166534;
+  --chalk: rgb(255 255 255 / 55%);
+  --chalk-solid: #ffffff;
+  --floodlight: #fde047;
+  --floodlight-glow: radial-gradient(circle, rgb(254 240 138 / 75%), rgb(250 204 21 / 18%) 45%, transparent 70%);
+  --brand-ring: rgb(34 197 94 / 22%);
+
+  /* Sombras y capas */
+  --shadow-sm: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-md: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 14px 32px -18px rgb(0 0 0 / 85%);
+  --shadow-lg: 0 24px 70px rgb(0 0 0 / 60%);
+  --backdrop: rgb(2 6 4 / 72%);
+  --sticky-shadow: rgb(0 0 0 / 70%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f2f6f3;
+    --bg-glow: radial-gradient(1200px 420px at 85% -160px, rgb(34 197 94 / 9%), transparent 70%);
+    --surface: #ffffff;
+    --surface-2: #f7faf8;
+    --surface-3: #e6f0e9;
+    --muted-bg: #c9d6ce;
+    --fg: #0d1712;
+    --fg-soft: #23362b;
+    --muted: #4c5e54;
+    --line: #dbe4de;
+    --line-strong: #7b8f84;
+    --primary: #15803d;
+    --primary-hover: #166534;
+    --on-primary: #ffffff;
+    --accent-fg: #166534;
+    --highlight: #fde047;
+    --on-highlight: #1a1400;
+    --highlight-fg: #854d0e;
+    --focus: #a16207;
+    --top-bg: #0f1e17;
+    --top-fg: #eef5f0;
+    --top-muted: #b8c8be;
+    --top-line: #0f1e17;
+    --top-button-bg: #162a20;
+    --top-button-hover: #1f3a2c;
+    --top-button-line: #2f4b3c;
+    --danger-fg: #b91c1c;
+    --danger-bg: #fef2f2;
+    --danger-line: #f1a5a5;
+    --warning-fg: #854d0e;
+    --warning-bg: #fefce8;
+    --warning-line: #e3c463;
+    --info-fg: #075985;
+    --info-bg: #eff8ff;
+    --info-line: #8cc8ec;
+    --positive-fg: #15803d;
+    --negative-fg: #b91c1c;
+    --thead-bg: #e9efeb;
+    --thead-fg: #3e5146;
+    --row-alt: #f5f8f6;
+    --row-hover: #e8f2eb;
+    --points-bg: #fde047;
+    --points-fg: #1a1400;
+    --points-head-bg: #facc15;
+    --zone-champion: #a16207;
+    --zone-champion-tint: #fef9c3;
+    --zone-champion-fg: #713f12;
+    --zone-libertadores: #0284c7;
+    --zone-libertadores-tint: #e0f2fe;
+    --zone-libertadores-fg: #075985;
+    --zone-libertadores-qualifying: #4f46e5;
+    --zone-libertadores-qualifying-tint: #e0e7ff;
+    --zone-libertadores-qualifying-fg: #3730a3;
+    --zone-sudamericana: #ea580c;
+    --zone-sudamericana-tint: #ffedd5;
+    --zone-sudamericana-fg: #9a3412;
+    --zone-playoff: #0d9488;
+    --zone-playoff-tint: #ccfbf1;
+    --zone-playoff-fg: #115e59;
+    --zone-relegation-playoff: #db2777;
+    --zone-relegation-playoff-tint: #fce7f3;
+    --zone-relegation-playoff-fg: #9d174d;
+    --zone-relegation: #dc2626;
+    --zone-relegation-tint: #fee2e2;
+    --zone-relegation-fg: #991b1b;
+    --shadow-sm: 0 1px 2px rgb(13 23 18 / 6%);
+    --shadow-md: 0 1px 2px rgb(13 23 18 / 6%), 0 10px 24px -16px rgb(13 23 18 / 28%);
+    --shadow-lg: 0 24px 70px rgb(16 34 23 / 24%);
+    --backdrop: rgb(15 29 20 / 58%);
+    --sticky-shadow: rgb(13 23 18 / 22%);
+  }
+}
+
+/* Igual que el bloque claro anterior: permite forzar el tema desde <html data-theme="light">. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f2f6f3;
+  --bg-glow: radial-gradient(1200px 420px at 85% -160px, rgb(34 197 94 / 9%), transparent 70%);
+  --surface: #ffffff;
+  --surface-2: #f7faf8;
+  --surface-3: #e6f0e9;
+  --muted-bg: #c9d6ce;
+  --fg: #0d1712;
+  --fg-soft: #23362b;
+  --muted: #4c5e54;
+  --line: #dbe4de;
+  --line-strong: #7b8f84;
+  --primary: #15803d;
+  --primary-hover: #166534;
+  --on-primary: #ffffff;
+  --accent-fg: #166534;
+  --highlight: #fde047;
+  --on-highlight: #1a1400;
+  --highlight-fg: #854d0e;
+  --focus: #a16207;
+  --top-bg: #0f1e17;
+  --top-fg: #eef5f0;
+  --top-muted: #b8c8be;
+  --top-line: #0f1e17;
+  --top-button-bg: #162a20;
+  --top-button-hover: #1f3a2c;
+  --top-button-line: #2f4b3c;
+  --danger-fg: #b91c1c;
+  --danger-bg: #fef2f2;
+  --danger-line: #f1a5a5;
+  --warning-fg: #854d0e;
+  --warning-bg: #fefce8;
+  --warning-line: #e3c463;
+  --info-fg: #075985;
+  --info-bg: #eff8ff;
+  --info-line: #8cc8ec;
+  --positive-fg: #15803d;
+  --negative-fg: #b91c1c;
+  --thead-bg: #e9efeb;
+  --thead-fg: #3e5146;
+  --row-alt: #f5f8f6;
+  --row-hover: #e8f2eb;
+  --points-bg: #fde047;
+  --points-fg: #1a1400;
+  --points-head-bg: #facc15;
+  --zone-champion: #a16207;
+  --zone-champion-tint: #fef9c3;
+  --zone-champion-fg: #713f12;
+  --zone-libertadores: #0284c7;
+  --zone-libertadores-tint: #e0f2fe;
+  --zone-libertadores-fg: #075985;
+  --zone-libertadores-qualifying: #4f46e5;
+  --zone-libertadores-qualifying-tint: #e0e7ff;
+  --zone-libertadores-qualifying-fg: #3730a3;
+  --zone-sudamericana: #ea580c;
+  --zone-sudamericana-tint: #ffedd5;
+  --zone-sudamericana-fg: #9a3412;
+  --zone-playoff: #0d9488;
+  --zone-playoff-tint: #ccfbf1;
+  --zone-playoff-fg: #115e59;
+  --zone-relegation-playoff: #db2777;
+  --zone-relegation-playoff-tint: #fce7f3;
+  --zone-relegation-playoff-fg: #9d174d;
+  --zone-relegation: #dc2626;
+  --zone-relegation-tint: #fee2e2;
+  --zone-relegation-fg: #991b1b;
+  --shadow-sm: 0 1px 2px rgb(13 23 18 / 6%);
+  --shadow-md: 0 1px 2px rgb(13 23 18 / 6%), 0 10px 24px -16px rgb(13 23 18 / 28%);
+  --shadow-lg: 0 24px 70px rgb(16 34 23 / 24%);
+  --backdrop: rgb(15 29 20 / 58%);
+  --sticky-shadow: rgb(13 23 18 / 22%);
+}
