@@ -1,0 +1,74 @@
+# Blueprint de Render para la API de Cancha (fase 8C). Guía: docs/deployment.md.
+# Sin secretos: MONGODB_URI y CORS_ORIGINS se pegan en el panel al crear el
+# blueprint (sync: false) y JWT_ACCESS_SECRET lo genera Render (generateValue).
+services:
+  - type: web
+    name: cancha-api
+    runtime: docker
+    # free: se duerme tras 15 min sin tráfico (la primera petición tarda ~1 min) y
+    # pierde la caché de fuentes y el rate limit en memoria. Ver docs/deployment.md.
+    plan: free
+    # Elige la región más cercana al cluster de Atlas (misma zona de AWS).
+    region: virginia
+    # El contexto es la raíz: el Dockerfile compila core y el proxy del monorepo.
+    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
+    healthCheckPath: /health
+    # Despliega sólo cuando el CI de GitHub (ci.yml) termina en verde.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT no se declara: Render lo define (10000) y la API lo lee.
+
+      # Cadena de Atlas con la contraseña real (sin <db_password>): se pega en el panel.
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: cancha
+
+      # Secreto HS256 de los access tokens, generado por Render (256 bits en base64).
+      # Si se regenera, todos los access tokens vigentes dejan de valer (ver guía).
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+
+      # URL de la web en Vercel, https y sin barra final (p. ej. https://cancha.vercel.app).
+      - key: CORS_ORIGINS
+        sync: false
+      # Con el rewrite de Vercel el navegador ve un solo origen: Lax basta.
+      - key: AUTH_COOKIE_SAMESITE
+        value: lax
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: "30"
+      - key: AUTH_RATE_LIMIT
+        value: "10"
+      - key: AUTH_RATE_TTL_SECONDS
+        value: "60"
+
+      # Saltos de proxy propios (edge de Vercel + balanceador de Render). Valor
+      # inicial: VERIFÍCALO tras el primer despliegue con LOG_CLIENT_IP (guía).
+      - key: TRUST_PROXY
+        value: "2"
+      # Diagnóstico de TRUST_PROXY: true sólo mientras verificas; registra IPs
+      # (datos personales). Vuelve a false al terminar.
+      - key: LOG_CLIENT_IP
+        value: "false"
+
+      # Proxy de fuentes oficiales (valores por defecto, docs/official-source-proxy.md).
+      - key: OFFICIAL_SOURCE_TIMEOUT_MS
+        value: "20000"
+      - key: OFFICIAL_SOURCE_MAX_BYTES
+        value: "5242880"
+      - key: OFFICIAL_SOURCE_CACHE_TTL_SECONDS
+        value: "600"
+      - key: OFFICIAL_SOURCE_CACHE_MAX_ENTRIES
+        value: "200"
+      # 64 MiB: holgado para los 512 MB del plan free.
+      - key: OFFICIAL_SOURCE_CACHE_MAX_BYTES
+        value: "67108864"
+      - key: OFFICIAL_SOURCE_RATE_LIMIT
+        value: "300"
+      - key: OFFICIAL_SOURCE_RATE_TTL_SECONDS
+        value: "60"

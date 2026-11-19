@@ -380,6 +380,27 @@ npm run test:e2e
 
 Playwright ejecuta los recorridos en perfiles aislados con un servidor local dedicado, sin túnel público ni acceso a la biblioteca personal. `npm run test:e2e:session` prueba en Chromium la biblioteca con sesión contra la API real (compilada, con MongoDB en memoria y sin Docker). Incluye Chromium, Firefox y WebKit en resoluciones de escritorio, notebook, tablet y móvil. `npm run test:flows` conserva los recorridos de integración con jsdom. [Instalación, cobertura, correcciones visuales y límites](docs/browser-audit.md).
 
+## Despliegue (Vercel + Render + Atlas)
+
+[docs/deployment.md](docs/deployment.md) es la guía paso a paso: cluster M0 en MongoDB Atlas, API en Render con Docker y web en Vercel, dónde va cada variable, cómo verificar `TRUST_PROXY` y una lista de verificación final.
+
+- [`render.yaml`](render.yaml): blueprint de la API.
+  - Docker con `apps/api/Dockerfile`, health check en `/health` y despliegue sólo con el CI en verde (`autoDeployTrigger: checksPass`).
+  - Declara todas las variables sin secretos: `MONGODB_URI` y `CORS_ORIGINS` se pegan en el panel y `JWT_ACCESS_SECRET` lo genera Render.
+- [`apps/web/vercel.json`](apps/web/vercel.json): Root Directory `apps/web`.
+  - Instala desde la raíz sólo el workspace de la web (`cd ../.. && npm ci -w @cancha/web`) y ejecuta `npm run build`.
+  - Reenvía `/graphql` y las 4 rutas de fuentes oficiales a la API (mismo origen para la cookie y sin CORS) y usa `index.html` como fallback de la SPA.
+  - Hay que reemplazar el marcador `REEMPLAZAR-URL-DE-LA-API.onrender.com` por la URL de Render. `scripts/vercel-config.test.mjs` comprueba que las rutas coincidan con las del proxy.
+  - Necesita la opción de Vercel "Include files outside the root directory": la web compila `packages/core` desde la fuente.
+- En producción, la API no arranca si falta `JWT_ACCESS_SECRET` o `CORS_ORIGINS`, o si queda un valor de desarrollo o de plantilla. Lo mismo pasa con:
+  - el secreto de desarrollo;
+  - un marcador `REEMPLAZAR` o `<db_password>` en el secreto, la URI o los orígenes;
+  - orígenes `http://` o `localhost`;
+  - `AUTH_COOKIE_SECURE=false`.
+
+  El error enumera todos los problemas a la vez y nunca repite la URI.
+- `LOG_CLIENT_IP=true` (desactivado por defecto) registra la cadena `X-Forwarded-For`, la IP del socket y `req.ip` de cada petición, para elegir `TRUST_PROXY`. Se vuelve a desactivar al terminar: las IPs son datos personales.
+
 ## Integración continua (CI)
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) se ejecuta en cada `push` y `pull_request` a `main`, con permisos de sólo lectura (`contents: read`). Una corrida nueva de la misma rama o PR cancela la anterior.

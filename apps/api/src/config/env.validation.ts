@@ -28,6 +28,12 @@ export interface ApiEnvironment {
    * cualquier X-Forwarded-For) ni listas de IPs.
    */
   readonly TRUST_PROXY: number;
+  /**
+   * Diagnóstico temporal de TRUST_PROXY: registra X-Forwarded-For, la IP del
+   * socket y req.ip de cada petición. Desactivado por defecto; las IPs son datos
+   * personales, así que sólo se activa mientras se verifica el despliegue.
+   */
+  readonly LOG_CLIENT_IP: boolean;
   /** Proxy de fuentes oficiales (fase 6, docs/official-source-proxy.md). */
   readonly OFFICIAL_SOURCE_TIMEOUT_MS: number;
   readonly OFFICIAL_SOURCE_MAX_BYTES: number;
@@ -57,6 +63,15 @@ function text(value: unknown): string | undefined {
   const trimmed = String(value).trim();
   return trimmed === "" ? undefined : trimmed;
 }
+
+/**
+ * Marcadores que quedan al copiar plantillas sin completar: `<REEMPLAZAR…>` de
+ * render.yaml/vercel.json/docs y `<db_password>` de la cadena de Atlas.
+ */
+const placeholder = /REEMPLAZAR|<[^>]*>/i;
+
+/** Hosts que sólo existen en la máquina local: nunca son el origen de la web en producción. */
+const localHosts = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]);
 
 /** Un origen es `esquema://host[:puerto]`, sin ruta, query ni barra final. */
 function isOrigin(value: string): boolean {
@@ -113,6 +128,9 @@ export function validateEnvironment(raw: Record<string, unknown>): ApiEnvironmen
     problems.push("MONGODB_URI es obligatoria (por ejemplo mongodb://localhost:27017/?replicaSet=rs0&directConnection=true).");
   } else if (!/^mongodb(\+srv)?:\/\/\S+$/.test(uri)) {
     problems.push("MONGODB_URI debe comenzar con mongodb:// o mongodb+srv://.");
+  } else if (placeholder.test(uri)) {
+    // Sin repetir la URI: puede contener la contraseña.
+    problems.push("MONGODB_URI todavía tiene un marcador (<db_password>, <REEMPLAZAR…>): pega la cadena de conexión con la contraseña real.");
   }
 
   const database = text(raw.MONGODB_DB) ?? defaultDatabase;
@@ -127,6 +145,8 @@ export function validateEnvironment(raw: Record<string, unknown>): ApiEnvironmen
     problems.push(`JWT_ACCESS_SECRET debe tener al menos ${minimumJwtSecretLength} caracteres.`);
   } else if (production && secret === developmentJwtSecret) {
     problems.push("JWT_ACCESS_SECRET no puede ser el valor de desarrollo en producción.");
+  } else if (placeholder.test(secret)) {
+    problems.push("JWT_ACCESS_SECRET todavía es un marcador (<REEMPLAZAR…>): genera un valor aleatorio.");
   }
 
   const originsText = text(raw.CORS_ORIGINS);
@@ -139,6 +159,19 @@ export function validateEnvironment(raw: Record<string, unknown>): ApiEnvironmen
   const invalidOrigins = origins.filter(origin => !isOrigin(origin));
   if (invalidOrigins.length > 0) {
     problems.push(`CORS_ORIGINS sólo admite orígenes http(s)://host[:puerto] sin ruta ni barra final (inválidos: ${invalidOrigins.join(", ")}).`);
+  }
+  const placeholderOrigins = origins.filter(origin => placeholder.test(origin));
+  if (placeholderOrigins.length > 0) {
+    problems.push(`CORS_ORIGINS todavía tiene un marcador: pon la URL real de la web (${placeholderOrigins.join(", ")}).`);
+  }
+  if (production) {
+    // Valores de desarrollo que no sirven detrás de Vercel: la web publicada es https y no local.
+    const developmentOrigins = origins.filter(origin =>
+      isOrigin(origin) && !placeholder.test(origin)
+      && (new URL(origin).protocol !== "https:" || localHosts.has(new URL(origin).hostname)));
+    if (developmentOrigins.length > 0) {
+      problems.push(`CORS_ORIGINS en producción sólo admite orígenes https públicos, no http ni localhost (inválidos: ${developmentOrigins.join(", ")}).`);
+    }
   }
 
   const sameSite = (text(raw.AUTH_COOKIE_SAMESITE)?.toLowerCase() ?? "lax") as CookieSameSite;
@@ -153,6 +186,7 @@ export function validateEnvironment(raw: Record<string, unknown>): ApiEnvironmen
   const rateLimit = integer(raw.AUTH_RATE_LIMIT, "AUTH_RATE_LIMIT", 10, 1, 10_000, problems);
   const rateTtl = integer(raw.AUTH_RATE_TTL_SECONDS, "AUTH_RATE_TTL_SECONDS", 60, 1, 86_400, problems);
   const trustProxy = integer(raw.TRUST_PROXY, "TRUST_PROXY", 0, 0, 10, problems);
+  const logClientIp = boolean(raw.LOG_CLIENT_IP, "LOG_CLIENT_IP", false, problems);
 
   const sourceDefaults = defaultOfficialSourceLimits;
   const sourceTimeout = integer(raw.OFFICIAL_SOURCE_TIMEOUT_MS, "OFFICIAL_SOURCE_TIMEOUT_MS", sourceDefaults.timeoutMs, 1000, 120_000, problems);
@@ -180,6 +214,7 @@ export function validateEnvironment(raw: Record<string, unknown>): ApiEnvironmen
     AUTH_RATE_LIMIT: rateLimit,
     AUTH_RATE_TTL_SECONDS: rateTtl,
     TRUST_PROXY: trustProxy,
+    LOG_CLIENT_IP: logClientIp,
     OFFICIAL_SOURCE_TIMEOUT_MS: sourceTimeout,
     OFFICIAL_SOURCE_MAX_BYTES: sourceMaxBytes,
     OFFICIAL_SOURCE_CACHE_TTL_SECONDS: sourceCacheTtl,

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "cd ../.. && npm ci -w @cancha/web",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/graphql", "destination": "https://REEMPLAZAR-URL-DE-LA-API.onrender.com/graphql" },
+    { "source": "/official-source/:path*", "destination": "https://REEMPLAZAR-URL-DE-LA-API.onrender.com/official-source/:path*" },
+    { "source": "/third-division-source/:path*", "destination": "https://REEMPLAZAR-URL-DE-LA-API.onrender.com/third-division-source/:path*" },
+    { "source": "/argentina-cup-source/:path*", "destination": "https://REEMPLAZAR-URL-DE-LA-API.onrender.com/argentina-cup-source/:path*" },
+    { "source": "/brazil-cup-source/:path*", "destination": "https://REEMPLAZAR-URL-DE-LA-API.onrender.com/brazil-cup-source/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

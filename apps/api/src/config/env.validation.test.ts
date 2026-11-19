@@ -20,6 +20,7 @@ describe("validateEnvironment", () => {
       AUTH_RATE_LIMIT: 10,
       AUTH_RATE_TTL_SECONDS: 60,
       TRUST_PROXY: 0,
+      LOG_CLIENT_IP: false,
       OFFICIAL_SOURCE_TIMEOUT_MS: 20_000,
       OFFICIAL_SOURCE_MAX_BYTES: 5 * 1024 * 1024,
       OFFICIAL_SOURCE_CACHE_TTL_SECONDS: 600,
@@ -111,6 +112,54 @@ describe("validateEnvironment", () => {
     // `true` confiaría en cualquier X-Forwarded-For y permitiría falsificar la IP del rate limit.
     it.each(["true", "false", "loopback", "10.0.0.1", "-1", "11", "1.5"])("rechaza TRUST_PROXY=%s", value => {
       expect(() => validateEnvironment({ MONGODB_URI: uri, TRUST_PROXY: value })).toThrow(/TRUST_PROXY debe ser un entero entre 0 y 10/);
+    });
+  });
+
+  describe("valores de plantilla o de desarrollo en producción", () => {
+    it("rechaza la cadena de Atlas sin completar sin repetir la URI (puede tener la contraseña)", () => {
+      const atlas = "mongodb+srv://cancha:<db_password>@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority";
+      let message = "";
+      try { validateEnvironment({ ...production, MONGODB_URI: atlas }); }
+      catch (error) { message = (error as Error).message; }
+      expect(message).toMatch(/MONGODB_URI todavía tiene un marcador/);
+      expect(message).not.toContain("cluster0");
+      expect(() => validateEnvironment({ MONGODB_URI: "mongodb+srv://REEMPLAZAR.mongodb.net" })).toThrow(/MONGODB_URI todavía tiene un marcador/);
+    });
+
+    it("rechaza un JWT_ACCESS_SECRET que sigue siendo el marcador", () => {
+      expect(() => validateEnvironment({ ...production, MONGODB_URI: uri, JWT_ACCESS_SECRET: "<REEMPLAZAR-con-un-secreto-aleatorio-largo>" }))
+        .toThrow(/JWT_ACCESS_SECRET todavía es un marcador/);
+    });
+
+    it.each([
+      ["http://cancha.example.cl", /sólo admite orígenes https públicos/],
+      ["https://localhost:5173", /sólo admite orígenes https públicos/],
+      ["https://cancha.example.cl,http://127.0.0.1:5173", /inválidos: http:\/\/127\.0\.0\.1:5173\)/],
+      ["https://REEMPLAZAR-URL-DE-LA-WEB.vercel.app", /CORS_ORIGINS todavía tiene un marcador/],
+    ])("en producción rechaza CORS_ORIGINS=%s", (origins, message) => {
+      expect(() => validateEnvironment({ ...production, MONGODB_URI: uri, CORS_ORIGINS: origins })).toThrow(message);
+    });
+
+    it("fuera de producción conserva los orígenes http locales", () => {
+      expect(validateEnvironment({ MONGODB_URI: uri, CORS_ORIGINS: "http://localhost:4179" }).CORS_ORIGINS).toEqual(["http://localhost:4179"]);
+    });
+
+    it("acepta una configuración de producción completa (Vercel + Render + Atlas)", () => {
+      const env = validateEnvironment({
+        ...production,
+        MONGODB_URI: "mongodb+srv://cancha:s3cr3t@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority",
+        CORS_ORIGINS: "https://cancha.vercel.app,https://cancha.example.cl",
+        TRUST_PROXY: "2",
+      });
+      expect(env).toMatchObject({ NODE_ENV: "production", TRUST_PROXY: 2, LOG_CLIENT_IP: false, AUTH_COOKIE_SECURE: true });
+    });
+  });
+
+  describe("LOG_CLIENT_IP", () => {
+    it("está desactivado por defecto y sólo acepta true o false", () => {
+      expect(validateEnvironment({ MONGODB_URI: uri }).LOG_CLIENT_IP).toBe(false);
+      expect(validateEnvironment({ MONGODB_URI: uri, LOG_CLIENT_IP: "true" }).LOG_CLIENT_IP).toBe(true);
+      expect(() => validateEnvironment({ MONGODB_URI: uri, LOG_CLIENT_IP: "1" })).toThrow(/LOG_CLIENT_IP debe ser true o false/);
     });
   });
 

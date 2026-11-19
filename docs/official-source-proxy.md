@@ -81,7 +81,7 @@ Valor según el despliegue: es el número de proxies **propios** entre el navega
 | API en Render, llamada directamente (sin Vercel) | `1` (balanceador de Render) |
 | Web en Vercel con *rewrite* hacia la API en Render | `2` (edge de Vercel + balanceador de Render) |
 
-Antes de fijar el valor en producción hay que verificarlo. Por ejemplo, registra temporalmente `req.ips` y `req.ip` y compáralos con la IP pública del navegador. Si el valor es demasiado alto, el cliente puede falsificar su IP. Si es demasiado bajo, todos los clientes comparten la IP del proxy y el límite se agota para todos.
+Antes de fijar el valor en producción hay que verificarlo. Con `LOG_CLIENT_IP=true` (desactivado por defecto) la API registra en cada petición `X-Forwarded-For`, la IP del socket, `req.ips` y `req.ip`, y se comparan con la IP pública del navegador. El procedimiento completo está en [docs/deployment.md](deployment.md#paso-4-verificar-trust_proxy). Si el valor es demasiado alto, el cliente puede falsificar su IP. Si es demasiado bajo, todos los clientes comparten la IP del proxy y el límite se agota para todos. Las IPs son datos personales: vuelve a `LOG_CLIENT_IP=false` al terminar.
 
 ## Varias instancias
 
