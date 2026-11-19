@@ -5,10 +5,14 @@ import { InMemoryTournamentRepository } from "@cancha/core/application/services/
 import { emptySportsUniverseLibrary } from "@cancha/core/application/services/sports-universes";
 import { restoreTournamentBackup } from "@cancha/core/application/use-cases/restore-tournament-backup";
 import { validateLibraryChanges } from "@cancha/core/application/validation/library-changes";
+import { compareCheckpointLibrary, createSaveCheckpoint, verifySaveCheckpoint } from "@cancha/core/application/services/save-checkpoints";
+import { parseTournamentBackupWithActivity } from "@cancha/core/application/services/tournament-archive";
+import type { SaveCheckpoint } from "@cancha/core/domain/entities/save-checkpoint";
 import {
   ApiConflictError,
   ApiError,
   ApiNetworkError,
+  ApiNotFoundError,
   ApiUnauthenticatedError,
   ApiValidationError,
   type GraphqlVariables,
@@ -36,6 +40,8 @@ export interface FakeLibraryServer {
   readonly operations: string[];
   /** Cuerpos recibidos por commitLibraryChanges. */
   readonly commits: unknown[];
+  /** Puntos de guardado de la cuenta, con su versión de compare-and-set. */
+  readonly checkpoints: Map<string, { record: SaveCheckpoint; version: number }>;
   /** La próxima petición falla con este error (p. ej. `new ApiNetworkError()`). */
   failNext(error: Error): void;
   /** Otro dispositivo escribió: cambia la biblioteca y avanza la versión. */
@@ -85,7 +91,74 @@ export function createFakeLibraryServer(initial: Partial<FakeLibraryState> = {})
   let pendingFailure: Error | null = null;
   let cookieValid = true;
 
-  function library(query: string, variables: GraphqlVariables = {}): unknown {
+  const checkpoints = new Map<string, { record: SaveCheckpoint; version: number }>();
+  const summary = ({ record, version }: { record: SaveCheckpoint; version: number }) => ({
+    id: record.id, name: record.name, description: record.description, createdAt: record.createdAt, updatedAt: record.updatedAt,
+    tournamentCount: record.tournamentCount, universeCount: record.universeCount, activityCount: record.activityCount,
+    sizeBytes: record.sizeBytes, version, revision: record.revision, backupVersion: record.backupVersion, digest: record.integrity.digest,
+  });
+  const current = () => ({ tournaments: state.tournaments, activity: state.activity, universes: state.universes });
+  async function stored(id: string) {
+    const entry = checkpoints.get(id);
+    if (!entry) throw new ApiNotFoundError("No se encontró el punto de guardado.", "NOT_FOUND");
+    try {
+      await verifySaveCheckpoint(entry.record);
+    } catch (error) {
+      throw new ApiValidationError((error as Error).message, "VALIDATION");
+    }
+    return entry;
+  }
+
+  async function checkpoint(query: string, variables: GraphqlVariables): Promise<unknown> {
+    if (query.includes("saveCheckpointPreview")) {
+      operations.push("saveCheckpointPreview");
+      const entry = await stored(String(variables.id));
+      return { saveCheckpointPreview: {
+        checkpoint: summary(entry),
+        comparison: compareCheckpointLibrary(parseTournamentBackupWithActivity(entry.record.content), current()),
+        libraryVersion: state.libraryVersion,
+      } };
+    }
+    if (query.includes("saveCheckpointContent")) {
+      operations.push("saveCheckpointContent");
+      return { saveCheckpointContent: JSON.parse((await stored(String(variables.id))).record.content) as unknown };
+    }
+    if (query.includes("restoreSaveCheckpoint")) {
+      operations.push("restoreSaveCheckpoint");
+      const entry = await stored(String(variables.id));
+      if (entry.version !== variables.version || state.libraryVersion !== variables.libraryVersion) {
+        throw new ApiConflictError("El punto o la biblioteca cambiaron.", "CONFLICT", { code: "CONFLICT" });
+      }
+      const repository = new InMemoryTournamentRepository({ tournaments: [], activity: [], activeTournamentId: null });
+      const result = restoreTournamentBackup(entry.record.content, "replace", repository);
+      state.tournaments = repository.findAll();
+      state.activity = repository.findActivity();
+      state.activeTournamentId = repository.getActiveTournamentId();
+      state.universes = repository.getSportsUniverseLibrary();
+      state.libraryVersion += 1;
+      return { restoreSaveCheckpoint: { ...result, libraryVersion: state.libraryVersion } };
+    }
+    if (query.includes("deleteSaveCheckpoint")) {
+      operations.push("deleteSaveCheckpoint");
+      const entry = checkpoints.get(String(variables.id));
+      if (!entry) throw new ApiNotFoundError("No se encontró el punto de guardado.", "NOT_FOUND");
+      if (entry.version !== variables.version) throw new ApiConflictError("El punto cambió.", "CONFLICT", { code: "CONFLICT" });
+      checkpoints.delete(String(variables.id));
+      return { deleteSaveCheckpoint: true };
+    }
+    if (query.includes("createSaveCheckpoint")) {
+      operations.push("createSaveCheckpoint");
+      const record = await createSaveCheckpoint(current(), String(variables.name), String(variables.description ?? ""));
+      const entry = { record, version: 1 };
+      checkpoints.set(record.id, entry);
+      return { createSaveCheckpoint: summary(entry) };
+    }
+    operations.push("saveCheckpoints");
+    return { saveCheckpoints: [...checkpoints.values()].map(summary).reverse() };
+  }
+
+  async function library(query: string, variables: GraphqlVariables = {}): Promise<unknown> {
+    if (/[sS]aveCheckpoint/.test(query)) return checkpoint(query, variables);
     if (query.includes("librarySnapshot")) {
       operations.push("librarySnapshot");
       return { librarySnapshot: structuredClone({ ...state, versions: {} }) };
@@ -133,7 +206,7 @@ export function createFakeLibraryServer(initial: Partial<FakeLibraryState> = {})
     throw new ApiValidationError(`Operación no soportada por el servidor falso: ${query}`, "VALIDATION");
   }
 
-  function respond(query: string, variables?: GraphqlVariables): unknown {
+  async function respond(query: string, variables?: GraphqlVariables): Promise<unknown> {
     if (pendingFailure) {
       const failure = pendingFailure;
       pendingFailure = null;
@@ -160,7 +233,7 @@ export function createFakeLibraryServer(initial: Partial<FakeLibraryState> = {})
         return json({ data: { [operation]: payload() } });
       }
       if (query.includes("logout")) { operations.push("logout"); cookieValid = false; return json({ data: { logout: true } }); }
-      return json({ data: respond(query, variables) });
+      return json({ data: await respond(query, variables) });
     } catch (error) {
       if (error instanceof ApiNetworkError) throw new TypeError("Failed to fetch");
       if (error instanceof ApiError) return fail(error);
@@ -172,11 +245,12 @@ export function createFakeLibraryServer(initial: Partial<FakeLibraryState> = {})
     state,
     operations,
     commits,
+    checkpoints,
     failNext(error) { pendingFailure = error; },
     externalWrite(change) { change(state); state.libraryVersion += 1; },
     api: {
       async request<T>(query: string, variables?: GraphqlVariables): Promise<T> {
-        return structuredClone(respond(query, variables)) as T;
+        return structuredClone(await respond(query, variables)) as T;
       },
     },
     fetch: fetchImpl as typeof fetch,

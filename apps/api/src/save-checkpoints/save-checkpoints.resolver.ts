@@ -16,7 +16,11 @@ export class SaveCheckpointModel {
   @Field(() => String) updatedAt!: string;
   @Field(() => Int) tournamentCount!: number;
   @Field(() => Int) activityCount!: number;
+  @Field(() => Int) universeCount!: number;
   @Field(() => Int, { description: "Tamaño del respaldo en bytes." }) sizeBytes!: number;
+  @Field(() => Int, { description: "Revisión de los metadatos del punto." }) revision!: number;
+  @Field(() => Int, { description: "Versión del formato cancha-backup del contenido (7)." }) backupVersion!: number;
+  @Field(() => String, { description: "Huella SHA-256 (hex) del contenido: comprueba integridad, no autenticidad." }) digest!: string;
   @Field(() => Int, { description: "Versión para compare-and-set: envíala como expectedVersion." }) version!: number;
 }
 
@@ -38,7 +42,11 @@ function toModel(summary: SaveCheckpointSummary): SaveCheckpointModel {
     updatedAt: summary.updatedAt,
     tournamentCount: summary.tournamentCount,
     activityCount: summary.activityCount,
+    universeCount: summary.universeCount,
     sizeBytes: summary.sizeBytes,
+    revision: summary.revision,
+    backupVersion: summary.backupVersion,
+    digest: summary.integrity.digest,
     version: summary.version,
   };
 }

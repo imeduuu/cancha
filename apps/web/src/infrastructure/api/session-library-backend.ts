@@ -9,7 +9,9 @@ import {
 } from "@cancha/core/application/services/in-memory-library";
 import { emptySportsUniverseLibrary } from "@cancha/core/application/services/sports-universes";
 import { createTournamentBackup } from "@cancha/core/application/services/tournament-archive";
+import type { CheckpointService } from "../persistence/checkpoint-service";
 import type { LibraryBackend } from "../persistence/library-backend";
+import { ServerCheckpointService } from "./server-checkpoint-service";
 import {
   ApiConflictError,
   ApiNetworkError,
@@ -143,6 +145,17 @@ export class SessionLibraryBackend implements LibraryBackend {
     this.channel?.close();
     if (typeof document !== "undefined") document.removeEventListener("visibilitychange", this.onVisibility);
     this.listeners.clear();
+  }
+
+  /** Puntos de guardado de la cuenta; `onRestored` se llama con la réplica ya recargada. */
+  createCheckpointService(onRestored: () => void): CheckpointService {
+    return new ServerCheckpointService(this.api, this, onRestored);
+  }
+
+  /** Vuelve a descargar la biblioteca (p. ej. tras restaurar un punto en el servidor). */
+  async reloadFromServer(): Promise<void> {
+    await this.reload();
+    this.channel?.postMessage({ libraryVersion: this.confirmed.libraryVersion });
   }
 
   /** Avisa cuando la réplica cambió por otra pestaña o dispositivo. */

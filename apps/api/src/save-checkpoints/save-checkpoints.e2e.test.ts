@@ -21,8 +21,11 @@ const as = <T = Record<string, never>>(session: TestSession, query: string, vari
 const codeOf = (response: GraphqlResponse<unknown>) => response.errors?.[0]?.extensions?.code;
 const checkpoints = () => api.app.get<Db>(MONGO_DATABASE).collection(saveCheckpointCollectionName);
 
-const FIELDS = "id name description createdAt tournamentCount activityCount sizeBytes version";
-interface Checkpoint { id: string; name: string; version: number; tournamentCount: number; activityCount: number; sizeBytes: number }
+const FIELDS = "id name description createdAt tournamentCount activityCount universeCount sizeBytes version revision backupVersion digest";
+interface Checkpoint {
+  id: string; name: string; version: number; tournamentCount: number; activityCount: number; sizeBytes: number;
+  universeCount: number; revision: number; backupVersion: number; digest: string;
+}
 interface Backup { tournaments: { id: string; name: string }[]; activity: { id: string; action: string }[] }
 
 async function createTournament(session: TestSession, name: string) {
@@ -58,7 +61,11 @@ describe("puntos de guardado en el servidor", () => {
     const original = await exportLibrary(alice);
 
     const point = await createCheckpoint(alice, "Antes de los cambios", "Temporada simulada");
-    expect(point).toMatchObject({ name: "Antes de los cambios", version: 1, tournamentCount: 1, activityCount: original.activity.length });
+    expect(point).toMatchObject({
+      name: "Antes de los cambios", version: 1, tournamentCount: 1, activityCount: original.activity.length,
+      universeCount: 0, revision: 1, backupVersion: 7,
+    });
+    expect(point.digest).toMatch(/^[a-f0-9]{64}$/);
     expect((await list(alice)).map(({ id }) => id)).toEqual([point.id]);
 
     await as(alice, `mutation { renameTournament(tournamentId: "${liga.id}", expectedVersion: 2, name: "Renombrada") { id } }`);

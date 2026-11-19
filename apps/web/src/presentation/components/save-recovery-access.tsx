@@ -1,9 +1,9 @@
 import { createContext, useContext } from "react";
-import type { SaveCheckpoints } from "@cancha/core/application/services/save-checkpoints";
+import type { CheckpointService } from "../../infrastructure/persistence/checkpoint-service";
 
 export interface SaveRecoveryRequest { id: number; name: string }
 export const SaveRecoveryNavigation = createContext<{
-  service: SaveCheckpoints;
+  service: CheckpointService;
   open: (suggestedName?: string) => void;
   request: SaveRecoveryRequest | null;
   acknowledge: () => void;

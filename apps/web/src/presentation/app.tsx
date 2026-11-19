@@ -63,6 +63,7 @@ import {
 import { importTournamentArchive } from "@cancha/core/application/use-cases/import-tournament-archive";
 import { LocalStorageTournamentRepository } from "../infrastructure/persistence/local-storage-tournament-repository";
 import type { LibraryBackend } from "../infrastructure/persistence/library-backend";
+import type { CheckpointService } from "../infrastructure/persistence/checkpoint-service";
 import { StandingsTable } from "./components/standings-table";
 import { SimulationScopeDialog } from "./components/simulation-scope-dialog";
 import { SetupTournamentForm } from "./components/setup-tournament-form";
@@ -252,6 +253,10 @@ function Application({ libraryBackend }: AppProps) {
   }
   function reopenExternalLibrary() {
     if (!window.confirm("Se cerrarán los formularios y revisiones abiertos. Los borradores de sesión se conservarán; al abrir un partido modificado se usarán sus datos guardados actuales. ¿Continuar?")) return;
+    showCurrentLibrary();
+  }
+  /** Vuelve a la biblioteca guardada actual, cerrando formularios y revisiones (los borradores se conservan). */
+  function showCurrentLibrary() {
     try {
       const snapshot = repository.snapshot();
       const current = repository.findAll(), universes = repository.getSportsUniverseLibrary();
@@ -271,7 +276,11 @@ function Application({ libraryBackend }: AppProps) {
   const [saveRecoveryRequest, setSaveRecoveryRequest] = useState<SaveRecoveryRequest | null>(null);
   const saveRequestCounter = useRef(0);
   const [saveOrigin, setSaveOrigin] = useState<{screen: typeof screen; universeId: string | null; trigger: HTMLElement | null} | null>(null);
-  const checkpointService = useMemo(() => new SaveCheckpoints(new IndexedDbSaveCheckpointStore(), () => {
+  const checkpointService = useMemo<CheckpointService>(() => repository.createCheckpointService?.(() => {
+      showCurrentLibrary();
+      setFeedback("Biblioteca restaurada desde el punto de guardado de tu cuenta.");
+    })
+    ?? new SaveCheckpoints(new IndexedDbSaveCheckpointStore(), () => {
     const report = repository.findAllWithRecoveryReport();
     if (report.warnings.length) throw new Error(`No se puede proteger una biblioteca incompleta: ${report.warnings.join(" ")}`);
     return {tournaments: report.tournaments, activity: repository.findActivity(), universes: repository.getSportsUniverseLibrary()};

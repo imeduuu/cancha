@@ -3,6 +3,7 @@ import type { SportsUniverseLibrary } from "@cancha/core/domain/entities/sports-
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { LibraryWriteLease } from "@cancha/core/application/ports/library-write-lease";
 import type { TournamentLibraryRepository } from "@cancha/core/application/ports/tournament-repository";
+import type { CheckpointService } from "./checkpoint-service";
 
 /**
  * Todo lo que la aplicación (app.tsx) usa de la biblioteca: el puerto de core más
@@ -51,4 +52,10 @@ export interface LibraryBackend extends TournamentLibraryRepository {
    * pestaña con sesión). localStorage no lo necesita: usa el evento `storage`.
    */
   subscribeExternalChanges?(listener: () => void): () => void;
+  /**
+   * Puntos de guardado propios de este backend (los de la cuenta). Ausente: los de
+   * este navegador (`SaveCheckpoints` sobre IndexedDB). `onRestored` se llama tras
+   * restaurar, con la biblioteca ya actualizada.
+   */
+  createCheckpointService?(onRestored: () => void): CheckpointService;
 }

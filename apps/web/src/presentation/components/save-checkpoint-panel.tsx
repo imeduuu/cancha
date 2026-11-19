@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { checkpointMetadata, CheckpointValidationError, type SaveCheckpoints, type CheckpointCreationReview, type CheckpointRestoreReview } from "@cancha/core/application/services/save-checkpoints";
+import { checkpointMetadata, CheckpointValidationError, type CheckpointCreationReview, type CheckpointRestoreReview } from "@cancha/core/application/services/save-checkpoints";
+import type { CheckpointService } from "../../infrastructure/persistence/checkpoint-service";
 import type { SaveCheckpoint, CheckpointStatus } from "@cancha/core/domain/entities/save-checkpoint";
 import { downloadText } from "../download-text";
 import { ConfirmationDialog } from "./confirmation-dialog";
@@ -16,8 +17,9 @@ function date(value: string) {
 function size(bytes: number) { return `${(bytes / 1024).toLocaleString("es-CL", {maximumFractionDigits: 1})} KB`; }
 
 export function SaveCheckpointPanel({service, suggestedName = "", onReturn}: {
-  service: SaveCheckpoints; suggestedName?: string; onReturn?: () => void;
+  service: CheckpointService; suggestedName?: string; onReturn?: () => void;
 }) {
+  const server = service.location === "server";
   const [records, setRecords] = useState<unknown[]>([]);
   const [checks, setChecks] = useState<Map<string, {raw: unknown; status: CheckpointStatus; error?: string}>>(new Map());
   const [name, setName] = useState(suggestedName), [description, setDescription] = useState("");
@@ -114,8 +116,13 @@ export function SaveCheckpointPanel({service, suggestedName = "", onReturn}: {
 
   return <section className="save-checkpoint-panel" aria-label="Puntos de control manuales" aria-busy={busy || loading}>
     <h4 ref={heading} tabIndex={-1}>Puntos de control manuales</h4>
-    <p>Versiones locales de toda la biblioteca, incluidos todos los universos y torneos sin asignar. Son independientes del universo activo, del JSON descargado y de la recuperación automática.</p>
-    <p>El navegador puede borrar este almacenamiento. Descarga los puntos importantes como respaldo externo.</p>
+    {server ? <>
+      <p>Versiones de toda la biblioteca de tu cuenta, incluidos todos los universos y torneos sin asignar. Se guardan en el servidor (hasta 20) y son independientes del universo activo y del JSON descargado.</p>
+      <p>Descarga los puntos importantes como respaldo externo.</p>
+    </> : <>
+      <p>Versiones locales de toda la biblioteca, incluidos todos los universos y torneos sin asignar. Son independientes del universo activo, del JSON descargado y de la recuperación automática.</p>
+      <p>El navegador puede borrar este almacenamiento. Descarga los puntos importantes como respaldo externo.</p>
+    </>}
     {onReturn && <button type="button" className="small-action" disabled={busy} onClick={onReturn}>Volver al contexto de origen</button>}
     {loading && <p role="status">Leyendo puntos guardados…</p>}
     <button type="button" className="small-action" disabled={busy || loading} onClick={() => void reload()}>Actualizar puntos</button>
@@ -161,7 +168,7 @@ export function SaveCheckpointPanel({service, suggestedName = "", onReturn}: {
         })}>Verificar integridad</button>
         <button type="button" className="small-action" disabled={busy || !row.id || !row.metadata} onClick={() => void act(() => download(row.id!))}>Descargar JSON del punto</button>
         <button type="button" className="small-action" disabled={busy || !row.id || !row.metadata} onClick={event => {dialogTrigger.current = event.currentTarget;void act(async () => {setRestoration(await service.reviewRestoration(row.id!));});}}>Revisar restauración</button>
-        <button type="button" className="small-action" disabled={busy || !row.metadata} onClick={() => setEditing({record: row.metadata!, name: row.metadata!.name, description: row.metadata!.description})}>Editar nombre y descripción</button>
+        {service.canEdit !== false && <button type="button" className="small-action" disabled={busy || !row.metadata} onClick={() => setEditing({record: row.metadata!, name: row.metadata!.name, description: row.metadata!.description})}>Editar nombre y descripción</button>}
         <button type="button" className="small-action" disabled={busy || !row.id} onClick={event => {dialogTrigger.current = event.currentTarget;setDeleting({id: row.id!, raw: row.raw});}}>Eliminar punto</button>
       </div>
     </article>)}</div>
@@ -175,14 +182,16 @@ export function SaveCheckpointPanel({service, suggestedName = "", onReturn}: {
     {error && <p role="alert" className="error-message">{error}</p>}
     {message && <p role="status" className="library-message">{message}</p>}
     {busy && <p role="status">Operación en curso. Espera su confirmación.</p>}
-    <ConfirmationDialog open={!!deleting} busy={busy} eyebrow="PUNTO DE CONTROL LOCAL" title="Eliminar punto de control" description={`Se eliminará únicamente «${deleting ? rowName(deleting.raw) : ""}» del almacenamiento local. La biblioteca deportiva no cambia.`}
+    <ConfirmationDialog open={!!deleting} busy={busy} eyebrow={server ? "PUNTO DE CONTROL DE LA CUENTA" : "PUNTO DE CONTROL LOCAL"} title="Eliminar punto de control" description={`Se eliminará únicamente «${deleting ? rowName(deleting.raw) : ""}» ${server ? "de tu cuenta" : "del almacenamiento local"}. La biblioteca deportiva no cambia.`}
       warning="Esta eliminación no se puede deshacer. Puedes cancelar y descargar primero el punto."
       confirmLabel="Confirmar eliminación" onCancel={() => {setDeleting(null);returnDialogFocus();}} onConfirm={() => void act(async () => {
         if (!deleting) return;await service.delete(deleting.id, deleting.raw, true);setDeleting(null);await changed();setMessage("Punto eliminado. La biblioteca deportiva no cambió.");returnDialogFocus();
       })}/>
     <ConfirmationDialog open={!!restoration} busy={busy} eyebrow="REEMPLAZO DE LA BIBLIOTECA COMPLETA" title="Restaurar punto de control"
       description={`Se reemplazará toda la biblioteca por «${restoration?.checkpoint.name ?? ""}», incluidos actividad, universos y asignaciones. No se combinan resultados.`}
-      warning="Se perderán los cambios posteriores que no estén en el punto, incluidas temporadas y resultados. Descarga primero el respaldo completo actual. La copia automática de recuperación depende del almacenamiento disponible; si falla su escritura, la restauración se aborta."
+      warning={server
+        ? "Se perderán los cambios posteriores que no estén en el punto, incluidas temporadas y resultados. Descarga primero el respaldo completo actual: con sesión no hay copia automática de recuperación."
+        : "Se perderán los cambios posteriores que no estén en el punto, incluidas temporadas y resultados. Descarga primero el respaldo completo actual. La copia automática de recuperación depende del almacenamiento disponible; si falla su escritura, la restauración se aborta."}
       details={comparison && <div className="checkpoint-comparison" aria-label="Comparación con la biblioteca actual">
         <p>Torneos en ambos: {ids(comparison.sharedTournamentIds)}</p><p>Exclusivos del punto: {ids(comparison.checkpointOnlyIds)}</p><p>Exclusivos actuales que se retirarán: {ids(comparison.currentOnlyIds)}</p>
         <p>Torneos con cambios: {ids(comparison.changedTournamentIds)}</p><p>IDs con diferente competición o temporada: {ids(comparison.differentSeasonIds)}</p>
