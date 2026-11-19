@@ -923,3 +923,15 @@ button { cursor: pointer; }
 .planning-preview { margin-block:14px; padding:14px; min-width:0; border:1px solid #ccd3d8; border-radius:8px; }
 .planning-preview button { margin:3px; }
 @media(max-width:760px){.season-planning .competition-controls { grid-template-columns:minmax(0,1fr); }}
+
+/* Cuenta (fase 5F): el panel flota sobre la página para no alterar la cabecera. */
+.account-panel { position: fixed; top: 90px; right: 16px; z-index: 40; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 110px); overflow: auto; display: grid; gap: 12px; padding: 18px; border: 1px solid #d1dacb; border-radius: 6px; background: #fff; box-shadow: 0 18px 40px rgba(23, 33, 27, .16); }
+.account-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account-panel-heading h2 { margin: 0; font-size: 18px; }
+.account-panel-note { margin: 0; color: var(--muted); font-size: 13px; }
+.account-panel-modes { display: flex; gap: 6px; }
+.account-panel-modes button[aria-pressed="true"] { border-color: var(--green); background: #eaf0e3; color: var(--green); }
+.account-panel form { display: grid; gap: 10px; }
+.account-panel label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+.account-panel input { min-width: 0; }
+.account-access-button { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

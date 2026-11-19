@@ -16,6 +16,8 @@ import {HeadToHeadAccess} from "./components/head-to-head-access";
 import {clubOccurrenceKey} from "@cancha/core/application/services/club-history";
 import { reviewContinentalEdition, confirmContinentalEdition } from "@cancha/core/application/use-cases/prepare-continental-edition";
 import { SessionDraftProvider, useClearSessionDrafts } from "./session-drafts";
+import { AccountProvider } from "./account-context";
+import { AccountAccess } from "./components/account-access";
 import { DeferredPanel } from "./components/deferred-panel";
 import { publishedSeasonSource } from "../infrastructure/external-services/load-official-league-source";
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
@@ -110,7 +112,7 @@ export interface AppProps {
 }
 
 export function App({ libraryBackend }: AppProps = {}) {
-  return <SessionDraftProvider><Application libraryBackend={libraryBackend} /></SessionDraftProvider>;
+  return <AccountProvider><SessionDraftProvider><Application libraryBackend={libraryBackend} /></SessionDraftProvider></AccountProvider>;
 }
 
 const SportsDecisionsCenter = lazy(()=>import("./components/sports-decisions-center").then(m=>({default:m.SportsDecisionsCenter})));
@@ -1211,6 +1213,7 @@ function Application({ libraryBackend }: AppProps) {
               Crear torneo
             </button>
           )}
+          <AccountAccess />
         </div>
         {tournament && screen === "tournament" && (
           <span className="topbar-active-tournament" title={tournament.name}>

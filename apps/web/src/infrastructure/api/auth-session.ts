@@ -3,6 +3,9 @@ import {
   type GraphqlClient,
   type GraphqlVariables,
 } from "./graphql-client";
+import { hasSessionHint, sessionHintKey } from "./session-hint";
+
+export { sessionHintKey };
 
 /**
  * Sesión de la cuenta en el navegador (fase 5D).
@@ -20,7 +23,6 @@ import {
  *   el modo sin sesión no toca la red.
  */
 
-export const sessionHintKey = "cancha.session.hint";
 export const authRefreshLockName = "cancha.auth-refresh";
 /** Se refresca antes de que venza para no enviar un token a punto de expirar. */
 const refreshMarginMs = 30_000;
@@ -98,11 +100,7 @@ export class AuthSession {
 
   /** ¿Hubo una sesión en este navegador? (no implica que siga vigente). */
   hasHint(): boolean {
-    try {
-      return this.storage?.getItem(sessionHintKey) === "1";
-    } catch {
-      return false;
-    }
+    return hasSessionHint(this.storage);
   }
 
   subscribe(listener: AuthSessionListener): () => void {
