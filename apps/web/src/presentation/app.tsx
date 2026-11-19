@@ -18,6 +18,7 @@ import { reviewContinentalEdition, confirmContinentalEdition } from "@cancha/cor
 import { SessionDraftProvider, useClearSessionDrafts } from "./session-drafts";
 import { AccountProvider, useAccount } from "./account-context";
 import { AccountAccess } from "./components/account-access";
+import { localLibraryNeedsMigration } from "../infrastructure/persistence/local-library-migration";
 import { DeferredPanel } from "./components/deferred-panel";
 import { publishedSeasonSource } from "../infrastructure/external-services/load-official-league-source";
 import { lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -102,6 +103,7 @@ const FixtureList = lazy(() => import("./components/fixture-list").then(module =
 const ImportOfficialTournament = lazy(() => import("./components/import-official-tournament").then(module => ({ default: module.ImportOfficialTournament })));
 const MatchCalendar = lazy(() => import("./components/match-calendar").then(module => ({ default: module.MatchCalendar })));
 const CalendarProgrammingCenter = lazy(() => import("./components/calendar-programming-center").then(module => ({ default: module.CalendarProgrammingCenter })));
+const AccountMigration = lazy(() => import("./components/account-migration").then(module => ({ default: module.AccountMigration })));
 const SecondDivisionPanel = lazy(() => import("./components/second-division-panel").then(module => ({ default: module.SecondDivisionPanel })));
 
 export interface AppProps {
@@ -138,12 +140,14 @@ function LibraryHost({ libraryBackend }: AppProps) {
   const userId = account?.status === "signed-in" ? account.user?.id ?? null : null;
   const [remote, setRemote] = useState<SessionLibrary | null>(null);
   const [attempt, setAttempt] = useState(0);
+  /** Usuario para el que ya se resolvió (o se pospuso) la migración en este ingreso. */
+  const [migrationHandledFor, setMigrationHandledFor] = useState<string | null>(null);
   const accountRef = useRef(account);
   accountRef.current = account;
 
   useEffect(() => {
     const current = accountRef.current;
-    if (!userId || !current) { setRemote(null); return; }
+    if (!userId || !current) { setRemote(null); setMigrationHandledFor(null); return; }
     let active = true;
     let loaded: (LibraryBackend & { dispose(): void }) | null = null;
     setRemote(null);
@@ -172,6 +176,13 @@ function LibraryHost({ libraryBackend }: AppProps) {
         <p>Puedes reintentar o cerrar sesión desde Cuenta para usar la biblioteca de este navegador.</p>
       </div>
       <button type="button" onClick={() => setAttempt(value => value + 1)}>Reintentar</button>
+    </SessionShell>;
+  }
+  if (migrationHandledFor !== userId && localLibraryNeedsMigration(userId)) {
+    return <SessionShell>
+      <DeferredPanel fallback={<p role="status">Cargando…</p>}>
+        <AccountMigration userId={userId} backend={remote.backend} onDone={() => setMigrationHandledFor(userId)} />
+      </DeferredPanel>
     </SessionShell>;
   }
   return <SessionDraftProvider key={`session:${userId}`}>

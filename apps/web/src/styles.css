@@ -936,3 +936,7 @@ button { cursor: pointer; }
 .account-panel input { min-width: 0; }
 .account-access-button { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-shell { display: grid; gap: 12px; max-width: 640px; padding-block: 32px; }
+.account-migration { display: grid; gap: 12px; }
+.account-migration h2 { margin: 0; }
+.account-migration-replace { display: grid; gap: 8px; padding: 12px; border: 1px solid #e4c9c0; border-radius: 6px; }
+.account-migration-replace label { display: flex; gap: 8px; align-items: flex-start; }
