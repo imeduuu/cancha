@@ -6,9 +6,20 @@
 # La versión debe coincidir con config.mongodbMemoryServer.version de
 # apps/api/package.json (binario de las pruebas).
 #
-# Pendiente (fase 8): el miembro del replica set se anuncia como localhost:27017.
-# Sirve para conectarse desde el host (directConnection=true), pero no desde otro
-# contenedor (la API dockerizada): habrá que anunciar el nombre del servicio.
+# El miembro del replica set se anuncia como localhost:27017. Desde el host
+# (npm run dev:api) eso es correcto. Desde otro contenedor, "localhost" sería ese
+# contenedor, así que la API dockerizada se conecta a mongo:27017 con
+# directConnection=true: el driver habla sólo con ese nodo y no usa la lista de
+# miembros anunciada (con un solo nodo, que es el primario, las transacciones
+# funcionan igual). No se reconfigura el replica set: cambiar el host anunciado
+# afectaría al volumen existente y rompería la conexión desde el host.
+#
+# API en contenedor (opcional, perfil "api"; ver docs/deployment.md):
+#   export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")"
+#   docker compose --profile api up -d --build --wait
+#   curl http://localhost:3000/health
+#   docker compose --profile api down        # sin --volumes: conserva los datos
+# Sin --profile api, `npm run db:up` sólo levanta MongoDB, como siempre.
 name: cancha
 
 services:
@@ -32,6 +43,33 @@ services:
       retries: 30
       start_period: 10s
     restart: unless-stopped
+
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: cancha-api:local
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      # 3000 lo usa también `npm run dev:api`: no corras ambos a la vez.
+      - "3000:3000"
+    environment:
+      # Igual que en producción: la validación de entorno se ejerce de verdad.
+      NODE_ENV: production
+      PORT: "3000"
+      MONGODB_URI: mongodb://mongo:27017/?replicaSet=rs0&directConnection=true
+      MONGODB_DB: cancha
+      # Desde tu shell, nunca escrito aquí (ver el comentario de arriba). No se usa
+      # ${...:?}: Compose interpola todo el archivo aunque el perfil no esté
+      # activo y rompería `npm run db:up`. Si falta, la API no arranca y su log
+      # dice "JWT_ACCESS_SECRET es obligatoria en producción".
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-}
+      # Origen https de prueba: producción no acepta http ni localhost.
+      CORS_ORIGINS: https://cancha.localhost.test
+      TRUST_PROXY: "0"
 
 volumes:
   mongo-data:

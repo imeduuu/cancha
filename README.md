@@ -185,7 +185,7 @@ La web con sesión no los necesita: los ejecuta sobre su copia en memoria y env�
 
 ### MongoDB
 
-- `docker-compose.yml` (raíz): imagen `mongo:8.0.38` con `--replSet rs0`, volumen `cancha-mongo-data` y un healthcheck que inicia el replica set la primera vez. Las transacciones de MongoDB exigen un replica set. `npm run db:up` lo levanta y espera a que esté sano; `npm run db:down` lo detiene sin borrar el volumen; `npm run db:reset` borra el volumen y levanta una base vacía. El miembro se anuncia como `localhost:27017`, válido para conectarse desde el host con `directConnection=true`.
+- `docker-compose.yml` (raíz): imagen `mongo:8.0.38` con `--replSet rs0`, volumen `cancha-mongo-data` y un healthcheck que inicia el replica set la primera vez. Las transacciones de MongoDB exigen un replica set. `npm run db:up` lo levanta y espera a que esté sano; `npm run db:down` lo detiene sin borrar el volumen; `npm run db:reset` borra el volumen y levanta una base vacía. El miembro se anuncia como `localhost:27017`, válido para conectarse desde el host con `directConnection=true`. La API en contenedor (perfil `api`, abajo) se conecta a `mongo:27017` también con `directConnection=true`: el driver habla sólo con ese nodo y no usa el host anunciado, así que no hace falta reconfigurar el replica set ni tocar el volumen.
 - `MongoTournamentRepository` (`apps/api/src/infrastructure/persistence/`) guarda la biblioteca de torneos con las mismas validaciones y garantías que el adaptador de `localStorage`, pero con transacciones reales: `saveWithActivity`, `saveManyWithActivity`, `recordActivity` y `deleteById` escriben el torneo y su evento de actividad en una sola transacción o no escriben nada.
 - **Biblioteca por usuario**: cada usuario tiene su propia biblioteca, historial, torneo activo y versión de biblioteca. Todos los documentos llevan `_id: { userId, id }`, y el usuario sale siempre de la sesión, nunca de un argumento. Un torneo de otro usuario responde `NOT_FOUND`, igual que uno inexistente, para no revelar que existe. Dos usuarios pueden tener torneos con el mismo nombre e incluso el mismo id (al importar el archivo del otro) sin interferir.
 - Colecciones: `tournaments` (un documento por torneo, `_id` = `{ userId, id }`, `_version`, `_saveSeq`, `_savedAt`), `activity` (`_id` = `{ userId, id del evento }`, `_seq` = orden de registro), `counters` (secuencias por usuario) y `library_state` (torneo activo y versión de la biblioteca de cada usuario). Índices por usuario: `tournaments` por `_id.userId` + `_saveSeq`, `activity` por `_id.userId` + `_seq` (único) y por `_id.userId` + `tournamentId` + `_seq`; se crean al arrancar la API. Autenticación: `users` (email único), `sessions` (una por login, revocable) y `refresh_tokens` (hash del token, un solo uso); sus índices, incluidos los TTL que limpian lo vencido, se crean antes del primer registro o login.
@@ -199,6 +199,28 @@ La web con sesión no los necesita: los ejecuta sobre su copia en memoria y env�
   Si el caso de uso lanza, no se escribe nada; sólo se conservan los eventos de rechazo. Un conflicto sólo de biblioteca se reintenta hasta 3 veces.
 - **Suite de contrato**: `packages/core/src/test-utils/tournament-repository-contract.ts` define en 13 casos lo que debe cumplir cualquier repositorio de la biblioteca: guardar y leer sin pérdidas, escrituras coordinadas con el historial, operaciones de varios torneos sin escrituras parciales, eliminación y torneo activo. Se ejecuta contra `LocalStorageTournamentRepository` (web), `MongoTournamentRepository` e `InMemoryTournamentRepository` (API); los tres la cumplen completa.
 - Pruebas: `npm test` usa, una sola vez por corrida, [mongodb-memory-server](https://github.com/typegoose/mongodb-memory-server) (`mongod` real en modo replica set), sin Docker. La versión del binario está fijada en `config.mongodbMemoryServer.version` de `apps/api/package.json` (la misma que la imagen de Docker; cámbialas juntas). La primera ejecución descarga el binario (~80 MB) a `~/.cache/mongodb-binaries`; en CI conviene cachear esa carpeta o fijarla con `MONGOMS_DOWNLOAD_DIR`.
+
+
+### API en contenedor
+
+`apps/api/Dockerfile` (multi-stage, contexto = raíz del repo) compila core, `@cancha/official-source-proxy` y la API, y deja una imagen final con:
+
+- `node:22.23.5-bookworm-slim`: glibc, para usar los binarios precompilados de `argon2`.
+- Sólo dependencias de producción (`npm ci --omit=dev -w @cancha/api`) más los `dist/` de los tres paquetes. `typescript` entra porque `@nestjs/graphql` lo declara como *peer*.
+- Usuario `node` (no root), `NODE_ENV=production`, puerto 3000 y `HEALTHCHECK` contra `GET /health` con `fetch` de Node (la imagen no trae curl).
+- `.dockerignore` en la raíz: fuera `node_modules`, `dist`, `.env*`, `.git`, docs y la web (salvo su `package.json`, que `npm ci` necesita).
+
+Prueba local con el perfil `api` de `docker-compose.yml`, que `npm run db:up` no activa. El secreto sólo vive en tu shell; si falta, la API no arranca y el log dice "JWT_ACCESS_SECRET es obligatoria en producción".
+
+```bash
+# Git Bash; en PowerShell: $env:JWT_ACCESS_SECRET = node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")"
+docker compose --profile api up -d --build --wait   # construye la imagen, espera mongo y api sanos
+curl -i http://localhost:3000/health                # 200 {"status":"ok",...,"mongo":{"status":"up",...}}
+docker compose --profile api down                   # sin --volumes: conserva cancha-mongo-data
+```
+
+El servicio usa `NODE_ENV=production`, así que se ejerce la validación real de producción: `CORS_ORIGINS` es un origen `https` de prueba y la cookie es `Secure`. Sirve para `/health` y para GraphQL con `curl`, no para la web en `http://localhost`. Usa la base `cancha` de tu MongoDB local, la misma de `dev:api`, y ocupa el puerto 3000: no lo ejecutes junto a `npm run dev:api`.
 
 ## Importadores: cobertura, validación y reimportación
 

@@ -1,0 +1,37 @@
+# Contexto de `docker build -f apps/api/Dockerfile .` (raíz del monorepo).
+# Sólo entra lo que la imagen de la API necesita: manifiestos y fuentes de
+# packages/core, packages/official-source-proxy y apps/api (+ package.json de
+# apps/web para npm ci). Nunca secretos ni artefactos locales.
+
+# Dependencias y builds locales (se reconstruyen dentro de la imagen)
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/.cache
+
+# Secretos y configuración local: la configuración entra por variables de entorno
+**/.env
+**/.env.*
+
+# Control de versiones, CI y editor
+.git
+.github
+.vscode
+.idea
+
+# Documentación y reportes
+docs
+**/*.md
+**/coverage
+**/playwright-report*
+**/test-results*
+**/*.log
+
+# La web sólo aporta su package.json (workspace declarado en la raíz)
+apps/web/*
+!apps/web/package.json
+
+# Archivos de Docker
+**/Dockerfile
+.dockerignore
+docker-compose.yml
