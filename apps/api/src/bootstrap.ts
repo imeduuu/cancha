@@ -22,6 +22,9 @@ export function configureApp(app: INestApplication): void {
   const express = app as NestExpressApplication;
   const config = app.get<ConfigService<ApiEnvironment, true>>(ConfigService);
   const origins = config.get("CORS_ORIGINS", { infer: true });
+  // Siempre un número de saltos (env.validation lo exige): Express confía sólo en
+  // las últimas N entradas de X-Forwarded-For y req.ip es la anterior a ellas.
+  // Nunca `true`, que tomaría la primera entrada (la que escribe el cliente).
   express.set("trust proxy", config.get("TRUST_PROXY", { infer: true }));
   express.enableCors({
     origin: [...origins],

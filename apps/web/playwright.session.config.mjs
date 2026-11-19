@@ -17,7 +17,7 @@ export default defineConfig({
   projects: [{ name: "chromium-session" }],
   webServer: [
     {
-      command: "npm run build -w @cancha/core && npm run build -w @cancha/api && node apps/api/scripts/session-e2e-api.mjs",
+      command: "npm run build -w @cancha/core -w @cancha/official-source-proxy && npm run build -w @cancha/api && node apps/api/scripts/session-e2e-api.mjs",
       cwd: "../..",
       url: `http://127.0.0.1:${apiPort}/health`,
       env: {

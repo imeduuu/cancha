@@ -1,7 +1,8 @@
 {
   // Build de la API (CLI de Nest). Resolución de Node real: @cancha/core se
   // resuelve a packages/core/dist (condiciones "types"/"default"), así que
-  // hace falta `npm run build -w @cancha/core` antes de compilar.
+  // hace falta `npm run build -w @cancha/core -w @cancha/official-source-proxy`
+  // antes de compilar.
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],

@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import type { INestApplication } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { configureApp } from "../bootstrap.js";
 import { startTestReplicaSet, type TestReplicaSet } from "./mongo-replica-set.js";
@@ -38,6 +39,12 @@ export interface GraphqlTestApp {
   stop(): Promise<void>;
 }
 
+/** Proveedor que una prueba reemplaza (p. ej. los destinos del proxy de fuentes oficiales). */
+export interface ProviderOverride {
+  readonly provide: unknown;
+  readonly useValue: unknown;
+}
+
 export const testPassword = "contraseña-de-prueba-segura";
 
 const authFields = "accessToken accessTokenExpiresAt user { id email createdAt }";
@@ -52,8 +59,13 @@ export function refreshCookieOf(setCookie: readonly string[]): string | undefine
  * compartido, con la misma configuración HTTP que main.ts y un cliente GraphQL
  * de supertest autenticado. Una app por archivo de prueba: ConfigModule lee
  * process.env al importar AppModule (`env` permite ajustar variables).
+ * `overrides` reemplaza proveedores con Test.createTestingModule.
  */
-export async function startGraphqlApp(prefix: string, env: Record<string, string> = {}): Promise<GraphqlTestApp> {
+export async function startGraphqlApp(
+  prefix: string,
+  env: Record<string, string> = {},
+  overrides: readonly ProviderOverride[] = [],
+): Promise<GraphqlTestApp> {
   const replicaSet: TestReplicaSet = await startTestReplicaSet();
   Object.assign(process.env, {
     NODE_ENV: "test",
@@ -61,10 +73,18 @@ export async function startGraphqlApp(prefix: string, env: Record<string, string
     MONGODB_DB: `${prefix}_${process.pid}_${Date.now()}`,
     // Límite alto: sólo auth-rate-limit.e2e lo prueba (con su propio valor).
     AUTH_RATE_LIMIT: "1000",
+    // Valores fijos para que una prueba anterior del mismo worker no los deje cambiados.
+    TRUST_PROXY: "0",
+    OFFICIAL_SOURCE_RATE_LIMIT: "1000",
     ...env,
   });
   const { AppModule } = await import("../app.module.js");
-  const app = await NestFactory.create(AppModule, { logger: false, bodyParser: false });
+  const app = overrides.length === 0
+    ? await NestFactory.create(AppModule, { logger: false, bodyParser: false })
+    : await overrides
+      .reduce((builder, { provide, useValue }) => builder.overrideProvider(provide).useValue(useValue), Test.createTestingModule({ imports: [AppModule] }))
+      .compile()
+      .then(moduleRef => moduleRef.createNestApplication({ logger: false, bodyParser: false }));
   configureApp(app);
   await app.init();
 

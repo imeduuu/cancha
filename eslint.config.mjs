@@ -84,4 +84,37 @@ export default [
       ] }],
     },
   },
+  {
+    // El proxy de fuentes oficiales es herramienta de servidor/desarrollo (Vite,
+    // verify:live): el bundle de la web nunca lo incluye.
+    files: ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [
+        {
+          regex: "(^|/)packages/",
+          message: "Importa el núcleo como @cancha/core/..., no con rutas relativas entre paquetes.",
+        },
+        {
+          regex: "^@cancha/official-source-proxy(/|$)",
+          message: "apps/web/src no puede importar el proxy de fuentes oficiales: sólo vite.config.ts y scripts/.",
+        },
+      ] }],
+    },
+  },
+  {
+    // Paquete independiente: sólo Node y sus propios módulos; nada de core, api ni web.
+    files: ["packages/official-source-proxy/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [
+        {
+          regex: "^(?!\\.{1,2}/|node:|vitest(/|$)|tsdown$)",
+          message: "@cancha/official-source-proxy sólo puede importar módulos propios (rutas relativas), node:* y vitest.",
+        },
+        {
+          regex: "(^|/)(apps|packages)/|^@cancha/",
+          message: "@cancha/official-source-proxy no puede depender de core, api ni web.",
+        },
+      ] }],
+    },
+  },
 ];

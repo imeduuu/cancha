@@ -7,6 +7,7 @@ import { HealthModule } from "./health/health.module.js";
 import { TournamentPersistenceModule } from "./infrastructure/persistence/tournament-persistence.module.js";
 import { ApiGraphqlModule } from "./graphql/graphql.module.js";
 import { LibraryModule } from "./library/library.module.js";
+import { OfficialSourcesModule } from "./official-sources/official-sources.module.js";
 import { SaveCheckpointsModule } from "./save-checkpoints/save-checkpoints.module.js";
 
 @Module({
@@ -25,6 +26,7 @@ import { SaveCheckpointsModule } from "./save-checkpoints/save-checkpoints.modul
     LibraryModule,
     ApiGraphqlModule,
     SaveCheckpointsModule,
+    OfficialSourcesModule,
   ],
 })
 export class AppModule {}

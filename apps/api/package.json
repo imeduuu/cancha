@@ -20,6 +20,7 @@
     "@apollo/server": "5.5.1",
     "@as-integrations/express5": "1.1.2",
     "@cancha/core": "*",
+    "@cancha/official-source-proxy": "*",
     "@nestjs/apollo": "14.1.2",
     "@nestjs/common": "12.5.1",
     "@nestjs/config": "12.1.1",

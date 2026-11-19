@@ -1,3 +1,5 @@
+import { defaultOfficialSourceLimits } from "@cancha/official-source-proxy";
+
 export const nodeEnvironments = ["development", "test", "production"] as const;
 export type NodeEnvironment = (typeof nodeEnvironments)[number];
 
@@ -20,11 +22,26 @@ export interface ApiEnvironment {
   /** Intentos por IP y por operación (register, login, refreshToken) en cada ventana. */
   readonly AUTH_RATE_LIMIT: number;
   readonly AUTH_RATE_TTL_SECONDS: number;
-  /** Valor de `trust proxy` de Express: saltos de proxy confiables (0 = ninguno). */
+  /**
+   * Valor de `trust proxy` de Express: número de saltos de proxy propios entre el
+   * cliente y la API (0 = ninguno). Siempre un entero: nunca `true` (confiaría en
+   * cualquier X-Forwarded-For) ni listas de IPs.
+   */
   readonly TRUST_PROXY: number;
+  /** Proxy de fuentes oficiales (fase 6, docs/official-source-proxy.md). */
+  readonly OFFICIAL_SOURCE_TIMEOUT_MS: number;
+  readonly OFFICIAL_SOURCE_MAX_BYTES: number;
+  /** 0 desactiva la caché. */
+  readonly OFFICIAL_SOURCE_CACHE_TTL_SECONDS: number;
+  readonly OFFICIAL_SOURCE_CACHE_MAX_ENTRIES: number;
+  readonly OFFICIAL_SOURCE_CACHE_MAX_BYTES: number;
+  /** Consultas por IP en cada ventana (cuenta también los aciertos de caché). */
+  readonly OFFICIAL_SOURCE_RATE_LIMIT: number;
+  readonly OFFICIAL_SOURCE_RATE_TTL_SECONDS: number;
 }
 
 const defaultPort = 3000;
+const mebibyte = 1024 * 1024;
 const defaultDatabase = "cancha";
 // Restricciones de nombres de base de datos de MongoDB (Windows incluido).
 const invalidDatabaseName = /[/\\. "$*<>:|?]/;
@@ -137,6 +154,15 @@ export function validateEnvironment(raw: Record<string, unknown>): ApiEnvironmen
   const rateTtl = integer(raw.AUTH_RATE_TTL_SECONDS, "AUTH_RATE_TTL_SECONDS", 60, 1, 86_400, problems);
   const trustProxy = integer(raw.TRUST_PROXY, "TRUST_PROXY", 0, 0, 10, problems);
 
+  const sourceDefaults = defaultOfficialSourceLimits;
+  const sourceTimeout = integer(raw.OFFICIAL_SOURCE_TIMEOUT_MS, "OFFICIAL_SOURCE_TIMEOUT_MS", sourceDefaults.timeoutMs, 1000, 120_000, problems);
+  const sourceMaxBytes = integer(raw.OFFICIAL_SOURCE_MAX_BYTES, "OFFICIAL_SOURCE_MAX_BYTES", sourceDefaults.maxResponseBytes, 1024, 64 * mebibyte, problems);
+  const sourceCacheTtl = integer(raw.OFFICIAL_SOURCE_CACHE_TTL_SECONDS, "OFFICIAL_SOURCE_CACHE_TTL_SECONDS", sourceDefaults.cacheTtlMs / 1000, 0, 86_400, problems);
+  const sourceCacheEntries = integer(raw.OFFICIAL_SOURCE_CACHE_MAX_ENTRIES, "OFFICIAL_SOURCE_CACHE_MAX_ENTRIES", sourceDefaults.cacheMaxEntries, 1, 10_000, problems);
+  const sourceCacheBytes = integer(raw.OFFICIAL_SOURCE_CACHE_MAX_BYTES, "OFFICIAL_SOURCE_CACHE_MAX_BYTES", sourceDefaults.cacheMaxBytes, mebibyte, 1024 * mebibyte, problems);
+  const sourceRateLimit = integer(raw.OFFICIAL_SOURCE_RATE_LIMIT, "OFFICIAL_SOURCE_RATE_LIMIT", sourceDefaults.rateLimit, 1, 100_000, problems);
+  const sourceRateTtl = integer(raw.OFFICIAL_SOURCE_RATE_TTL_SECONDS, "OFFICIAL_SOURCE_RATE_TTL_SECONDS", sourceDefaults.rateWindowMs / 1000, 1, 86_400, problems);
+
   if (problems.length > 0) {
     throw new Error(`Configuración inválida de la API:\n- ${problems.join("\n- ")}`);
   }
@@ -154,5 +180,12 @@ export function validateEnvironment(raw: Record<string, unknown>): ApiEnvironmen
     AUTH_RATE_LIMIT: rateLimit,
     AUTH_RATE_TTL_SECONDS: rateTtl,
     TRUST_PROXY: trustProxy,
+    OFFICIAL_SOURCE_TIMEOUT_MS: sourceTimeout,
+    OFFICIAL_SOURCE_MAX_BYTES: sourceMaxBytes,
+    OFFICIAL_SOURCE_CACHE_TTL_SECONDS: sourceCacheTtl,
+    OFFICIAL_SOURCE_CACHE_MAX_ENTRIES: sourceCacheEntries,
+    OFFICIAL_SOURCE_CACHE_MAX_BYTES: sourceCacheBytes,
+    OFFICIAL_SOURCE_RATE_LIMIT: sourceRateLimit,
+    OFFICIAL_SOURCE_RATE_TTL_SECONDS: sourceRateTtl,
   };
 }

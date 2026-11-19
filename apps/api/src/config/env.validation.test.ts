@@ -20,6 +20,13 @@ describe("validateEnvironment", () => {
       AUTH_RATE_LIMIT: 10,
       AUTH_RATE_TTL_SECONDS: 60,
       TRUST_PROXY: 0,
+      OFFICIAL_SOURCE_TIMEOUT_MS: 20_000,
+      OFFICIAL_SOURCE_MAX_BYTES: 5 * 1024 * 1024,
+      OFFICIAL_SOURCE_CACHE_TTL_SECONDS: 600,
+      OFFICIAL_SOURCE_CACHE_MAX_ENTRIES: 200,
+      OFFICIAL_SOURCE_CACHE_MAX_BYTES: 64 * 1024 * 1024,
+      OFFICIAL_SOURCE_RATE_LIMIT: 300,
+      OFFICIAL_SOURCE_RATE_TTL_SECONDS: 60,
     });
   });
 
@@ -98,6 +105,48 @@ describe("validateEnvironment", () => {
       expect(env).toMatchObject({ REFRESH_TOKEN_TTL_DAYS: 7, AUTH_RATE_LIMIT: 3, AUTH_RATE_TTL_SECONDS: 10, TRUST_PROXY: 1 });
       expect(() => validateEnvironment({ MONGODB_URI: uri, AUTH_RATE_LIMIT: "0" })).toThrow(/AUTH_RATE_LIMIT debe ser un entero/);
       expect(() => validateEnvironment({ MONGODB_URI: uri, REFRESH_TOKEN_TTL_DAYS: "1.5" })).toThrow(/REFRESH_TOKEN_TTL_DAYS/);
+    });
+
+    // Express acepta true, "loopback" o listas de IPs; aquí sólo un número de saltos.
+    // `true` confiaría en cualquier X-Forwarded-For y permitiría falsificar la IP del rate limit.
+    it.each(["true", "false", "loopback", "10.0.0.1", "-1", "11", "1.5"])("rechaza TRUST_PROXY=%s", value => {
+      expect(() => validateEnvironment({ MONGODB_URI: uri, TRUST_PROXY: value })).toThrow(/TRUST_PROXY debe ser un entero entre 0 y 10/);
+    });
+  });
+
+  describe("proxy de fuentes oficiales", () => {
+    it("convierte las variables y permite desactivar la caché con TTL 0", () => {
+      const env = validateEnvironment({
+        MONGODB_URI: uri,
+        OFFICIAL_SOURCE_TIMEOUT_MS: "5000",
+        OFFICIAL_SOURCE_MAX_BYTES: "2097152",
+        OFFICIAL_SOURCE_CACHE_TTL_SECONDS: "0",
+        OFFICIAL_SOURCE_CACHE_MAX_ENTRIES: "50",
+        OFFICIAL_SOURCE_CACHE_MAX_BYTES: "16777216",
+        OFFICIAL_SOURCE_RATE_LIMIT: "20",
+        OFFICIAL_SOURCE_RATE_TTL_SECONDS: "30",
+      });
+      expect(env).toMatchObject({
+        OFFICIAL_SOURCE_TIMEOUT_MS: 5000,
+        OFFICIAL_SOURCE_MAX_BYTES: 2_097_152,
+        OFFICIAL_SOURCE_CACHE_TTL_SECONDS: 0,
+        OFFICIAL_SOURCE_CACHE_MAX_ENTRIES: 50,
+        OFFICIAL_SOURCE_CACHE_MAX_BYTES: 16_777_216,
+        OFFICIAL_SOURCE_RATE_LIMIT: 20,
+        OFFICIAL_SOURCE_RATE_TTL_SECONDS: 30,
+      });
+    });
+
+    it.each([
+      ["OFFICIAL_SOURCE_TIMEOUT_MS", "500"],
+      ["OFFICIAL_SOURCE_MAX_BYTES", String(65 * 1024 * 1024)],
+      ["OFFICIAL_SOURCE_CACHE_TTL_SECONDS", "-1"],
+      ["OFFICIAL_SOURCE_CACHE_MAX_ENTRIES", "0"],
+      ["OFFICIAL_SOURCE_CACHE_MAX_BYTES", "1000"],
+      ["OFFICIAL_SOURCE_RATE_LIMIT", "0"],
+      ["OFFICIAL_SOURCE_RATE_TTL_SECONDS", "abc"],
+    ])("rechaza %s=%s", (name, value) => {
+      expect(() => validateEnvironment({ MONGODB_URI: uri, [name]: value })).toThrow(new RegExp(`${name} debe ser un entero`));
     });
   });
 });
