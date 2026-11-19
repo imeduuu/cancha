@@ -29,11 +29,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -48,7 +48,7 @@ jobs:
         run: echo "version=$(node -p "require('./apps/api/package.json').config.mongodbMemoryServer.version")" >> "$GITHUB_OUTPUT"
 
       - name: Caché del binario de MongoDB
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.MONGOMS_DOWNLOAD_DIR }}
           key: mongodb-binaries-${{ runner.os }}-${{ runner.arch }}-${{ steps.mongo.outputs.version }}
@@ -68,11 +68,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -86,7 +86,7 @@ jobs:
 
       - name: Caché de navegadores de Playwright
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
@@ -104,7 +104,7 @@ jobs:
 
       - name: Subir reporte de Playwright
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
