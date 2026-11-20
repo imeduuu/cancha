@@ -135,11 +135,13 @@ Corrige en **Environment** y guarda con **Save, rebuild, and deploy**.
 En [`apps/web/vercel.json`](../apps/web/vercel.json), reemplaza las **5** apariciones de `REEMPLAZAR-URL-DE-LA-API.onrender.com` por el host de tu API del paso 2.2, por ejemplo `cancha-api.onrender.com`. Usa buscar y reemplazar del editor. Queda así:
 
 ```json
-{ "source": "/graphql", "destination": "https://cancha-api.onrender.com/graphql" },
-{ "source": "/official-source/:path*", "destination": "https://cancha-api.onrender.com/official-source/:path*" },
+{ "source": "/graphql(/)?", "destination": "https://cancha-api.onrender.com/graphql" },
+{ "source": "/official-source(/.*)?", "destination": "https://cancha-api.onrender.com/official-source$1" },
 ```
 
-Comprueba que esté completo con `npm test -w @cancha/web -- scripts/vercel-config.test.mjs`: exige las 5 rutas, una sola API con https y el fallback de la SPA al final. Haz commit y push a `main`.
+Comprueba que esté completo con `npm test -w @cancha/web -- scripts/vercel-config.test.mjs`. La prueba compila los rewrites con `@vercel/routing-utils`, la misma librería que usa Vercel, y simula rutas reales: con y sin barra final, el prefijo solo y con query. Exige una sola API con https y el fallback de la SPA al final. Haz commit y push a `main`.
+
+> **No uses `:path*`** en las fuentes oficiales. `"/official-source/:path*"` sólo acepta segmentos no vacíos, así que **no** captura una barra final: `/official-source/ligas/liga-de-primera-mercado-libre/` (las rutas de ANFP terminan en `/`) caía en el fallback y Vercel respondía `index.html` con 200. `(/.*)?` con `$1` captura cualquier subruta, la barra final y el prefijo solo.
 
 ### 3.2 Crear el proyecto
 
@@ -180,7 +182,7 @@ Vercel ejecuta los comandos **dentro de** `apps/web`, pero la web es un workspac
   error TS2307: Cannot find module '@cancha/core/domain/entities/tournament' or its corresponding type declarations.
   ```
 
-- **Rewrites:** `/graphql` y las 4 rutas de fuentes oficiales van primero y se reenvían a la API (Vercel conserva la query y las cookies). La última regla, `/(.*)` → `/index.html`, es el fallback de la SPA. Vercel sirve antes los archivos que existen (`/assets/…`), así que esa regla sólo atrapa rutas sin archivo.
+- **Rewrites:** `/graphql` y las 4 rutas de fuentes oficiales van primero y se reenvían a la API (Vercel conserva la query y las cookies). Para comprobar en producción que una ruta llega a la API, mira la cabecera `X-Render-Origin-Server` (y `X-Cancha-Source-Cache` en las fuentes): `curl -I https://<web>.vercel.app/official-source/ligas/liga-de-primera-mercado-libre/`. Si falta, respondió el fallback de la SPA. La última regla, `/(.*)` → `/index.html`, es el fallback de la SPA. Vercel sirve antes los archivos que existen (`/assets/…`), así que esa regla sólo atrapa rutas sin archivo.
 
 Esta configuración se comprobó simulando el build de Vercel en un clon limpio del repositorio: `npm ci -w @cancha/web` desde la raíz y `npm run build` en `apps/web` construyen el mismo bundle que el build local. Sin `packages/` el build falla con el error de arriba.
 

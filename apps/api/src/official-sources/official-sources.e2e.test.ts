@@ -34,6 +34,19 @@ describe("proxy de fuentes oficiales en la API", () => {
     },
   );
 
+  it.each([
+    ["/official-source", "/"],
+    ["/official-source/", "/"],
+    ["/official-source?j=1", "/?j=1"],
+    ["/third-division-source/?j=1", "/?j=1"],
+    ["/argentina-cup-source/ok/", "/ok/"],
+    ["/brazil-cup-source/ok/?j=3&x=1", "/ok/?j=3&x=1"],
+  ])("%s (prefijo solo o barra final) llega al proxy y pide %s al origen", async (path, upstream) => {
+    const response = await http().get(path);
+    expect(response.status).toBe(200);
+    expect(response.text).toBe(`<p>${upstream}</p>`);
+  });
+
   it("no reenvía la cookie de sesión ni el access token al origen", async () => {
     const response = await http().get("/official-source/ok?privado")
       .set("Authorization", `Bearer ${api.session.accessToken}`)

@@ -30,6 +30,15 @@ Comprobación parcial del 19 de noviembre de 2026 con `--via=proxy`:
 - ANFA Tercera A falló: `calendario_ta.php` respondió **404 también con `--via=direct`**. Es un cambio del sitio, no del proxy, y queda pendiente revisar el importador de ANFA.
 - Ese informe no reemplazó `live-importers-results.json`.
 
+Comprobación completa del 20 de noviembre de 2026 con `--via=direct` y `--via=proxy`: [live-importers-2026-11-20-direct.json](live-importers-2026-11-20-direct.json) y [live-importers-2026-11-20-proxy.json](live-importers-2026-11-20-proxy.json). Tampoco reemplazan `live-importers-results.json`.
+- Los dos modos dan el mismo resultado: **11 importaciones comprobadas y 6 fallos** de 17 rutas. Hubo 25 solicitudes: 23 con HTTP 200 y 2 hacia ANFA, que respondieron 404 directo o 502 a través del proxy.
+- **ANFA Tercera A, Tercera B Norte y Tercera B Sur: el sitio está en mantenimiento.** `anfaterceradivision.cl/` responde 200 con una página "Sitio en mantenimiento" (sólo dirección y correos, sin enlaces) y todos los `assets/php/*.php` (`calendario.php`, `calendario_ta.php?j=…`, `perfil_campeonato_*.php`) responden 404 con cualquier User-Agent. No hay URLs nuevas ni otro formato publicado. El importador conserva el formato anterior y sus validaciones: si el sitio vuelve igual, importa sin cambios. Mientras tanto, ante un 404 explica que ANFA no publica el calendario, y la interfaz muestra «Fuente en mantenimiento» en las dos tarjetas de Tercera, con el botón «Intentar importar» activo.
+- Rechazos de validación, sin relación con el acceso. No se debilitó ninguna validación:
+  - Primera Nacional (ESPN): `La fase torneo-reducido---first-round de ESPN requiere verificar su correspondencia reglamentaria.`
+  - Série B (ESPN): `ESPN publicó más de dos partidos entre Criciúma y Fortaleza.`
+  - Primera B (ANFP): `La fuente oficial publicó partidos sin una fecha identificable.`
+  Quedan pendientes de revisión aparte.
+
 Cada respuesta aceptada pasó por `importOfficialTournament`, las validaciones deportivas y la progresión existentes, con un repositorio aislado que no guarda datos. No se abrió `LocalStorageTournamentRepository`, no se accedió a localStorage y no se modificaron torneos, resultados ni actividad del usuario. Solo se escribieron código, documentación y muestras de pruebas. También se compararon los participantes y marcadores publicados con el resultado de la importación: en las 16 importaciones aceptadas no quedaron encuentros publicados cambiados u omitidos después de las correcciones.
 
 Las capturas técnicas están en [live-importers-results.json](live-importers-results.json), con URL de cada solicitud, hora, HTTP, tamaño y resumen de estructura. [live-importers-before.json](live-importers-before.json) conserva la primera ejecución anterior a las correcciones. No se guardaron respuestas completas con jugadores, fotos u otros campos innecesarios.

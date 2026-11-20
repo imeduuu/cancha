@@ -1,0 +1,1039 @@
+{
+  "checkedAt": "2026-11-20T12:34:16.620Z",
+  "via": "proxy",
+  "libraryAccess": "none; isolated in-memory repository",
+  "results": [
+    {
+      "league": "argentina-primera",
+      "checkedAt": "2026-11-20T12:33:57.738Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "ESPN (API pública)",
+      "sourceUrl": "https://www.espn.com/soccer/fixtures/_/league/arg.1",
+      "teams": 30,
+      "publishedMatches": 503,
+      "phases": [
+        "Torneo Apertura · Fase regular",
+        "Torneo Apertura · Octavos de final",
+        "Torneo Apertura · Cuartos de final",
+        "Torneo Apertura · Semifinales",
+        "Torneo Apertura · Final",
+        "Torneo Clausura · Fase regular",
+        "Torneo Clausura · Octavos de final"
+      ],
+      "groups": [
+        "Zona B",
+        "Zona A"
+      ],
+      "matchesWithScore": 495,
+      "matchesWithSchedule": 503,
+      "matchesByPhase": {
+        "Torneo Apertura · Fase regular": 240,
+        "Torneo Apertura · Octavos de final": 8,
+        "Torneo Apertura · Cuartos de final": 4,
+        "Torneo Apertura · Semifinales": 2,
+        "Torneo Apertura · Final": 1,
+        "Torneo Clausura · Fase regular": 240,
+        "Torneo Clausura · Octavos de final": 8
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 495,
+        "scheduled": 8
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 30,
+      "importedMatches": 503,
+      "sourceIncidents": []
+    },
+    {
+      "league": "argentina-nacional",
+      "checkedAt": "2026-11-20T12:34:00.058Z",
+      "error": "La fase torneo-reducido---first-round de ESPN requiere verificar su correspondencia reglamentaria. No se importaron datos parciales.",
+      "import": "failed",
+      "sourceIncidents": []
+    },
+    {
+      "league": "brasil-primera",
+      "checkedAt": "2026-11-20T12:34:00.623Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "ESPN (API pública)",
+      "sourceUrl": "https://www.espn.com/soccer/fixtures/_/league/bra.1",
+      "teams": 20,
+      "publishedMatches": 380,
+      "phases": [
+        "Brasileirão Série A"
+      ],
+      "groups": [],
+      "matchesWithScore": 350,
+      "matchesWithSchedule": 380,
+      "matchesByPhase": {
+        "Brasileirão Série A": 380
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 350,
+        "scheduled": 30
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 20,
+      "importedMatches": 380,
+      "sourceIncidents": []
+    },
+    {
+      "league": "brasil-serie-b",
+      "checkedAt": "2026-11-20T12:34:01.167Z",
+      "error": "ESPN publicó más de dos partidos entre Criciúma y Fortaleza.",
+      "import": "failed",
+      "sourceIncidents": []
+    },
+    {
+      "league": "libertadores",
+      "checkedAt": "2026-11-20T12:34:01.694Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "ESPN (API pública)",
+      "sourceUrl": "https://www.espn.com/soccer/fixtures/_/league/conmebol.libertadores",
+      "teams": 47,
+      "publishedMatches": 155,
+      "phases": [
+        "Copa Libertadores · Fase de grupos",
+        "Copa Libertadores · Fase previa 1 · Ida",
+        "Copa Libertadores · Fase previa 1 · Vuelta",
+        "Copa Libertadores · Fase previa 2 · Ida",
+        "Copa Libertadores · Fase previa 2 · Vuelta",
+        "Copa Libertadores · Fase previa 3 · Ida",
+        "Copa Libertadores · Fase previa 3 · Vuelta",
+        "Copa Libertadores · Octavos de final · Ida",
+        "Copa Libertadores · Octavos de final · Vuelta",
+        "Copa Libertadores · Cuartos de final · Ida",
+        "Copa Libertadores · Cuartos de final · Vuelta",
+        "Copa Libertadores · Semifinales · Ida",
+        "Copa Libertadores · Semifinales · Vuelta",
+        "Copa Libertadores · Final"
+      ],
+      "groups": [
+        "Group C",
+        "Group G",
+        "Group D",
+        "Group B",
+        "Group A",
+        "Group F",
+        "Group H",
+        "Group E"
+      ],
+      "matchesWithScore": 154,
+      "matchesWithSchedule": 155,
+      "matchesByPhase": {
+        "Copa Libertadores · Fase de grupos": 96,
+        "Copa Libertadores · Fase previa 1 · Ida": 3,
+        "Copa Libertadores · Fase previa 1 · Vuelta": 3,
+        "Copa Libertadores · Fase previa 2 · Ida": 8,
+        "Copa Libertadores · Fase previa 2 · Vuelta": 8,
+        "Copa Libertadores · Fase previa 3 · Ida": 4,
+        "Copa Libertadores · Fase previa 3 · Vuelta": 4,
+        "Copa Libertadores · Octavos de final · Ida": 8,
+        "Copa Libertadores · Octavos de final · Vuelta": 8,
+        "Copa Libertadores · Cuartos de final · Ida": 4,
+        "Copa Libertadores · Cuartos de final · Vuelta": 4,
+        "Copa Libertadores · Semifinales · Ida": 2,
+        "Copa Libertadores · Semifinales · Vuelta": 2,
+        "Copa Libertadores · Final": 1
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 154,
+        "scheduled": 1
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 47,
+      "importedMatches": 155,
+      "sourceIncidents": []
+    },
+    {
+      "league": "sudamericana",
+      "checkedAt": "2026-11-20T12:34:02.164Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "ESPN (API pública)",
+      "sourceUrl": "https://www.espn.com/soccer/fixtures/_/league/conmebol.sudamericana",
+      "teams": 56,
+      "publishedMatches": 157,
+      "phases": [
+        "Copa Sudamericana · Fase de grupos",
+        "Copa Sudamericana · Primera fase",
+        "Copa Sudamericana · Playoff de octavos · Ida",
+        "Copa Sudamericana · Playoff de octavos · Vuelta",
+        "Copa Sudamericana · Octavos de final · Ida",
+        "Copa Sudamericana · Octavos de final · Vuelta",
+        "Copa Sudamericana · Cuartos de final · Ida",
+        "Copa Sudamericana · Cuartos de final · Vuelta",
+        "Copa Sudamericana · Semifinales · Ida",
+        "Copa Sudamericana · Semifinales · Vuelta",
+        "Copa Sudamericana · Final"
+      ],
+      "groups": [
+        "Group G",
+        "Group E",
+        "Group C",
+        "Group A",
+        "Group D",
+        "Group F",
+        "Group H",
+        "Group B"
+      ],
+      "matchesWithScore": 156,
+      "matchesWithSchedule": 157,
+      "matchesByPhase": {
+        "Copa Sudamericana · Fase de grupos": 96,
+        "Copa Sudamericana · Primera fase": 16,
+        "Copa Sudamericana · Playoff de octavos · Ida": 8,
+        "Copa Sudamericana · Playoff de octavos · Vuelta": 8,
+        "Copa Sudamericana · Octavos de final · Ida": 8,
+        "Copa Sudamericana · Octavos de final · Vuelta": 8,
+        "Copa Sudamericana · Cuartos de final · Ida": 4,
+        "Copa Sudamericana · Cuartos de final · Vuelta": 4,
+        "Copa Sudamericana · Semifinales · Ida": 2,
+        "Copa Sudamericana · Semifinales · Vuelta": 2,
+        "Copa Sudamericana · Final": 1
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 156,
+        "scheduled": 1
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 56,
+      "importedMatches": 157,
+      "sourceIncidents": []
+    },
+    {
+      "league": "copa-argentina",
+      "checkedAt": "2026-11-20T12:34:03.454Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "Copa Argentina (sitio oficial)",
+      "sourceUrl": "https://www.copaargentina.org/es/fixture.html",
+      "teams": 64,
+      "publishedMatches": 63,
+      "phases": [
+        "Copa Argentina · 32avos de Final",
+        "Copa Argentina · 16avos de Final",
+        "Copa Argentina · Octavos de Final",
+        "Copa Argentina · Cuartos de Final",
+        "Copa Argentina · Semifinales",
+        "Copa Argentina · Final"
+      ],
+      "groups": [],
+      "matchesWithScore": 62,
+      "matchesWithSchedule": 0,
+      "matchesByPhase": {
+        "Copa Argentina · 32avos de Final": 32,
+        "Copa Argentina · 16avos de Final": 16,
+        "Copa Argentina · Octavos de Final": 8,
+        "Copa Argentina · Cuartos de Final": 4,
+        "Copa Argentina · Semifinales": 2,
+        "Copa Argentina · Final": 1
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "not-published": 63
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 64,
+      "importedMatches": 63,
+      "sourceIncidents": []
+    },
+    {
+      "league": "copa-brasil",
+      "checkedAt": "2026-11-20T12:34:04.652Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "CBF (sitio oficial)",
+      "sourceUrl": "https://www.cbf.com.br/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026",
+      "teams": 126,
+      "publishedMatches": 155,
+      "phases": [
+        "Copa do Brasil · 1ª Fase",
+        "Copa do Brasil · 2ª Fase",
+        "Copa do Brasil · 3ª Fase",
+        "Copa do Brasil · 4ª fase",
+        "Copa do Brasil · 5ª Fase",
+        "Copa do Brasil · Oitavas de Final",
+        "Copa do Brasil · Quartas de Final",
+        "Copa do Brasil · Semi Finais",
+        "Copa do Brasil · Final"
+      ],
+      "groups": [],
+      "matchesWithScore": 154,
+      "matchesWithSchedule": 0,
+      "matchesByPhase": {
+        "Copa do Brasil · 1ª Fase": 14,
+        "Copa do Brasil · 2ª Fase": 44,
+        "Copa do Brasil · 3ª Fase": 24,
+        "Copa do Brasil · 4ª fase": 12,
+        "Copa do Brasil · 5ª Fase": 32,
+        "Copa do Brasil · Oitavas de Final": 16,
+        "Copa do Brasil · Quartas de Final": 8,
+        "Copa do Brasil · Semi Finais": 4,
+        "Copa do Brasil · Final": 1
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "not-published": 155
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 126,
+      "importedMatches": 155,
+      "sourceIncidents": []
+    },
+    {
+      "league": "primera",
+      "checkedAt": "2026-11-20T12:34:08.216Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "Campeonato Chileno",
+      "sourceUrl": "https://www.campeonatochileno.cl/ligas/liga-de-primera-mercado-libre/",
+      "teams": 16,
+      "publishedMatches": 240,
+      "phases": [
+        "Sin fase"
+      ],
+      "groups": [],
+      "matchesWithScore": 216,
+      "matchesWithSchedule": 0,
+      "matchesByPhase": {
+        "Sin fase": 240
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 216,
+        "not-published": 24
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 16,
+      "importedMatches": 240,
+      "sourceIncidents": []
+    },
+    {
+      "league": "primera-b",
+      "checkedAt": "2026-11-20T12:34:10.831Z",
+      "error": "La fuente oficial publicó partidos sin una fecha identificable.",
+      "import": "failed",
+      "sourceIncidents": []
+    },
+    {
+      "league": "segunda",
+      "zone": "ascenso",
+      "checkedAt": "2026-11-20T12:34:12.540Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "Campeonato Chileno",
+      "sourceUrl": "https://www.campeonatochileno.cl/competition/liga-de-segunda-division-panini/",
+      "teams": 7,
+      "publishedMatches": 42,
+      "phases": [
+        "Zona de Ascenso"
+      ],
+      "groups": [],
+      "matchesWithScore": 36,
+      "matchesWithSchedule": 0,
+      "matchesByPhase": {
+        "Zona de Ascenso": 42
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 36,
+        "not-published": 6
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 7,
+      "importedMatches": 42,
+      "sourceIncidents": []
+    },
+    {
+      "league": "segunda",
+      "zone": "descenso",
+      "checkedAt": "2026-11-20T12:34:13.429Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "Campeonato Chileno",
+      "sourceUrl": "https://www.campeonatochileno.cl/competition/liga-de-segunda-division-panini/",
+      "teams": 7,
+      "publishedMatches": 42,
+      "phases": [
+        "Zona de Descenso"
+      ],
+      "groups": [],
+      "matchesWithScore": 36,
+      "matchesWithSchedule": 0,
+      "matchesByPhase": {
+        "Zona de Descenso": 42
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 36,
+        "not-published": 6
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 7,
+      "importedMatches": 42,
+      "sourceIncidents": []
+    },
+    {
+      "league": "copa-chile",
+      "checkedAt": "2026-11-20T12:34:13.810Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "Campeonato Chileno",
+      "sourceUrl": "https://www.campeonatochileno.cl/competition/copa-chile-coca-cola-zero-azucar/",
+      "teams": 32,
+      "publishedMatches": 120,
+      "phases": [
+        "Copa Chile · Grupo A",
+        "Copa Chile · Grupo B",
+        "Copa Chile · Grupo C",
+        "Copa Chile · Grupo D",
+        "Copa Chile · Grupo E",
+        "Copa Chile · Grupo F",
+        "Copa Chile · Grupo G",
+        "Copa Chile · Grupo H",
+        "Copa Chile · Octavos de final · Ida",
+        "Copa Chile · Octavos de final · Vuelta",
+        "Copa Chile · Cuartos de Final · Ida",
+        "Copa Chile · Cuartos de Final · Vuelta"
+      ],
+      "groups": [
+        "Grupo A",
+        "Grupo B",
+        "Grupo C",
+        "Grupo D",
+        "Grupo E",
+        "Grupo F",
+        "Grupo G",
+        "Grupo H"
+      ],
+      "matchesWithScore": 119,
+      "matchesWithSchedule": 0,
+      "matchesByPhase": {
+        "Copa Chile · Grupo A": 12,
+        "Copa Chile · Grupo B": 12,
+        "Copa Chile · Grupo C": 12,
+        "Copa Chile · Grupo D": 12,
+        "Copa Chile · Grupo E": 12,
+        "Copa Chile · Grupo F": 12,
+        "Copa Chile · Grupo G": 12,
+        "Copa Chile · Grupo H": 12,
+        "Copa Chile · Octavos de final · Ida": 8,
+        "Copa Chile · Octavos de final · Vuelta": 8,
+        "Copa Chile · Cuartos de Final · Ida": 4,
+        "Copa Chile · Cuartos de Final · Vuelta": 4
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 119,
+        "not-published": 1
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 32,
+      "importedMatches": 120,
+      "sourceIncidents": []
+    },
+    {
+      "league": "copa-liga",
+      "checkedAt": "2026-11-20T12:34:15.353Z",
+      "adapter": "passed",
+      "season": 2026,
+      "source": "Campeonato Chileno",
+      "sourceUrl": "https://www.campeonatochileno.cl/competition/copa-de-la-liga/",
+      "teams": 16,
+      "publishedMatches": 53,
+      "phases": [
+        "Copa de la Liga · Grupo A",
+        "Copa de la Liga · Grupo B",
+        "Copa de la Liga · Grupo C",
+        "Copa de la Liga · Grupo D",
+        "Copa de la Liga · Semifinales · Ida",
+        "Copa de la Liga · Semifinales · Vuelta",
+        "Copa de la Liga · Final"
+      ],
+      "groups": [
+        "Grupo A",
+        "Grupo B",
+        "Grupo C",
+        "Grupo D"
+      ],
+      "matchesWithScore": 53,
+      "matchesWithSchedule": 0,
+      "matchesByPhase": {
+        "Copa de la Liga · Grupo A": 12,
+        "Copa de la Liga · Grupo B": 12,
+        "Copa de la Liga · Grupo C": 12,
+        "Copa de la Liga · Grupo D": 12,
+        "Copa de la Liga · Semifinales · Ida": 2,
+        "Copa de la Liga · Semifinales · Vuelta": 2,
+        "Copa de la Liga · Final": 1
+      },
+      "duplicateIds": 0,
+      "statuses": {
+        "finished": 53
+      },
+      "coverage": "unknown",
+      "conflicts": [],
+      "changedPublishedMatches": [],
+      "import": "passed",
+      "importedTeams": 16,
+      "importedMatches": 53,
+      "sourceIncidents": []
+    },
+    {
+      "league": "tercera-a",
+      "checkedAt": "2026-11-20T12:34:16.474Z",
+      "error": "ANFA Tercera División ya no publica el calendario de Tercera A Nacional (HTTP 404): su sitio está en mantenimiento. Intenta más tarde o crea el torneo manualmente.",
+      "import": "failed",
+      "sourceIncidents": []
+    },
+    {
+      "league": "tercera-b",
+      "zone": "norte",
+      "checkedAt": "2026-11-20T12:34:16.569Z",
+      "error": "ANFA Tercera División ya no publica el calendario de Tercera B Norte (HTTP 404): su sitio está en mantenimiento. Intenta más tarde o crea el torneo manualmente.",
+      "import": "failed",
+      "sourceIncidents": []
+    },
+    {
+      "league": "tercera-b",
+      "zone": "sur",
+      "checkedAt": "2026-11-20T12:34:16.600Z",
+      "error": "ANFA Tercera División ya no publica el calendario de Tercera B Sur (HTTP 404): su sitio está en mantenimiento. Intenta más tarde o crea el torneo manualmente.",
+      "import": "failed",
+      "sourceIncidents": []
+    }
+  ],
+  "requests": [
+    {
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/arg.1/scoreboard?dates=2026&limit=1000",
+      "via": "direct",
+      "startedAt": "2026-11-20T12:33:57.789Z",
+      "status": 200,
+      "finalUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/arg.1/scoreboard?dates=2026&limit=1000",
+      "bytes": 5366320,
+      "type": "scoreboard",
+      "events": 503,
+      "teams": 30,
+      "duplicateIds": 0,
+      "phases": {
+        "torneo-apertura": 240,
+        "apertura---round-of-16": 8,
+        "apertura---quarterfinals": 4,
+        "apertura---semifinals": 2,
+        "apertura---final": 1,
+        "torneo-clausura": 240,
+        "clausura---round-of-16": 8
+      },
+      "statuses": {
+        "STATUS_FULL_TIME": 490,
+        "STATUS_FINAL_AET": 3,
+        "STATUS_FINAL_PEN": 2,
+        "STATUS_SCHEDULED": 8
+      },
+      "years": {
+        "2026": 503
+      },
+      "pendingTeams": []
+    },
+    {
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/arg.2/scoreboard?dates=2026&limit=1000",
+      "via": "direct",
+      "startedAt": "2026-11-20T12:34:00.058Z",
+      "status": 200,
+      "finalUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/arg.2/scoreboard?dates=2026&limit=1000",
+      "bytes": 6894964,
+      "type": "scoreboard",
+      "events": 664,
+      "teams": 36,
+      "duplicateIds": 0,
+      "phases": {
+        "regular-season": 648,
+        "torneo-reducido---first-round": 7,
+        "championship-final": 1,
+        "torneo-reducido---quarterfinals": 8
+      },
+      "statuses": {
+        "STATUS_FULL_TIME": 654,
+        "STATUS_ABANDONED": 1,
+        "STATUS_SUSPENDED": 1,
+        "STATUS_SCHEDULED": 8
+      },
+      "years": {
+        "2026": 664
+      },
+      "pendingTeams": []
+    },
+    {
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard?dates=2026&limit=1000",
+      "via": "direct",
+      "startedAt": "2026-11-20T12:34:00.623Z",
+      "status": 200,
+      "finalUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.1/scoreboard?dates=2026&limit=1000",
+      "bytes": 3981011,
+      "type": "scoreboard",
+      "events": 383,
+      "teams": 20,
+      "duplicateIds": 0,
+      "phases": {
+        "2026-brasileiro-serie-a": 383
+      },
+      "statuses": {
+        "STATUS_FULL_TIME": 350,
+        "STATUS_POSTPONED": 3,
+        "STATUS_SCHEDULED": 30
+      },
+      "years": {
+        "2026": 383
+      },
+      "pendingTeams": []
+    },
+    {
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.2/scoreboard?dates=2026&limit=1000",
+      "via": "direct",
+      "startedAt": "2026-11-20T12:34:01.168Z",
+      "status": 200,
+      "finalUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/bra.2/scoreboard?dates=2026&limit=1000",
+      "bytes": 4057651,
+      "type": "scoreboard",
+      "events": 385,
+      "teams": 22,
+      "duplicateIds": 0,
+      "phases": {
+        "2026-brasileiro-serie-b": 385
+      },
+      "statuses": {
+        "STATUS_FULL_TIME": 380,
+        "STATUS_SCHEDULED": 5
+      },
+      "years": {
+        "2026": 385
+      },
+      "pendingTeams": [
+        "TBD Home",
+        "TBD Away"
+      ]
+    },
+    {
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/conmebol.libertadores/scoreboard?dates=2026&limit=1000",
+      "via": "direct",
+      "startedAt": "2026-11-20T12:34:01.720Z",
+      "status": 200,
+      "finalUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/conmebol.libertadores/scoreboard?dates=2026&limit=1000",
+      "bytes": 1656702,
+      "type": "scoreboard",
+      "events": 155,
+      "teams": 47,
+      "duplicateIds": 0,
+      "phases": {
+        "first-stage": 6,
+        "second-stage": 16,
+        "third-stage": 8,
+        "group-stage": 96,
+        "round-of-16": 16,
+        "quarterfinals": 8,
+        "semifinals": 4,
+        "final": 1
+      },
+      "statuses": {
+        "STATUS_FULL_TIME": 141,
+        "STATUS_FINAL_PEN": 13,
+        "STATUS_SCHEDULED": 1
+      },
+      "years": {
+        "2026": 155
+      },
+      "pendingTeams": []
+    },
+    {
+      "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/conmebol.sudamericana/scoreboard?dates=2026&limit=1000",
+      "via": "direct",
+      "startedAt": "2026-11-20T12:34:02.164Z",
+      "status": 200,
+      "finalUrl": "https://site.api.espn.com/apis/site/v2/sports/soccer/conmebol.sudamericana/scoreboard?dates=2026&limit=1000",
+      "bytes": 1687090,
+      "type": "scoreboard",
+      "events": 157,
+      "teams": 56,
+      "duplicateIds": 0,
+      "phases": {
+        "first-stage": 16,
+        "group-stage": 96,
+        "knockout-round-playoffs": 16,
+        "round-of-16": 16,
+        "quarterfinals": 8,
+        "semifinals": 4,
+        "final": 1
+      },
+      "statuses": {
+        "STATUS_FINAL_PEN": 9,
+        "STATUS_FULL_TIME": 147,
+        "STATUS_SCHEDULED": 1
+      },
+      "years": {
+        "2026": 157
+      },
+      "pendingTeams": []
+    },
+    {
+      "url": "/argentina-cup-source/es/fixture/feed/editions.json",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:03.486Z",
+      "status": 200,
+      "finalUrl": "/argentina-cup-source/es/fixture/feed/editions.json",
+      "bytes": 13323,
+      "sourceCache": "miss",
+      "type": "json",
+      "keys": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13"
+      ]
+    },
+    {
+      "url": "/argentina-cup-source/es/fixture/feed/14_14-EDICION.json",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:04.193Z",
+      "status": 200,
+      "finalUrl": "/argentina-cup-source/es/fixture/feed/14_14-EDICION.json",
+      "bytes": 55915,
+      "sourceCache": "miss",
+      "type": "json",
+      "keys": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14"
+      ]
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:04.653Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026",
+      "bytes": 380101,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1995",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.423Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1995",
+      "bytes": 583512,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1996",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.424Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1996",
+      "bytes": 1029770,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1997",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.426Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1997",
+      "bytes": 724878,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1998",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.428Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1998",
+      "bytes": 555944,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1999",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.430Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/1999",
+      "bytes": 865556,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2000",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.432Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2000",
+      "bytes": 627764,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2001",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.434Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2001",
+      "bytes": 504036,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2002",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.436Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2002",
+      "bytes": 442821,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2003",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:05.438Z",
+      "status": 200,
+      "finalUrl": "/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/2026/2003",
+      "bytes": 380118,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": true,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/official-source/ligas/liga-de-primera-mercado-libre/",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:08.264Z",
+      "status": 200,
+      "finalUrl": "/official-source/ligas/liga-de-primera-mercado-libre/",
+      "bytes": 1400622,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "Liga de Primera Mercado Libre – Campeonato Chileno",
+      "matchNodes": 96,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": false,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/official-source/competition/campeonato-de-ascenso-caixun-2026/",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:10.832Z",
+      "status": 200,
+      "finalUrl": "/official-source/competition/campeonato-de-ascenso-caixun-2026/",
+      "bytes": 1420808,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "Campeonato de Ascenso Caixun 2026 – Campeonato Chileno",
+      "matchNodes": 80,
+      "tables": 1,
+      "roundSelectors": 1,
+      "hasCbfPhases": false,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/official-source/competition/liga-de-segunda-division-panini/",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:12.540Z",
+      "status": 200,
+      "finalUrl": "/official-source/competition/liga-de-segunda-division-panini/",
+      "bytes": 686536,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "Liga de Segunda División Panini – Campeonato Chileno",
+      "matchNodes": 84,
+      "tables": 2,
+      "roundSelectors": 1,
+      "hasCbfPhases": false,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/official-source/competition/copa-chile-coca-cola-zero-azucar/",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:13.810Z",
+      "status": 200,
+      "finalUrl": "/official-source/competition/copa-chile-coca-cola-zero-azucar/",
+      "bytes": 964780,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "Copa Chile Coca-Cola Zero Azúcar – Campeonato Chileno",
+      "matchNodes": 160,
+      "tables": 8,
+      "roundSelectors": 1,
+      "hasCbfPhases": false,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/official-source/competition/copa-de-la-liga/",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:15.353Z",
+      "status": 200,
+      "finalUrl": "/official-source/competition/copa-de-la-liga/",
+      "bytes": 578043,
+      "sourceCache": "miss",
+      "type": "text/html",
+      "title": "Copa de la Liga – Campeonato Chileno",
+      "matchNodes": 80,
+      "tables": 4,
+      "roundSelectors": 0,
+      "hasCbfPhases": false,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/third-division-source/assets/php/calendario_ta.php",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:16.492Z",
+      "status": 502,
+      "finalUrl": "/third-division-source/assets/php/calendario_ta.php",
+      "bytes": 42,
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": false,
+      "hasArgentinaFeed": false
+    },
+    {
+      "url": "/third-division-source/assets/php/calendario.php",
+      "via": "proxy",
+      "startedAt": "2026-11-20T12:34:16.569Z",
+      "status": 502,
+      "finalUrl": "/third-division-source/assets/php/calendario.php",
+      "bytes": 42,
+      "type": "text/html",
+      "title": "",
+      "matchNodes": 0,
+      "tables": 0,
+      "roundSelectors": 0,
+      "hasCbfPhases": false,
+      "hasArgentinaFeed": false
+    }
+  ]
+}

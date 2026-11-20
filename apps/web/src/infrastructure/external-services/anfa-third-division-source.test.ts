@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnfaThirdDivisionSource } from "./anfa-third-division-source";
+import { AnfaThirdDivisionSource, anfaCalendarUnavailableMessage } from "./anfa-third-division-source";
 
 function calendarPage(scoreMarkup: string): string {
   return `<table class="table table-striped table-responsive table-hover"><tbody>
@@ -47,5 +47,26 @@ describe("AnfaThirdDivisionSource", () => {
 
     await expect(new AnfaThirdDivisionSource().fetchSeason("tercera-a"))
       .rejects.toThrow(/marcador inválido para el partido anfa-j1-local-fc-visitante-fc/);
+  });
+
+  it.each([
+    ["directo", 404, ""],
+    ["a través del proxy", 502, "La fuente oficial respondió con HTTP 404."],
+  ])("explica que ANFA no publica el calendario ante un 404 (%s)", async (_via, status, body) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, { status })));
+
+    await expect(new AnfaThirdDivisionSource().fetchSeason("tercera-b", "norte"))
+      .rejects.toThrow(anfaCalendarUnavailableMessage("Tercera B Norte"));
+  });
+
+  it.each([
+    [502, "La fuente oficial respondió con HTTP 500."],
+    [502, "No se pudo conectar con la fuente oficial."],
+    [500, ""],
+  ])("otros errores (%i %j) conservan el código HTTP", async (status, body) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, { status })));
+
+    await expect(new AnfaThirdDivisionSource().fetchSeason("tercera-a"))
+      .rejects.toThrow(`ANFA Tercera División respondió con HTTP ${status} al consultar Tercera A Nacional.`);
   });
 });

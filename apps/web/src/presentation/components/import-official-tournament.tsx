@@ -16,6 +16,24 @@ import { loadOfficialLeagueSource } from "../../infrastructure/external-services
 import { ConfirmationDialog } from "./confirmation-dialog";
 
 import { NACIONAL_RULES_URL, SERIE_B_RULES_URL } from "@cancha/core/domain/services/second-division-rules";
+
+/**
+ * Aviso para una fuente que hoy no publica datos. El botón sigue activo: si la
+ * fuente vuelve con el mismo formato, se importa sin publicar otra versión.
+ */
+interface SourceAvailability {
+  readonly status: "unavailable";
+  readonly label: string;
+  readonly note: string;
+}
+
+const anfaMaintenance: SourceAvailability = {
+  status: "unavailable",
+  label: "Fuente en mantenimiento",
+  note: "Desde noviembre de 2026, el sitio de ANFA Tercera División está en mantenimiento y no publica calendarios. "
+    + "Puedes intentar importar igual (funcionará cuando el sitio vuelva) o crear el torneo manualmente.",
+};
+
 const officialLeagues = [
   { id: "argentina-nacional", title: "Primera Nacional Argentina 2026",
     description: "Dos zonas, final por el primer ascenso y Torneo Reducido.",
@@ -73,6 +91,7 @@ const officialLeagues = [
     description: "Calendario y resultados oficiales de la categoría nacional.",
     sourceUrl: "https://anfaterceradivision.cl/assets/php/perfil_campeonato_ta.php",
     sourceName: "ANFA Tercera División",
+    availability: anfaMaintenance,
   },
   {
     id: "tercera-b",
@@ -80,6 +99,7 @@ const officialLeagues = [
     description: "Elige la zona norte o sur que quieres importar y trabajar.",
     sourceUrl: "https://anfaterceradivision.cl/assets/php/calendario.php",
     sourceName: "ANFA Tercera División",
+    availability: anfaMaintenance,
     zones: [
       { id: "norte", label: "Zona Norte" },
       { id: "sur", label: "Zona Sur" },
@@ -138,6 +158,7 @@ const officialLeagues = [
   basesUrl?: string;
   rulesUrl?: string;
   zones?: readonly { id: OfficialLeagueZone; label: string }[];
+  availability?: SourceAvailability;
 }>;
 
 type OfficialLeague = (typeof officialLeagues)[number];
@@ -297,6 +318,12 @@ export function ImportOfficialTournament({
             <h4>{league.title}</h4>
             <p>{league.description}</p>
           </div>
+          {"availability" in league && league.availability && (
+            <div className="rules-verification-note official-import-availability" role="note">
+              <strong>{league.availability.label}</strong>
+              <p>{league.availability.note}</p>
+            </div>
+          )}
           <button
             className="official-import-button"
             type="button"
@@ -313,7 +340,9 @@ export function ImportOfficialTournament({
               ? `Consultando ${league.sourceName.split(" ")[0]}…`
               : choosingZoneFor === league.id
                 ? "Cancelar selección"
-                : "Importar / actualizar"}
+                : "availability" in league
+                  ? "Intentar importar"
+                  : "Importar / actualizar"}
           </button>
           {league.zones && choosingZoneFor === league.id && (
             <div

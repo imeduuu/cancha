@@ -197,6 +197,28 @@ async function mapConcurrent<T>(
   return results;
 }
 
+/**
+ * Desde noviembre de 2026 anfaterceradivision.cl muestra una página de
+ * mantenimiento y sus calendarios (`assets/php/*.php`) responden 404. El
+ * importador sigue esperando el formato anterior: si el sitio vuelve igual,
+ * importa sin cambios; mientras tanto, el error lo explica.
+ */
+export function anfaCalendarUnavailableMessage(calendarName: string): string {
+  return `ANFA Tercera División ya no publica el calendario de ${calendarName} (HTTP 404): `
+    + "su sitio está en mantenimiento. Intenta más tarde o crea el torneo manualmente.";
+}
+
+/**
+ * 404 del sitio: directo (verify:live) o reenviado por el proxy de fuentes
+ * oficiales, que lo responde como 502 con "La fuente oficial respondió con HTTP 404.".
+ */
+async function isMissingCalendar(response: Response): Promise<boolean> {
+  if (response.status === 404) return true;
+  if (response.status !== 502) return false;
+  const body = await response.text().catch(() => "");
+  return /respondió con HTTP 404\.?\s*$/.test(body);
+}
+
 export class AnfaThirdDivisionSource implements OfficialLeagueSource {
   async fetchSeason(
     league: OfficialLeagueId,
@@ -247,6 +269,9 @@ export class AnfaThirdDivisionSource implements OfficialLeagueSource {
     }
 
     if (!response.ok) {
+      if (await isMissingCalendar(response)) {
+        throw new Error(anfaCalendarUnavailableMessage(calendar.name));
+      }
       throw new Error(
         `ANFA Tercera División respondió con HTTP ${response.status} al consultar ${calendar.name}.`,
       );

@@ -15,7 +15,9 @@ import { OFFICIAL_SOURCE_PROXY } from "./official-sources.tokens.js";
 export class OfficialSourcesController {
   constructor(@Inject(OFFICIAL_SOURCE_PROXY) private readonly proxy: OfficialSourceProxy) {}
 
-  @All(["official-source/*path", "third-division-source/*path", "argentina-cup-source/*path", "brazil-cup-source/*path"])
+  // `{/*path}` (path-to-regexp v8) hace opcional la subruta: con `/*path` el prefijo
+  // solo (`/official-source` o `/official-source/`) respondía 404 sin llegar al proxy.
+  @All(["official-source{/*path}", "third-division-source{/*path}", "argentina-cup-source{/*path}", "brazil-cup-source{/*path}"])
   async forward(@Req() req: Request, @Res() res: Response): Promise<void> {
     // req.ip respeta TRUST_PROXY (número de saltos): el proxy nunca lee X-Forwarded-For.
     await this.proxy.handle(req, res, { clientKey: req.ip, url: req.originalUrl });

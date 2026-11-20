@@ -12,7 +12,7 @@ export interface FakeOfficialSource {
 
 /**
  * Origen falso para las pruebas del proxy en la API (sin red):
- * `/ok` responde HTML con la ruta pedida, `/fail` responde 500 y
+ * `/`, `/ok` y `/ok/` responden HTML con la ruta pedida (con su query), `/fail` responde 500 y
  * `/redirect-foreign` redirige a otro host.
  */
 export async function startFakeOfficialSource(): Promise<FakeOfficialSource> {
@@ -20,7 +20,7 @@ export async function startFakeOfficialSource(): Promise<FakeOfficialSource> {
   const server: Server = createServer((req, res) => {
     hits.push({ url: req.url ?? "", headers: req.headers });
     const path = (req.url ?? "/").split("?")[0];
-    if (path === "/ok") {
+    if (path === "/" || path === "/ok" || path === "/ok/") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "set-cookie": "origen=1" });
       res.end(`<p>${req.url}</p>`);
     } else if (path === "/fail") {

@@ -180,6 +180,7 @@
 .official-import-source { color: var(--muted); font-size: var(--fs-xs); }
 .official-import-source a, .official-source-link a { color: var(--accent-fg); font-weight: 600; }
 .official-import-error { margin: 0; }
+.official-import-availability { margin: 0; }
 .official-source-link { margin: 0 0 var(--space-3); color: var(--fg-soft); font-size: var(--fs-xs); }
 .staged-format-note { max-width: var(--measure); margin: 0 0 var(--space-3); color: var(--fg-soft); font-size: var(--fs-sm); line-height: 1.5; }
 .official-zone-options { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 7px; }
