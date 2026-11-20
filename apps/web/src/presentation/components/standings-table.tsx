@@ -116,8 +116,8 @@ export function StandingsTable({
         <table className="standings-table">
           <thead>
             <tr>
-              <th scope="col">#</th>
-              <th scope="col">Equipo</th>
+              <th scope="col" className="standing-position">#</th>
+              <th scope="col" className="standing-team">Equipo</th>
               <th scope="col" title="Partidos jugados">PJ</th>
               <th scope="col" title="Partidos ganados">PG</th>
               <th scope="col" title="Partidos empatados">PE</th>
@@ -125,7 +125,7 @@ export function StandingsTable({
               <th scope="col" title="Goles a favor">GF</th>
               <th scope="col" title="Goles en contra">GC</th>
               <th scope="col" title="Diferencia de goles">DG</th>
-              <th scope="col" title="Puntos">Pts</th>
+              <th scope="col" className="standing-points" title="Puntos">Pts</th>
             </tr>
           </thead>
           <tbody>
@@ -159,7 +159,12 @@ export function StandingsTable({
                   <td>{standing.losses}</td>
                   <td>{standing.goalsFor}</td>
                   <td>{standing.goalsAgainst}</td>
-                  <td>{standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}</td>
+                  <td className={standing.goalDifference > 0
+                    ? "standing-difference-positive"
+                    : standing.goalDifference < 0 ? "standing-difference-negative" : undefined}
+                  >
+                    {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
+                  </td>
                   <td className="standing-points">{standing.points}</td>
                 </tr>
               );

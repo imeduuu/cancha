@@ -90,3 +90,56 @@
 
 /* Solo para lectores de pantalla */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
+
+/* Botones de acción de los centros (simulación, decisiones, sorteos, ascensos, resoluciones). */
+:is(.season-simulation-center, .sports-decisions-center, .draw-center, .second-division-panel > details, .official-resolution-manager) button:not(.small-action) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-height: var(--control-height);
+  margin: var(--space-1) var(--space-1) var(--space-1) 0;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transition: background-color .15s ease, color .15s ease;
+}
+:is(.season-simulation-center, .sports-decisions-center, .draw-center, .second-division-panel > details, .official-resolution-manager) button:not(.small-action):hover:not(:disabled) {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+:is(.season-simulation-center, .sports-decisions-center, .draw-center, .second-division-panel > details, .official-resolution-manager) button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+:is(.sports-decisions-center, .draw-center) .small-action { margin: var(--space-1) var(--space-1) var(--space-1) 0; }
+
+/* Tablas de datos (estadísticas, rendimiento, resoluciones): mismo lenguaje que la tabla de posiciones. */
+:is(.statistics-table, .performance-table, .official-resolution-manager table) { width: 100%; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums; }
+:is(.statistics-table, .performance-table, .official-resolution-manager table) thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--thead-bg);
+  color: var(--thead-fg);
+  font-family: var(--font-label);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line-strong);
+}
+:is(.statistics-table, .performance-table, .official-resolution-manager table) tbody tr:nth-child(even) > * { background: var(--row-alt); }
+:is(.statistics-table, .performance-table, .official-resolution-manager table) tbody tr:hover > * { background: var(--row-hover); }
+:is(.statistics-table, .performance-table, .official-resolution-manager table) :is(th, td) { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); }
+
+/* Centros y paneles anchos: el texto corrido no supera una medida legible. */
+:is(.sports-decisions-center, .draw-center, .historical-archive, .season-closure-center, .season-simulation-center, .competition-center, .season-planning, .club-history, .head-to-head, .club-performance, .continental-qualification, .save-recovery-center, .sports-universe-dashboard, .competition-alert-center, .statistics-panel, .calendar-programming-center, .match-calendar) :is(p, li) { max-width: 80ch; }
