@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event";
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
+import { chileanPrimera2026PlacementRules } from "@cancha/core/domain/services/chilean-primera-placement-rules";
 import { LocalStorageTournamentRepository } from "./local-storage-tournament-repository";
 import {
   createSportsUniverse,
@@ -216,10 +217,7 @@ describe("LocalStorageTournamentRepository", () => {
 
     const tournaments = new LocalStorageTournamentRepository(false).findAll();
 
-    expect(tournaments[0].placementRules).toEqual({
-      championPlaces: 1,
-      relegationPlaces: 2,
-    });
+    expect(tournaments[0].placementRules).toEqual(chileanPrimera2026PlacementRules);
     expect(tournaments[0].matchdays[0].fixtures[0].result).toEqual({
       homeGoals: 2,
       awayGoals: 1,
@@ -232,6 +230,32 @@ describe("LocalStorageTournamentRepository", () => {
     expect(tournaments[1].placementRules?.relegationPlaces).toBe(1);
     expect(tournaments[2].placementRules?.relegationPlaces).toBe(2);
     expect(JSON.parse(storedValues.get(storageKey) ?? "[]")).toHaveLength(3);
+  });
+
+  it("keeps the imported Liga de Primera 2026 international places after a reload", () => {
+    const primera: Tournament = {
+      id: "anfp-liga-primera-2026",
+      name: "Liga de Primera Mercado Libre",
+      teams: [{ id: "team-a", name: "Club A" }, { id: "team-b", name: "Club B" }],
+      legs: 1,
+      tieBreakers: [],
+      matchdays: [{ number: 1, leg: 1, fixtures: [{ id: "fixture-1", homeTeamId: "team-a", awayTeamId: "team-b" }] }],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      placementRules: chileanPrimera2026PlacementRules,
+    };
+    new LocalStorageTournamentRepository(false).save(primera);
+
+    const [reloaded] = new LocalStorageTournamentRepository(false).findAll();
+
+    expect(reloaded.placementRules).toMatchObject({
+      championPlaces: 1,
+      libertadoresPlaces: { from: 1, to: 2 },
+      libertadoresQualifyingPlaces: { from: 3, to: 3 },
+      sudamericanaPlaces: { from: 4, to: 6 },
+      relegationPlaces: 2,
+      note: chileanPrimera2026PlacementRules.note,
+    });
+    expect(reloaded.placementRules?.playoffPlaces).toBeUndefined();
   });
 
   it("merges backup tournaments without duplicating IDs and keeps existing conflicts", () => {

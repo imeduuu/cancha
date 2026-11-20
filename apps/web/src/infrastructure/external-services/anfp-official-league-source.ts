@@ -7,6 +7,7 @@ import type {
   OfficialMatchday,
 } from "@cancha/core/application/ports/official-league-source";
 import { normalizeTeamName } from "@cancha/core/domain/services/team-name";
+import { chileanPrimera2026PlacementRules } from "@cancha/core/domain/services/chilean-primera-placement-rules";
 
 interface LeaguePageConfig {
   readonly id: string;
@@ -26,14 +27,7 @@ const leaguePages: Record<"primera" | "primera-b" | "segunda" | "copa-chile" | "
     sourceUrl: "https://www.campeonatochileno.cl/ligas/liga-de-primera-mercado-libre/",
     path: "/ligas/liga-de-primera-mercado-libre/",
     format: "round-robin",
-    placementRules: {
-      championPlaces: 1,
-      libertadoresPlaces: { from: 1, to: 2 },
-      libertadoresQualifyingPlaces: { from: 3, to: 3 },
-      sudamericanaPlaces: { from: 4, to: 6 },
-      relegationPlaces: 2,
-      note: "Cupos base 2027: 1.º y 2.º de liga a Libertadores; 3.º disputa un partido único contra el campeón de Copa Chile por el cupo Chile 4, cuyo perdedor va a Sudamericana. 4.º–6.º clasifican a Sudamericana. El campeón de Copa de la Liga obtiene Chile 3. La app no calcula esos campeones, el partido por Chile 4 ni los corrimientos de cupos.",
-    },
+    placementRules: chileanPrimera2026PlacementRules,
   },
   "primera-b": {
     id: "anfp-liga-de-ascenso-2026",

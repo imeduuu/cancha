@@ -24,6 +24,7 @@ import { isValidGoalScorer } from "@cancha/core/domain/services/goal-scorers";
 import { validateTournamentPlayerData } from "@cancha/core/domain/services/player-roster";
 import { validateFixtureDetails } from "@cancha/core/domain/services/match-details";
 import { applyCompetitionRulesConfiguration } from "@cancha/core/domain/services/competition-rules";
+import { chileanPrimera2026PlacementRules } from "@cancha/core/domain/services/chilean-primera-placement-rules";
 import { validateMatchRegulations, validateTournamentMatchRegulations } from "@cancha/core/domain/services/match-regulations";
 import type { SportsUniverseLibrary } from "@cancha/core/domain/entities/sports-universe";
 import {
@@ -50,10 +51,7 @@ const officialPlacementRules: Readonly<Record<string, TournamentPlacementRules>>
     relegationPlaces: 1,
     note: "Descienden el último por promedios de las últimas tres temporadas y el último de la tabla anual. Si es el mismo club, también desciende el penúltimo anual. Esta tabla no calcula promedios. Las plazas internacionales mostradas son las posiciones base de la tabla anual; pueden correrse por campeones de Apertura, Clausura o Copa Argentina y la app aún no calcula esos corrimientos.",
   },
-  "anfp-liga-primera-2026": {
-    championPlaces: 1,
-    relegationPlaces: 2,
-  },
+  "anfp-liga-primera-2026": chileanPrimera2026PlacementRules,
   "anfp-liga-de-ascenso-2026": {
     championPlaces: 1,
     playoffPlaces: { from: 2, to: 8 },

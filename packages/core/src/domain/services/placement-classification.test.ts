@@ -4,6 +4,7 @@ import {
   classifyPosition,
   getPlayoffPlacementStatuses,
 } from "./placement-classification";
+import { chileanPrimera2026PlacementRules } from "./chilean-primera-placement-rules";
 
 describe("classifyPosition", () => {
   it("marks the champion, the Segunda B playoff positions, and the relegation places", () => {
@@ -192,5 +193,37 @@ describe("classifyPosition", () => {
 it("does not confirm a playoff place while its table rules are explicitly pending",()=>{
  const t: Tournament={id:"audit",name:"Audit",season:2026,teams:[{id:"a",name:"A"},{id:"b",name:"B"}],legs:1,tieBreakers:[],createdAt:"2026-01-01T00:00:00Z",matchdays:[],competitionRules:{season:2026,verification:{standings:"pending",placements:"verified"}}};
  const table=t.teams.map((team,index)=>({teamId:team.id,teamName:team.name,played:1,wins:1-index,draws:0,losses:index,goalsFor:1-index,goalsAgainst:index,goalDifference:1-index*2,points:3*(1-index)}));
- expect(getPlayoffPlacementStatuses(table,[],{playoffPlaces:{from:1,to:1}},t).get("a")).toBe("provisional");
+ const statuses=getPlayoffPlacementStatuses(table,[],{playoffPlaces:{from:1,to:1}},t);
+ expect(statuses.get("a")).toBe("provisional");
+ expect(statuses.has("b")).toBe(false);
+});
+
+describe("getPlayoffPlacementStatuses with unverified annual rules", () => {
+  const teams = Array.from({ length: 16 }, (_, index) => ({ id: `t${index + 1}`, name: `Club ${index + 1}` }));
+  const table = teams.map((team, index) => ({
+    teamId: team.id, teamName: team.name, played: 30, wins: 16 - index, draws: 0, losses: index + 14,
+    goalsFor: 30, goalsAgainst: 30, goalDifference: 0, points: 3 * (16 - index),
+  }));
+  const tournament = (id: string): Tournament => ({
+    id, name: id, season: 2026, teams, legs: 2, tieBreakers: [], createdAt: "2026-01-01T00:00:00Z", matchdays: [],
+    competitionRules: { season: 2026, verification: { standings: "pending", placements: "provisional" } },
+  });
+
+  it("does not mark any Liga de Primera 2026 team, because that league has no playoff places", () => {
+    const statuses = getPlayoffPlacementStatuses(
+      table, [], chileanPrimera2026PlacementRules, tournament("anfp-liga-primera-2026"),
+    );
+    expect(statuses.size).toBe(0);
+  });
+
+  it("marks only the 2nd–8th Primera B places as provisional", () => {
+    const statuses = getPlayoffPlacementStatuses(
+      table,
+      [],
+      { championPlaces: 1, playoffPlaces: { from: 2, to: 8 }, relegationPlaces: 1 },
+      tournament("anfp-liga-de-ascenso-2026"),
+    );
+    expect([...statuses.keys()]).toEqual(["t2", "t3", "t4", "t5", "t6", "t7", "t8"]);
+    expect([...statuses.values()].every((status) => status === "provisional")).toBe(true);
+  });
 });

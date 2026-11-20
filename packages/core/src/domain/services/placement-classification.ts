@@ -30,11 +30,17 @@ export function getPlayoffPlacementStatuses(
   pointsSystem: PointsSystem = { win: 3, draw: 1, loss: 0 },
 ): ReadonlyMap<string, PlayoffPlacementStatus> {
   const statuses = new Map<string, PlayoffPlacementStatus>();
+  if (!rules.playoffPlaces && !rules.relegationPlayoffPlaces) return statuses;
   if (hasPendingAnnualRules(tournament) || hasUnverifiedCompetitionRules(tournament)) {
-    for (const row of standings) statuses.set(row.teamId, "provisional");
+    // Sin reglas verificadas nada se confirma, pero sólo los puestos de playoff llevan la marca.
+    standings.forEach((row, index) => {
+      const classification = classifyPosition(index + 1, standings.length, rules);
+      if (classification === "playoff" || classification === "relegation-playoff") {
+        statuses.set(row.teamId, "provisional");
+      }
+    });
     return statuses;
   }
-  if (!rules.playoffPlaces && !rules.relegationPlayoffPlaces) return statuses;
 
   const remainingByTeam = new Map(standings.map(({ teamId }) => [teamId, 0]));
   for (const fixture of fixtures) {
