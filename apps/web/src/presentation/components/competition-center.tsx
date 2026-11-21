@@ -133,10 +133,10 @@ export function CompetitionCenter({ tournaments, allTournaments = tournaments,
       onOpenCalendar={(tournament) => onCalendar(tournament)}
       onBack={() => setProgrammingOpen(false)}
     /></DeferredPanel>}
-    <SeasonPlanningAccess openRequest={planningRequest} contextKey={`season-planning:${scopeKey}`} onProgramCalendar={openCalendarProgramming} onRegisterCupRegulation={onRegisterCupRegulation} tournaments={tournaments} activity={activity} onOpen={onOpen} onCalendar={onCalendar} onAlerts={onAlerts} onReviewPlanning={onReviewPlanning} onConfirmPlanning={onConfirmPlanning} onReviewContinental={onReviewContinental} onConfirmContinental={onConfirmContinental}/>
+    <SeasonPlanningAccess universeId={universeLibrary.activeUniverseId} openRequest={planningRequest} contextKey={`season-planning:${scopeKey}`} onProgramCalendar={openCalendarProgramming} onRegisterCupRegulation={onRegisterCupRegulation} tournaments={tournaments} activity={activity} onOpen={onOpen} onCalendar={onCalendar} onAlerts={onAlerts} onReviewPlanning={onReviewPlanning} onConfirmPlanning={onConfirmPlanning} onReviewContinental={onReviewContinental} onConfirmContinental={onConfirmContinental}/>
     <SeasonSimulationAccess /><DrawCenterAccess /><SportsDecisionsAccess /><SeasonClosureAccess />
     <SaveRecoveryAccess label="Abrir puntos de control y respaldos" />
-    <SeasonProgressionPanel key={scopeKey} contextKey={`progression:${scopeKey}`} tournaments={tournaments} activity={activity} onOpen={onOpen} onCalendar={onCalendar} onAlerts={onAlerts} onReviewPlanning={onReviewPlanning} onConfirmPlanning={onConfirmPlanning} onRegisterCupRegulation={onRegisterCupRegulation} onReviewContinental={onReviewContinental} onConfirmContinental={onConfirmContinental}/>
+    <SeasonProgressionPanel universeId={universeLibrary.activeUniverseId} key={scopeKey} contextKey={`progression:${scopeKey}`} tournaments={tournaments} activity={activity} onOpen={onOpen} onCalendar={onCalendar} onAlerts={onAlerts} onReviewPlanning={onReviewPlanning} onConfirmPlanning={onConfirmPlanning} onRegisterCupRegulation={onRegisterCupRegulation} onReviewContinental={onReviewContinental} onConfirmContinental={onConfirmContinental}/>
     <HistoricalArchiveAccess />
     <ClubAssociationsAccess tournament={tournaments[0]}/><ClubHistoryAccess contextKey={`club-history:${scopeKey}`} tournaments={tournaments} activity={activity} onOpen={onOpen}/>
     <ClubPerformanceAccess tournaments={tournaments} activity={activity} onOpen={onOpen} contextKey={`performance:${scopeKey}:center`} label="Centro"/>

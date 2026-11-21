@@ -5,6 +5,8 @@ import { getDivisionOutcome } from "./second-division-progression";
 import { secondDivisionKind } from "./second-division-rules";
 import { normalizeTeamName } from "./team-name";
 import { argentinaHalves, getArgentinaHalfFinalWinner } from "./argentina-half-champions";
+import { isChileanAscenso } from "./chilean-ascenso-playoff-progression";
+import { getChileanDivisionTransition } from "./chilean-division-transition";
 
 export interface DivisionTransition {
   readonly promoted: readonly string[];
@@ -15,6 +17,7 @@ export interface DivisionTransition {
 
 export function getDivisionTransition(upper: Tournament, lower: Tournament,
   history: readonly Tournament[]): DivisionTransition {
+  if (isChileanAscenso(lower)) return getChileanDivisionTransition(upper, lower);
   const kind = secondDivisionKind(lower);
   const expectedUpper = kind === "brasil" ? "brasileirao-serie-a" : "arg-liga-profesional";
   const outcome = getDivisionOutcome(lower);
@@ -31,14 +34,12 @@ export function getDivisionTransition(upper: Tournament, lower: Tournament,
     !isValidFixtureResult(upper, day, fixture)))) {
     pending.push("La Primera División tiene partidos o fases pendientes."); return result();
   }
-  const regular: Tournament = { ...upper, matchdays: upper.matchdays.filter(day => kind === "brasil"
-    || day.phaseName?.endsWith("Fase regular")) };
-  const table = calculateStandings(regular);
-  if (table.length !== (kind === "brasil" ? 20 : 30)
-    || table.some(row => row.played !== (kind === "brasil" ? 38 : 32))) {
-    pending.push("El calendario de Primera no acredita toda la fase regular."); return result();
-  }
   if (kind === "brasil") {
+    const regular: Tournament = { ...upper };
+    const table = calculateStandings(regular);
+    if (table.length !== 20 || table.some(row => row.played !== 38)) {
+      pending.push("El calendario de Primera no acredita toda la fase regular."); return result();
+    }
     // Use the REC Série A rules only for this transition, preserving existing tournament settings.
     const verified = { ...regular, competitionRules: undefined,
       tieBreakers: ["wins", "goalDifference", "goalsFor", "headToHeadGoalDifference", "redCards", "yellowCards"] as const };
@@ -52,6 +53,27 @@ export function getDivisionTransition(upper: Tournament, lower: Tournament,
   }
   for (const half of argentinaHalves) {
     if (!getArgentinaHalfFinalWinner(upper, half)) pending.push(`Final del ${half} pendiente.`);
+  }
+  const relegations = getArgentinaRelegations(upper, history);
+  pending.push(...relegations.pending);
+  return relegations.relegated.length ? result(relegations.relegated) : result();
+}
+
+export interface ArgentinaRelegations {
+  /** [peor promedio, último de la tabla anual sin el anterior] (art. 93 del Estatuto AFA). */
+  readonly relegated: readonly string[];
+  readonly pending: readonly string[];
+}
+
+/** LPF 2026 relegations: worst three-season average plus last of the annual table (regular phases only). */
+export function getArgentinaRelegations(upper: Tournament, history: readonly Tournament[]): ArgentinaRelegations {
+  const expectedUpper = "arg-liga-profesional";
+  const pending: string[] = [];
+  const none = (): ArgentinaRelegations => ({ relegated: [], pending: [...new Set(pending)] });
+  const regular: Tournament = { ...upper, matchdays: upper.matchdays.filter(day => day.phaseName?.endsWith("Fase regular")) };
+  const table = calculateStandings(regular);
+  if (table.length !== 30 || table.some(row => row.played !== 32)) {
+    pending.push("El calendario de Primera no acredita toda la fase regular."); return none();
   }
   const seasons = [2024, 2025, 2026];
   const seasonal: Tournament[] = [];
@@ -69,7 +91,7 @@ export function getDivisionTransition(upper: Tournament, lower: Tournament,
     seasonal.push({ ...item, matchdays: item.matchdays.filter(day => !day.phaseName
       || /Fase regular|Brasileirão/.test(day.phaseName)) });
   }
-  if (seasonal.length !== 3) return result();
+  if (seasonal.length !== 3) return none();
   const averages = upper.teams.map(team => {
     let points = 0, played = 0;
     for (const item of seasonal) {
@@ -83,12 +105,12 @@ export function getDivisionTransition(upper: Tournament, lower: Tournament,
   }).sort((a, b) => a.points * b.played - b.points * a.played);
   if (averages.some(row => row.played === 0)
     || averages[0].points * averages[1].played === averages[1].points * averages[0].played) {
-    pending.push("Desempate por promedios pendiente (art. 111 AFA)."); return result();
+    pending.push("Desempate por promedios pendiente (art. 111 AFA)."); return none();
   }
   const first = averages[0].teamId;
   const annual = table.filter(row => row.teamId !== first).sort((a, b) => a.points - b.points);
   if (annual[0].points === annual[1].points) {
-    pending.push("Desempate por descenso de la tabla anual pendiente (art. 111 AFA)."); return result();
+    pending.push("Desempate por descenso de la tabla anual pendiente (art. 111 AFA)."); return none();
   }
-  return result([first, annual[0].teamId]);
+  return { relegated: [first, annual[0].teamId], pending: [...new Set(pending)] };
 }

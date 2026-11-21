@@ -5,11 +5,13 @@ import { getDivisionTransition } from "../../domain/services/division-season-tra
 import { validateTournamentIntegrity } from "../../domain/services/tournament-integrity";
 import { normalizeTeamName } from "../../domain/services/team-name";
 import { createActivityEvent } from "../services/activity-log";
+import { isChileanAscenso } from "../../domain/services/chilean-ascenso-playoff-progression";
 
 /** Creates roster planning snapshots; the future draw/calendar and rules stay pending. */
 export function createLinkedDivisionSeasons(upper: Tournament, lower: Tournament,
   incoming: readonly Team[], sourceUrl: string, repository: TournamentRepository,
-  createId: () => string = () => crypto.randomUUID(), now: () => Date = () => new Date()): readonly Tournament[] {
+  createId: () => string = () => crypto.randomUUID(), now: () => Date = () => new Date(),
+  options: { readonly simulated?: boolean } = {}): readonly Tournament[] {
   const stored = repository.findAll();
   const currentUpper = stored.find(item => item.id === upper.id);
   const currentLower = stored.find(item => item.id === lower.id);
@@ -19,9 +21,13 @@ export function createLinkedDivisionSeasons(upper: Tournament, lower: Tournament
   if (transition.pending.length) throw new Error(transition.pending.join(" "));
   if (incoming.length !== transition.lowerRelegated.length)
     throw new Error(`Registra los ${transition.lowerRelegated.length} ascendidos desde las categorías inferiores.`);
-  let url: URL;
-  try { url = new URL(sourceUrl); } catch { throw new Error("Registra la fuente de los ascendidos desde categorías inferiores."); }
-  if (url.protocol !== "https:") throw new Error("La fuente debe usar HTTPS.");
+  // A simulated scenario (confirmed simulated closures) may omit the external reference of user-provided clubs.
+  let url: URL | undefined;
+  if (sourceUrl.trim() || !options.simulated) {
+    try { url = new URL(sourceUrl); } catch { throw new Error("Registra la fuente de los ascendidos desde categorías inferiores."); }
+    if (url.protocol !== "https:") throw new Error("La fuente debe usar HTTPS.");
+  }
+  const chile = isChileanAscenso(lower);
   if (!repository.saveManyWithActivity) throw new Error("El repositorio no permite guardar ambas temporadas con historial coordinado.");
   const season = upper.season! + 1;
   const ids = new Set(stored.flatMap(item => [item.id, ...item.teams.map(team => team.id),
@@ -50,7 +56,9 @@ export function createLinkedDivisionSeasons(upper: Tournament, lower: Tournament
       seasonPreparation: { schemaVersion: 1, sourceTournamentIds: [upper.id, lower.id], plannedParticipants: teams.map(team => team.name), calendarReviews: [] },
       legs: 1, tieBreakers: [], matchdays: [], createdAt: now().toISOString(),
       format: "staged", competitionType: "league", importCoverage: "unknown",
-      rulesNote: `Planificación local: participantes actualizados desde ${source.name}. Calendario, zonas y reglamento ${season} pendientes; no es un fixture oficial. Ascendidos inferiores registrados por el usuario: ${url.href}`,
+      // Chile keeps its single-table format: the placement zones carry over to the next season.
+      ...(chile && source.placementRules ? { placementRules: source.placementRules } : {}),
+      rulesNote: `Planificación local: participantes actualizados desde ${source.name}. Calendario, zonas y reglamento ${season} pendientes; no es un fixture oficial. ${url ? `Ascendidos inferiores registrados por el usuario: ${url.href}` : "Escenario simulado: ascendidos inferiores aportados por el usuario, sin referencia externa."}`,
       competitionRules: { season, verification: { standings: "pending", placements: "pending" },
         standingsNote: "Reglamento y calendario pendientes de verificar para la nueva temporada.",
         placementsNote: "No se heredan automáticamente ascensos ni descensos de 2026." },

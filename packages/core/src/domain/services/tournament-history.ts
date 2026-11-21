@@ -5,6 +5,8 @@ import type { TeamStanding } from "./standings";
 
 import { secondDivisionKind } from "./second-division-rules";
 import { getDivisionOutcome } from "./second-division-progression";
+import { isArgentinaAnnualLeague } from "./argentina-league-champion";
+import { isChileanAscenso } from "./chilean-ascenso-playoff-progression";
 
 export type TournamentCompletionStatus = "Finalizado" | "En curso" | "Incompleto" | "Indeterminado";
 
@@ -42,6 +44,10 @@ export function getTournamentCompletionStatus(tournament: Tournament, basis: Cha
   if (statistics.played !== fixtures.length) return "Incompleto";
 
   if (tournament.competitionType === "cup") {
+    return championTeamId ? "Finalizado" : "Indeterminado";
+  }
+  // Staged leagues whose conclusion has its own rule: LPF 2026 (Campeón de Liga) and Liga de Ascenso (Liguilla).
+  if (isArgentinaAnnualLeague(tournament) || isChileanAscenso(tournament)) {
     return championTeamId ? "Finalizado" : "Indeterminado";
   }
   if (

@@ -9,6 +9,8 @@ import { sportingStorageKeys } from "../../infrastructure/persistence/library-wr
 import { isHttpsReference } from "@cancha/core/domain/services/continental-plan";
 import { championTierLabels } from "@cancha/core/application/services/champion-tier";
 import { ChampionCards } from "./champion-card";
+import { isChileanAscenso } from "@cancha/core/domain/services/chilean-ascenso-playoff-progression";
+import { isArgentinaAnnualLeague } from "@cancha/core/domain/services/argentina-league-champion";
 
 export function SeasonClosureCenter({tournaments, repository, universeId, universeName, initialTournamentId, getUniverseId, onChanged, onCalendar, onAlerts, onEdit, onPlanning, onClose}: {
   tournaments: readonly Tournament[]; repository: TournamentRepository; universeId: string | null; universeName: string;
@@ -72,10 +74,12 @@ export function SeasonClosureCenter({tournaments, repository, universeId, univer
       {evaluation.honours.awards.length ? <ul>{evaluation.honours.awards.filter(a => ["Campeón", "Subcampeón"].includes(a.label) || a.label.startsWith("Campeón del ")).map(a => <li key={a.label}>{a.label}: {name(a.teamId)}{a.tier && a.tier !== "verified" ? ` · ${championTierLabels[a.tier]}` : ""}</li>)}</ul> : <p>No hay campeón acreditado por los servicios deportivos existentes.</p>}
       {evaluation.tables.map(table => <div className="table-scroll" key={table.label}><table><caption>{table.label === "Clasificación final" && evaluation.blockers.length ? "Clasificación calculada · requiere revisión" : table.label}</caption><thead><tr><th>Posición</th><th>Club</th><th>Puntos</th><th>PJ</th></tr></thead><tbody>{table.rows.map((row, index) => <tr key={row.teamId}><td>{index + 1}</td><td>{row.teamName}</td><td>{row.points}</td><td>{row.played}</td></tr>)}</tbody></table></div>)}
       <h3>Ascensos, descensos y decisiones</h3>
-      <p>Ascendidos calculados: {evaluation.division?.promoted.map(name).join(", ") || "Sin ascensos resueltos por un servicio aplicable"}.</p>
+      <p>Ascendidos calculados{simulated ? " (simulado, no oficial)" : ""}: {evaluation.division?.promoted.map((teamId, index) => isChileanAscenso(t)
+        ? `${name(teamId)} · ${index === 0 ? "Asciende como campeón" : "Asciende por Liguilla"}` : name(teamId)).join(", ") || "Sin ascensos resueltos por un servicio aplicable"}.</p>
       <p>{simulated ? "Descensos calculados (simulado, no oficial)" : "Descensos calculados"}: {evaluation.relegated.map(row => `${name(row.teamId)} → ${row.destination}`).join("; ") || "Sin descensos resueltos por un servicio aplicable"}.</p>
       {evaluation.averages && <p>Proyección de descensos por promedio, separada de la tabla: {evaluation.averages.standings.filter(row => row.relegation).map(row => `${row.teamName} · ${row.status}`).join("; ") || "Sin plazas resueltas"}. {evaluation.averages.pendingReasons.join(" ")}</p>}
       <p>{t.competitionRules?.placementsNote ?? t.placementRules?.note ?? "No se deducen movimientos por el nombre de la competición."}</p>
+      {isArgentinaAnnualLeague(t) && <p>Campeón de Liga 2026: primero de la Tabla General, que suma solo las fases de zonas del Apertura y del Clausura (art. 24). Trofeo de Campeones 2026: no modelado (art. 20); no bloquea el cierre.</p>}
       <details><summary>Resoluciones registradas ({evaluation.resolutions.length})</summary><ul>{evaluation.resolutions.map(resolution => <li key={resolution.id}>{resolution.key} · {resolution.verification} · {resolution.invalidation ? "Invalidada" : resolution.supersededBy ? "Sustituida" : "Registro vigente"} · <a href={resolution.source.url} target="_blank" rel="noreferrer">{resolution.source.reference}</a></li>)}</ul></details>
       <h3>Clasificación internacional y próxima edición</h3>
       {evaluation.international ? <ul>{evaluation.international.entries.map((entry, index) => <li key={index}>{entry.teamName} → {entry.destination} · {entry.status === "confirmed" ? "Definitiva según cálculo registrado" : entry.status === "provisional" ? "Provisional" : "Pendiente"} · {entry.sourceTournamentName} / {entry.originTournamentName} · Vía: {evaluation.international?.qualificationRoutes.find(route => route.teamId === entry.sourceTeamId && route.destination === entry.destination && (route.originTournamentId ?? t.id) === entry.originTournamentId)?.source ?? "Origen registrado"}</li>)}</ul> : <p>Sin regla internacional registrada para mostrar cupos. No se infieren plazas.</p>}

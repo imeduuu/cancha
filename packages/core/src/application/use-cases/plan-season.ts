@@ -29,7 +29,7 @@ export function confirmSeasonPlanning(review:SeasonPlanningReview,repository:Tou
   created=[confirmContinentalEdition(review.continental,repository,true)];
  }else if(review.input.mode==="divisions"){
   if(!current.upper || !current.lower)throw new Error("Falta la pareja de divisiones revisada.");
-  created=createLinkedDivisionSeasons(current.upper,current.lower,review.input.incoming ?? [],review.input.sourceUrl ?? "",repository);
+  created=createLinkedDivisionSeasons(current.upper,current.lower,review.input.incoming ?? [],review.input.sourceUrl ?? "",repository,undefined,undefined,{simulated:current.simulatedSources});
  }else if(review.input.mode==="national-cup")created=[createTournamentSeason(current.source!,review.input.targetSeason,repository,undefined,undefined,false,true,{regulationId:review.input.regulationId ?? "",targetId:review.input.targetId})];
  else created=[createTournamentSeason(current.source!,review.input.targetSeason,repository,undefined,undefined,false,true)];
  reviews.delete(review);return created;

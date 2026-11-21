@@ -12,11 +12,14 @@ import { argentinaHalves, getArgentinaHalfChampions } from "../../domain/service
 import { buildClubProfiles, clubHistoryScopes, clubOccurrenceKey, type ClubHistoryScope } from "./club-history";
 import { competitionIdentity } from "./competition-center";
 import { sourceScenario } from "./continental-projection";
+import { isArgentinaAnnualLeague } from "../../domain/services/argentina-league-champion";
+import { getChileanAscensoPlayoffWinner, isChileanAscenso } from "../../domain/services/chilean-ascenso-playoff-progression";
 import { unverifiedTier, type ChampionTier } from "./champion-tier";
 
 export const provenanceLabels = {local:"Escenario local, editado o simulado",provider:"Proveedor sin certificación oficial",unknown:"Procedencia no acreditada"};
 export { championTierLabels, championTierTitles, unverifiedTier, type ChampionTier } from "./champion-tier";
-export interface Honour { teamId:string; label:string; tier?:ChampionTier }
+/** `title`: the regulation's own name for the award when it differs from `label` (e.g. «Campeón de Liga», LPF art. 24.2). */
+export interface Honour { teamId:string; label:string; tier?:ChampionTier; title?:string }
 export interface SeasonHonours {
  readonly awards:readonly Honour[];
  /** Reasons the outcome is not verified; with a tier they are accreditation notices, not sporting gaps. */
@@ -58,7 +61,12 @@ export function seasonHonours(t:Tournament,activity:readonly ActivityEvent[]=[])
  return {awards:[...halfAwards,...podium(t,stats.sportingChampionTeamId!,unverified,"sporting")],reasons,complete:false,tier:unverified,sportingReasons:[]};
 }
 function podium(t:Tournament,champion:string,tier:ChampionTier,basis:"verified"|"sporting"):Honour[]{
- const awards:Honour[]=[{teamId:champion,label:"Campeón",tier}];
+ const awards:Honour[]=[{teamId:champion,label:"Campeón",tier,...(isArgentinaAnnualLeague(t)?{title:"Campeón de Liga"}:{})}];
+ if(isChileanAscenso(t)){
+  const winner=getChileanAscensoPlayoffWinner(t);
+  if(winner)awards.push({teamId:winner,label:"Ascenso por Liguilla",tier});
+  return awards;
+ }
  const table=getFinalStandings(t,basis);
  if(table){
   const tied=new Set(getUnresolvedStandingsTieGroups(t,table).flatMap(g=>g.map(r=>r.teamId)));

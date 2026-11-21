@@ -17,8 +17,10 @@ import {useSessionDraft} from "../session-drafts";
 import {DeferredPanel} from "./deferred-panel";
 import {ConfirmationDialog} from "./confirmation-dialog";
 const History=lazy(()=>import("./club-history-panel").then(m=>({default:m.ClubHistoryPanel})));
-export interface PlanningCenterProps extends SeasonPlanningActions {onReviewContinental?:ContinentalPanelProps["onReview"];onConfirmContinental?:ContinentalPanelProps["onConfirm"];onProgramCalendar?:(t?:Tournament)=>void;tournaments:readonly Tournament[];activity:readonly ActivityEvent[];onOpen:(t:Tournament)=>void;onCalendar:(t:Tournament)=>void;onAlerts:(t:Tournament)=>void;contextKey?:string}
-export function SeasonPlanningCenter({tournaments,activity,onOpen,onCalendar,onAlerts,onProgramCalendar,onReviewPlanning,onConfirmPlanning,onRegisterCupRegulation,onReviewContinental,onConfirmContinental,contextKey="season-planning"}:PlanningCenterProps){
+export interface PlanningCenterProps extends SeasonPlanningActions {onReviewContinental?:ContinentalPanelProps["onReview"];onConfirmContinental?:ContinentalPanelProps["onConfirm"];onProgramCalendar?:(t?:Tournament)=>void;tournaments:readonly Tournament[];activity:readonly ActivityEvent[];onOpen:(t:Tournament)=>void;onCalendar:(t:Tournament)=>void;onAlerts:(t:Tournament)=>void;contextKey?:string;
+ /** Active sports universe: simulated closures are confirmed per universe. */
+ universeId?:string|null}
+export function SeasonPlanningCenter({tournaments,activity,onOpen,onCalendar,onAlerts,onProgramCalendar,onReviewPlanning,onConfirmPlanning,onRegisterCupRegulation,onReviewContinental,onConfirmContinental,contextKey="season-planning",universeId=null}:PlanningCenterProps){
   const runWrite = useLibraryWrite();
 
  const groups=useMemo(()=>groupCompetitions(tournaments),[tournaments]);
@@ -27,7 +29,7 @@ export function SeasonPlanningCenter({tournaments,activity,onOpen,onCalendar,onA
  const [club,setClub]=useSessionDraft(`${contextKey}:club`,"");
  const [createdIds,setCreatedIds]=useSessionDraft(`${contextKey}:created`,[] as string[]);
  function change(patch:Partial<typeof form>){setForm(old=>({...old,...patch}));setReview(null);setError("");setMessage("");}
- const input:SeasonPlanningInput={mode:form.mode,regulationId:form.regulationId,sourceId:form.sourceId,targetSeason:Number(form.destination),qualifyingSeason:Number(form.qualifying),partnerId:form.partnerId,cup:form.cup,sourceIds:form.sourceIds,selectedKeys:form.selectedKeys,targetId:form.targetId || undefined,incoming:form.incoming.split("\n").map(s=>s.trim()).filter(Boolean).map((name,i)=>({id:`incoming-${i}`,name})),sourceUrl:form.sourceUrl,note:form.note,carryRoster:form.carryRoster};
+ const input:SeasonPlanningInput={mode:form.mode,regulationId:form.regulationId,sourceId:form.sourceId,targetSeason:Number(form.destination),qualifyingSeason:Number(form.qualifying),partnerId:form.partnerId,cup:form.cup,sourceIds:form.sourceIds,selectedKeys:form.selectedKeys,targetId:form.targetId || undefined,incoming:form.incoming.split("\n").map(s=>s.trim()).filter(Boolean).map((name,i)=>({id:`incoming-${i}`,name})),sourceUrl:form.sourceUrl,note:form.note,carryRoster:form.carryRoster,universeId};
  const preview=useMemo(()=>projectSeasonPlanning(input,tournaments,activity),[JSON.stringify(input),tournaments,activity]);
  const stale=!!review && review.preview.snapshot!==planningLibrarySnapshot(tournaments,activity);
  const visibleGroups=groups.filter(g=>(!form.territory || g.territory===form.territory) && (!form.type || g.seasons.some(t=>(t.competitionType ?? "league")===form.type)));
@@ -48,7 +50,9 @@ export function SeasonPlanningCenter({tournaments,activity,onOpen,onCalendar,onA
   {form.mode==="divisions" && <div>
    <label>Otra división elegida expresamente<select value={form.partnerId} onChange={e=>change({partnerId:e.target.value})}><option value="">Sin relación elegida</option>{tournaments.filter(t=>t.id!==form.sourceId).map(t=><option key={t.id} value={t.id}>{t.name} · {t.season ?? "sin año"} · {t.id}</option>)}</select></label>
    <label>Ascendidos inferiores aportados (uno por línea)<textarea value={form.incoming} onChange={e=>change({incoming:e.target.value})}/></label>
-   <label>Referencia HTTPS de los ascendidos inferiores<input type="url" value={form.sourceUrl} onChange={e=>change({sourceUrl:e.target.value})}/></label>
+   {preview.suggestedIncoming.length>0 && <p>Campeón de Segunda calculado en esta biblioteca: {preview.suggestedIncoming.join(", ")}. Es una propuesta; escríbelo arriba si quieres incorporarlo.
+    <button type="button" className="small-action" onClick={()=>change({incoming:preview.suggestedIncoming.join("\n")})}>Usar la propuesta de Segunda</button></p>}
+   <label>{preview.simulatedSources?"Referencia HTTPS de los ascendidos inferiores (opcional en escenario simulado)":"Referencia HTTPS de los ascendidos inferiores"}<input type="url" value={form.sourceUrl} onChange={e=>change({sourceUrl:e.target.value})}/></label>
   </div>}
   {form.mode==="continental" && <div>
    <div className="competition-controls"><label>Copa continental de destino<select value={form.cup} onChange={e=>change({cup:e.target.value as ContinentalCup,selectedKeys:[],targetId:""})}><option value="libertadores">Libertadores</option><option value="sudamericana">Sudamericana</option></select></label><label>Temporada nacional de clasificación<input type="number" min="1" value={form.qualifying} onChange={e=>change({qualifying:e.target.value,selectedKeys:[]})}/></label></div>

@@ -207,23 +207,32 @@ function removeStalePlayoff(tournament: Tournament): Tournament {
   };
 }
 
-export function advanceChileanAscensoPlayoff(tournament: Tournament): Tournament {
-  if (
-    tournament.id !== ASCENSO_TOURNAMENT_ID
-    || tournament.placementRules?.playoffPlaces?.from !== 2
-    || tournament.placementRules.playoffPlaces.to !== 8
-    || !hasValidTeams(tournament.teams)
-  ) {
-    return tournament;
-  }
+/** Liga de Ascenso 2026 with the Liguilla (2.º–8.º) configured; the only season with this bracket. */
+export function isChileanAscenso(tournament: Tournament): boolean {
+  return tournament.id === ASCENSO_TOURNAMENT_ID
+    && tournament.placementRules?.playoffPlaces?.from === 2
+    && tournament.placementRules.playoffPlaces.to === 8
+    && hasValidTeams(tournament.teams);
+}
 
+/** Regular-phase matchdays of the Liga de Ascenso (without the Liguilla). */
+export function chileanAscensoRegularMatchdays(tournament: Tournament): readonly Matchday[] {
+  return tournament.matchdays.filter(isRegularMatchday);
+}
+
+interface AscensoBracket {
+  readonly regularMatchdays: readonly Matchday[];
+  readonly quarterfinals: readonly Tie[];
+  readonly semifinals: readonly (Tie | undefined)[];
+  readonly final: readonly Tie[];
+  readonly finalWinner?: string;
+}
+
+function computeBracket(tournament: Tournament): AscensoBracket | undefined {
   const regularMatchdays = tournament.matchdays.filter(isRegularMatchday);
-  if (!hasCompleteRoundRobin(tournament, regularMatchdays)) {
-    return removeStalePlayoff(tournament);
-  }
-
+  if (!hasCompleteRoundRobin(tournament, regularMatchdays)) return undefined;
   const standings = calculateStandings({ ...tournament, matchdays: regularMatchdays });
-  if (standings.length < 8) return removeStalePlayoff(tournament);
+  if (standings.length < 8) return undefined;
   const seeds = standings.slice(0, 8).map(({ teamId }) => teamId);
   const quarterfinals: Tie[] = [
     { homeTeamId: seeds[2], awayTeamId: seeds[7] },
@@ -247,6 +256,20 @@ export function advanceChileanAscensoPlayoff(tournament: Tournament): Tournament
   const final: Tie[] = semifinalWinners[0] && semifinalWinners[1]
     ? [{ homeTeamId: semifinalWinners[0], awayTeamId: semifinalWinners[1] }]
     : [];
+  const finalWinner = final[0] ? getTieWinner(tournament, tournament.matchdays, 1, "Final", final[0]) : undefined;
+  return { regularMatchdays, quarterfinals, semifinals, final, ...(finalWinner ? { finalWinner } : {}) };
+}
+
+/** Winner of the Liguilla final (aggregate, then return-leg penalties); undefined while undecided. */
+export function getChileanAscensoPlayoffWinner(tournament: Tournament): string | undefined {
+  return isChileanAscenso(tournament) ? computeBracket(tournament)?.finalWinner : undefined;
+}
+
+export function advanceChileanAscensoPlayoff(tournament: Tournament): Tournament {
+  if (!isChileanAscenso(tournament)) return tournament;
+  const bracket = computeBracket(tournament);
+  if (!bracket) return removeStalePlayoff(tournament);
+  const { regularMatchdays, quarterfinals, semifinals, final } = bracket;
 
   const regular = regularMatchdays.map((matchday) => ({
     ...matchday,

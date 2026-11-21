@@ -17,6 +17,9 @@ import {
 } from "./standings";
 
 import { secondDivisionKind } from "./second-division-rules";
+import { getArgentinaLeagueChampion, isArgentinaAnnualLeague } from "./argentina-league-champion";
+import { isChileanAscenso } from "./chilean-ascenso-playoff-progression";
+import { getChileanAscensoOutcome } from "./chilean-division-outcome";
 import { regularDivisionTournament, hasCompleteDivisionLeague, getDivisionOutcome } from "./second-division-progression";
 
 export interface TournamentStatistics {
@@ -404,6 +407,11 @@ function getSportingChampionFrom(
   matchdays: readonly Matchday[],
   allFixturesPlayed: boolean,
 ): string | undefined {
+  if (isArgentinaAnnualLeague(tournament)) return getArgentinaLeagueChampion(tournament).champion;
+  if (isChileanAscenso(tournament)) {
+    const outcome = getChileanAscensoOutcome(tournament);
+    return allFixturesPlayed && outcome.complete ? outcome.champion : undefined;
+  }
   if (secondDivisionKind(tournament)) {
     if (!hasCompleteDivisionLeague(tournament)) return undefined;
     if (secondDivisionKind(tournament) === "argentina") return getDivisionOutcome(tournament).promoted[0];

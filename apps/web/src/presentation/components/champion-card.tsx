@@ -20,6 +20,7 @@ function initials(name: string): string {
 }
 
 function titleOf(award: Honour, tier: ChampionTier): string {
+  if (award.title) return tier === "simulated" ? `${award.title} (simulado)` : tier === "calculated" ? `${award.title} · calculado` : award.title;
   if (award.label === "Campeón") return championTierTitles[tier];
   return tier === "simulated" ? `${award.label} (simulado)` : tier === "calculated" ? `${award.label} · calculado` : award.label;
 }

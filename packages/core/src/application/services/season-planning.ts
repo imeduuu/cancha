@@ -1,4 +1,6 @@
 import {projectNationalCup,nationalCupReviewState} from "./national-cup-planning";
+import {evaluateSeasonClosure} from "./season-closure";
+import {isChileanAscenso} from "../../domain/services/chilean-ascenso-playoff-progression";
 import type {Tournament} from "../../domain/entities/tournament";
 import type {Team} from "../../domain/entities/team";
 import type {ActivityEvent} from "../../domain/entities/activity-event";
@@ -9,7 +11,7 @@ import {secondDivisionKind} from "../../domain/services/second-division-rules";
 import {seasonCompetition} from "../../domain/services/season-preparation";
 import {canStartNewSeason,getTournamentCompletionStatus} from "../../domain/services/tournament-history";
 import {hasUnverifiedCompetitionRules} from "../../domain/services/competition-rules";
-import {isValidPlayedFixture} from "../../domain/services/tournament-statistics";
+import {calculateTournamentStatistics,isValidPlayedFixture} from "../../domain/services/tournament-statistics";
 import {calculateStandings,getUnresolvedStandingsTieGroups} from "../../domain/services/standings";
 import {validateTournamentIntegrity} from "../../domain/services/tournament-integrity";
 import {buildClubProfiles,clubOccurrenceKey} from "./club-history";
@@ -20,6 +22,8 @@ export type PlanningState="Lista para revisión"|"Pendiente de resultados"|"Pend
 export interface SeasonPlanningInput {
  mode:"roster"|"divisions"|"continental"|"national-cup";sourceId:string;targetSeason:number;qualifyingSeason?:number;partnerId?:string;cup?:ContinentalCup;
  regulationId?:string;sourceIds?:readonly string[];selectedKeys?:readonly string[];targetId?:string;incoming?:readonly Team[];sourceUrl?:string;note?:string;carryRoster?:boolean;
+ /** Active sports universe: closure confirmations are only valid inside it. */
+ universeId?:string|null;
 }
 export interface PlannedParticipant {key:string;teamId?:string;originId?:string;name:string;role:string;status:"confirmed"|"provisional"|"pending";competitionId:string;clubKey?:string;scenario:ReturnType<typeof sourceScenario>;selected:boolean;identityConflict?:boolean}
 export function planningLibrarySnapshot(tournaments:readonly Tournament[],activity:readonly ActivityEvent[]){return canonical({tournaments:[...tournaments].sort((a,b)=>a.id.localeCompare(b.id)),activity});}
@@ -36,6 +40,12 @@ export function projectSeasonPlanning(input:SeasonPlanningInput,tournaments:read
   participants.push({key:clubOccurrenceKey(t.id,team.id),teamId:team.id,originId:t.id,name:team.name,role,status,competitionId,clubKey:profile?.key,scenario:sourceScenario(t,activity),selected,identityConflict:!!profile?.warning});
  };
  const dependency=(id:string,reason:string,recorded:boolean)=>{if(!dependencies.some(d=>d.id===id && d.reason===reason))dependencies.push({id,reason,recorded});};
+ // A confirmed simulated closure is the foundation of a simulated next season (never an official one).
+ const closures=new Map<string,{confirmed:boolean;simulated:boolean}>();
+ const closureOf=(t:Tournament)=>{let c=closures.get(t.id);if(!c){const e=evaluateSeasonClosure(t,tournaments,activity,input.universeId ?? null);c={confirmed:e.confirmed,simulated:e.closureTier==="simulated"};closures.set(t.id,c);}return c;};
+ const simulatedClosed=(t:Tournament)=>{const c=closureOf(t);return c.confirmed && c.simulated;};
+ let simulatedSources=false;
+ const suggestedIncoming:string[]=[];
  if(!["roster","divisions","continental","national-cup"].includes(input.mode))block("Pendiente de reglamento","El flujo de planificación no está soportado.");
  if(!source)block("Pendiente de participantes","Selecciona una temporada de origen disponible.");
  if(!Number.isSafeInteger(input.targetSeason) || input.targetSeason<1 || input.mode!=="continental" && input.mode!=="national-cup" && source?.season!==undefined && input.targetSeason<=source.season)block("Pendiente de reglamento","Indica expresamente un año/edición de destino posterior; no se deduce una periodicidad.");
@@ -51,20 +61,34 @@ export function projectSeasonPlanning(input:SeasonPlanningInput,tournaments:read
  let continental:ReturnType<typeof continentalProjection>|undefined;
  let nationalCup:ReturnType<typeof projectNationalCup>|undefined;
  if(source && input.mode==="divisions"){
-  lower=secondDivisionKind(source)?source:partner && secondDivisionKind(partner)?partner:undefined;
+  const isLower=(t:Tournament)=>!!secondDivisionKind(t) || isChileanAscenso(t);
+  lower=isLower(source)?source:partner && isLower(partner)?partner:undefined;
   upper=lower?.id===source.id?partner:source;
   if(!lower || !upper)block("Pendiente de participantes","Elige expresamente ambas divisiones; no se enlazan por país, año o nombres.");
   else{
    dependency(partner!.id,"División asociada elegida expresamente para esta planificación (aún no es una relación histórica)",false);
    const transition=getDivisionTransition(upper,lower,tournaments);
+   if(isChileanAscenso(lower)){
+    for(const t of [upper,lower])if(!closureOf(t).confirmed)block("Pendiente de resultados",`Confirma el cierre de ${t.name} en el Centro de cierre antes de planificar la siguiente temporada.`);
+    simulatedSources=[upper,lower].every(simulatedClosed);
+    if(simulatedSources)notes.push("Escenario simulado: los movimientos salen de cierres simulados confirmados; no son ascensos ni descensos oficiales.");
+    for(const t of tournaments)if(/^anfp-liga-segunda/.test(competitionIdentity(t)) && t.season===lower.season){
+     const id=calculateTournamentStatistics(t).sportingChampionTeamId,name=t.teams.find(team=>team.id===id)?.name;
+     if(name && !suggestedIncoming.includes(name))suggestedIncoming.push(name);
+    }
+   }
    transition.pending.forEach(message=>block(/desempate|sorteo/i.test(message)?"Pendiente de desempate":/reglamento/i.test(message)?"Pendiente de reglamento":"Pendiente de resultados",message));
    if(input.targetSeason!==upper.season!+1)block("Pendiente de reglamento","El flujo existente de divisiones solo admite la siguiente temporada anual de sus formatos verificados; no calcula otros destinos.");
    for(const team of upper.teams){if(transition.upperRelegated.includes(team.id)){add(upper,team,"Desciende a Segunda por cálculo","confirmed",competitionIdentity(lower));movements.push({name:team.name,teamId:team.id,originId:upper.id,role:"Desciende desde Primera"});}else add(upper,team,"Permanece en Primera según movimientos calculados",transition.pending.length?"pending":"confirmed");}
    for(const team of lower.teams){if(transition.promoted.includes(team.id)){add(lower,team,"Asciende a Primera por cálculo","confirmed",competitionIdentity(upper));movements.push({name:team.name,teamId:team.id,originId:lower.id,role:"Asciende desde Segunda"});}
     else if(transition.lowerRelegated.includes(team.id))movements.push({name:team.name,teamId:team.id,originId:lower.id,role:"Salida de Segunda según el cálculo existente"});else add(lower,team,"Permanece en Segunda según movimientos calculados",transition.pending.length?"pending":"confirmed");}
-   for(const [i,team] of (input.incoming ?? []).entries())participants.push({key:`incoming-${i}`,name:team.name,role:"Ascenso inferior aportado por el usuario; sin identidad histórica vinculada",status:"provisional",competitionId:competitionIdentity(lower),scenario:"local",selected:true});
+   for(const [i,team] of (input.incoming ?? []).entries())participants.push({key:`incoming-${i}`,name:team.name,role:simulatedSources?"Ascendido desde Segunda aportado por el usuario (simulado)":"Ascenso inferior aportado por el usuario; sin identidad histórica vinculada",status:"provisional",competitionId:competitionIdentity(lower),scenario:"local",selected:true});
    if((input.incoming?.length ?? 0)!==transition.lowerRelegated.length)block("Pendiente de participantes",`Registra expresamente los ${transition.lowerRelegated.length} ascendidos inferiores exigidos por el flujo existente.`);
-   if(!isHttpsReference(input.sourceUrl))block("Pendiente de participantes","Falta la referencia HTTPS de los participantes inferiores aportados.");
+   if(input.sourceUrl?.trim() && !isHttpsReference(input.sourceUrl))block("Pendiente de participantes","La referencia de los participantes inferiores debe ser HTTPS.");
+   else if(!isHttpsReference(input.sourceUrl)){
+    if(simulatedSources)notes.push("Escenario simulado: la referencia HTTPS de los ascendidos desde Segunda es opcional.");
+    else block("Pendiente de participantes","Falta la referencia HTTPS de los participantes inferiores aportados.");
+   }
    const upperProfiles=new Set(upper.teams.map(t=>profileMap.get(clubOccurrenceKey(upper!.id,t.id))?.key));
    if(lower.teams.some(t=>upperProfiles.has(profileMap.get(clubOccurrenceKey(lower!.id,t.id))?.key)))block("Conflicto de identidad","Un mismo club registrado aparece en ambas divisiones de origen; no se decide su asignación automáticamente.");
   }
@@ -100,8 +124,12 @@ export function projectSeasonPlanning(input:SeasonPlanningInput,tournaments:read
   if(source.competitionType==="cup")block("Pendiente de participantes","Selecciona el flujo de copa nacional con admisión documentada y registra un reglamento aplicable; no se trasladan participantes por defecto.");
   else if(movementsConfigured)block("Pendiente de participantes","Esta competición requiere su flujo deportivo de movimientos; no se sustituye por una copia genérica.");
   else if(!canStartNewSeason(source))block("Pendiente de reglamento","El formato no admite la preparación genérica existente; revisa fases, calendario y reglamento.");
-  if(getTournamentCompletionStatus(source)!=="Finalizado")block("Pendiente de resultados","La temporada de origen no tiene una conclusión acreditada por el servicio existente.");
-  if(hasUnverifiedCompetitionRules(source))block("Pendiente de reglamento","Verifica el reglamento de origen antes de continuar con esta revisión.");
+  simulatedSources=simulatedClosed(source);
+  if(simulatedSources)notes.push("Escenario simulado: el origen se apoya en su cierre simulado confirmado; reglamento y conclusión no son oficiales.");
+  else{
+   if(getTournamentCompletionStatus(source)!=="Finalizado")block("Pendiente de resultados","La temporada de origen no tiene una conclusión acreditada por el servicio existente.");
+   if(hasUnverifiedCompetitionRules(source))block("Pendiente de reglamento","Verifica el reglamento de origen antes de continuar con esta revisión.");
+  }
   if(!input.carryRoster)block("Pendiente de participantes","Confirma que propones la nómina actual solo como escenario local, sin acreditar participantes oficiales futuros.");
  }
  const targetIdentities=input.mode==="divisions" && upper && lower?[competitionIdentity(upper),competitionIdentity(lower)]:[targetCompetitionId];
@@ -131,10 +159,16 @@ export function projectSeasonPlanning(input:SeasonPlanningInput,tournaments:read
   const last=t.continentalPlans?.[t.continentalPlans.length-1];if(last && continentalPlanState(last,tournaments,activity).startsWith("Desactualizada"))states.add("Dependencia desactualizada");
   const fixtures=t.matchdays.flatMap(day=>day.fixtures.map(f=>({day,f})));
   if(fixtures.some(({day,f})=>!isValidPlayedFixture(t,day,f)))states.add("Pendiente de resultados");
-  if(!t.competitionRules || t.competitionRules.season!==t.season || hasUnverifiedCompetitionRules(t))states.add("Pendiente de reglamento");
+  if(!t.competitionRules || t.competitionRules.season!==t.season || hasUnverifiedCompetitionRules(t)){
+   if(simulatedClosed(t))notes.push(`${t.name}: escenario simulado con cierre confirmado; su reglamento no está verificado.`);
+   else states.add("Pendiente de reglamento");
+  }
   if(t.competitionType!=="cup" && t.format!=="staged" && t.matchdays.every(d=>d.phaseName===undefined) && fixtures.length && fixtures.every(({day,f})=>isValidPlayedFixture(t,day,f)) && !t.teams.some(team=>team.groupName) && getUnresolvedStandingsTieGroups(t,calculateStandings(t)).length)states.add("Pendiente de desempate");
  }
- if(!targets.length || targets.some(t=>!t.competitionRules || hasUnverifiedCompetitionRules(t)))states.add("Pendiente de reglamento");
+ if(!targets.length || targets.some(t=>!t.competitionRules || hasUnverifiedCompetitionRules(t))){
+  if(simulatedSources)notes.push("Escenario simulado: el reglamento de la temporada de destino queda pendiente.");
+  else states.add("Pendiente de reglamento");
+ }
  const chosen=participants.filter(p=>p.selected);
  const identities=chosen.map(p=>p.clubKey).filter((v):v is string=>!!v);
  if(new Set(identities).size!==identities.length)block("Conflicto de identidad","Un club está repetido en los participantes previstos; revisa sus orígenes.");
@@ -151,5 +185,5 @@ export function projectSeasonPlanning(input:SeasonPlanningInput,tournaments:read
  if(differences.some(d=>d.unlinkedExpected.length || d.unlinkedRegistered.length))states.add("Pendiente de participantes");
  if(!blockers.length)states.add("Lista para revisión");
  return {input,source,partner,upper,lower,targetCompetitionId,targets,participants,movements,dependencies,states:[...states],blockers:[...new Set(blockers)],notes:[...new Set(notes)],differences,international,canReview:!blockers.length,
-  nationalCup,continentalEntries:continental?.entries ?? [],continentalConflicts:continental?.conflicts ?? [],overviews,snapshot:planningLibrarySnapshot(tournaments,activity)};
+  nationalCup,simulatedSources,suggestedIncoming,continentalEntries:continental?.entries ?? [],continentalConflicts:continental?.conflicts ?? [],overviews,snapshot:planningLibrarySnapshot(tournaments,activity)};
 }
