@@ -6,7 +6,8 @@ import { chileanPrimera2026PlacementRules } from "../../domain/services/chilean-
 import { getArgentinaLeagueChampion } from "../../domain/services/argentina-league-champion";
 import { getChileanAscensoOutcome } from "../../domain/services/chilean-division-outcome";
 import { getDivisionTransition } from "../../domain/services/division-season-transition";
-import { getTournamentCompletionStatus } from "../../domain/services/tournament-history";
+import { getTournamentCompletionStatus, hasCompleteRoundRobinSchedule } from "../../domain/services/tournament-history";
+import { validateTournamentIntegrity } from "../../domain/services/tournament-integrity";
 import { argentinaUpper } from "../../test-utils/journey-competition-fixtures";
 import { closureMemory } from "../../test-utils/season-closure-fixtures";
 import { simulateChampionship } from "../use-cases/simulate-championship";
@@ -119,7 +120,7 @@ describe("Chile transition Primera ↔ Liga de Ascenso", () => {
   it("an unrelated pair is rejected with an explicit message", () => {
     const {t: ascenso} = simulatedAscenso();
     expect(getDivisionTransition({...primera(), competitionId: "otra-liga"}, ascenso, []).pending)
-      .toContain("Selecciona la Liga de Primera y la Liga de Ascenso de Chile de la misma temporada 2026.");
+      .toContain("Selecciona la Liga de Primera y la Liga de Ascenso de Chile de la misma temporada.");
   });
 });
 
@@ -169,5 +170,30 @@ describe("planning Chile 2027 from confirmed simulated closures", () => {
     const {memory, repository, primera: p, ascenso} = library(false);
     expect(() => close(p.id, repository)).toThrow();
     expect(projectSeasonPlanning(input(p, ascenso), memory.state.tournaments, memory.state.activity).canReview).toBe(false);
+  });
+  it("2027 is created with a ready-to-simulate calendar, gets its Liguilla and plans 2028", () => {
+    const {memory, repository, primera: p, ascenso} = library();
+    close(p.id, repository);close(ascenso.id, repository);
+    const [upper, lower] = confirmSeasonPlanning(reviewSeasonPlanning(input(p, ascenso), repository), repository, true);
+    for (const t of [upper, lower]) {
+      expect(t.format).toBe("round-robin");expect(t.legs).toBe(2);expect(t.matchdays).toHaveLength(30);
+      expect(t.matchdays.flatMap(d => d.fixtures)).toHaveLength(240);
+      expect(t.calendarProvenance).toBe("local-generated");expect(t.tieBreakers).toEqual(["goalDifference", "goalsFor"]);
+      expect(hasCompleteRoundRobinSchedule(t)).toBe(true);expect(validateTournamentIntegrity(t)).toEqual([]);
+    }
+    expect(lower.placementRules).toEqual({championPlaces: 1, playoffPlaces: {from: 2, to: 8}, relegationPlaces: 1});
+    let seed = 99;
+    const random = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+    const upper27 = simulateChampionship(upper, "pendingOnly", repository, random).tournament;
+    const lower27 = simulateChampionship(lower, "pendingOnly", repository, random).tournament;
+    expect(lower27.matchdays.some(d => d.phaseName === "Liguilla de Ascenso · Final · Vuelta")).toBe(true);
+    expect(lower27.matchdays.flatMap(d => d.fixtures).filter(f => f.id.startsWith(`${lower27.id}-`)).length).toBeGreaterThan(0);
+    expect(getChileanAscensoOutcome(lower27).pending).toEqual([]);
+    close(upper27.id, repository);close(lower27.id, repository);
+    const next = {...input(upper27, lower27), targetSeason: 2028, incoming: [{id: "incoming-0", name: "Otro club de Segunda"}]};
+    const plan = projectSeasonPlanning(next, memory.state.tournaments, memory.state.activity);
+    expect(plan.blockers).toEqual([]);
+    const created = confirmSeasonPlanning(reviewSeasonPlanning(next, repository), repository, true);
+    expect(created.map(t => [t.season, t.teams.length, t.matchdays.length])).toEqual([[2028, 16, 30], [2028, 16, 30]]);
   });
 });

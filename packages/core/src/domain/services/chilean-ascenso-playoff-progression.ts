@@ -4,7 +4,10 @@ import { calculateStandings } from "./standings";
 import { reconcileFixtureParticipants } from "./knockout-fixture-reconciliation";
 import { isValidFixtureResult } from "./match-result-validation";
 
-const ASCENSO_TOURNAMENT_ID = "anfp-liga-de-ascenso-2026";
+const ASCENSO_COMPETITION_ID = "anfp-liga-de-ascenso";
+/** Competition identity without depending on the season year (2026 id or a planned season's UUID). */
+const competitionOf = (tournament: Tournament) =>
+  tournament.competitionId ?? /^(.*?)-(?:19|20)\d{2}$/.exec(tournament.id)?.[1] ?? tournament.id;
 const PLAYOFF_PREFIX = "Liguilla de Ascenso";
 const REGULAR_PHASE = "Fase regular";
 const FORMAT_NOTE =
@@ -96,7 +99,8 @@ function getTieWinner(
   phaseName: string,
   expectedTie: Tie,
 ): string | undefined {
-  const tieId = `${ASCENSO_TOURNAMENT_ID}-${phaseName}-${tieNumber}`;
+  // Fixture ids are prefixed by the tournament id: for 2026 that is exactly "anfp-liga-de-ascenso-2026", so they do not change.
+  const tieId = `${tournament.id}-${phaseName}-${tieNumber}`;
   const fixtures = matchdays.flatMap(({ fixtures: dayFixtures }) => dayFixtures);
   const firstLeg = fixtures.find(({ id }) => id === `${tieId}-ida`);
   const returnLeg = fixtures.find(({ id }) => id === `${tieId}-vuelta`);
@@ -142,6 +146,7 @@ function getTieWinner(
 }
 
 function makeFixture(
+  prefix: string,
   phaseName: string,
   tieNumber: number,
   tie: Tie,
@@ -149,7 +154,7 @@ function makeFixture(
   aggregateResolution: boolean,
 ): Fixture {
   return {
-    id: `${ASCENSO_TOURNAMENT_ID}-${phaseName}-${tieNumber}-${returnLeg ? "vuelta" : "ida"}`,
+    id: `${prefix}-${phaseName}-${tieNumber}-${returnLeg ? "vuelta" : "ida"}`,
     homeTeamId: returnLeg ? tie.awayTeamId : tie.homeTeamId,
     awayTeamId: returnLeg ? tie.homeTeamId : tie.awayTeamId,
     ...(aggregateResolution ? { knockoutResolution: "aggregate-then-penalties" as const } : {}),
@@ -174,7 +179,7 @@ function reconcileStageMatchday(
     usedTeams.add(tie.homeTeamId);
     usedTeams.add(tie.awayTeamId);
 
-    const candidate = makeFixture(spec.name, index + 1, tie, spec.returnLeg, spec.resolution);
+    const candidate = makeFixture(current.id, spec.name, index + 1, tie, spec.returnLeg, spec.resolution);
     const previous = previousFixtures.find(({ id }) => id === candidate.id);
     const reconciled = previous
       ? reconcileFixtureParticipants(previous, candidate.homeTeamId, candidate.awayTeamId)
@@ -207,9 +212,9 @@ function removeStalePlayoff(tournament: Tournament): Tournament {
   };
 }
 
-/** Liga de Ascenso 2026 with the Liguilla (2.º–8.º) configured; the only season with this bracket. */
+/** Liga de Ascenso (any season) with the Liguilla (2.º–8.º) configured in its placement rules. */
 export function isChileanAscenso(tournament: Tournament): boolean {
-  return tournament.id === ASCENSO_TOURNAMENT_ID
+  return competitionOf(tournament) === ASCENSO_COMPETITION_ID
     && tournament.placementRules?.playoffPlaces?.from === 2
     && tournament.placementRules.playoffPlaces.to === 8
     && hasValidTeams(tournament.teams);

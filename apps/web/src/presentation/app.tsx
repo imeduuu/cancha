@@ -44,6 +44,8 @@ import { persistTournamentProgress } from "@cancha/core/application/use-cases/pe
 import { simulateFixtures, type SimulationMode } from "@cancha/core/application/use-cases/simulate-fixtures";
 import { simulateArgentinaHalf, type ArgentinaTournamentHalf } from "@cancha/core/application/use-cases/simulate-argentina-half";
 import { simulateChampionship } from "@cancha/core/application/use-cases/simulate-championship";
+import { canGenerateSeasonCalendar, generateSeasonCalendar } from "@cancha/core/application/use-cases/generate-season-calendar";
+import { isChileanAscenso } from "@cancha/core/domain/services/chilean-ascenso-playoff-progression";
 import { updateMatchResult } from "@cancha/core/application/use-cases/update-match-result";
 import { updateMatchGoalScorers } from "@cancha/core/application/use-cases/update-match-goal-scorers";
 import { updateFixtureDetails } from "@cancha/core/application/use-cases/update-fixture-details";
@@ -420,7 +422,7 @@ function Application({ libraryBackend }: AppProps) {
   const secondKind = tournament ? secondDivisionKind(tournament) : undefined;
   const isSecondDivisionPlayoffPhase = Boolean(secondKind && activePhase && activePhase.name !== "Fase regular");
   const isArgentinaTournament = tournament?.id === "arg-liga-profesional-2026";
-  const isChileanAscensoTournament = tournament?.id === "anfp-liga-de-ascenso-2026";
+  const isChileanAscensoTournament = !!tournament && isChileanAscenso(tournament);
   const isChileanAscensoPlayoffPhase = isChileanAscensoTournament
     && Boolean(activePhase?.name.startsWith("Liguilla de Ascenso"));
   const isContinentalTournament = tournament?.id.startsWith("conmebol-") ?? false;
@@ -644,6 +646,21 @@ function Application({ libraryBackend }: AppProps) {
       setPersistenceStatus("saved");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "No se pudo simular el campeonato.");
+      setPersistenceStatus("error");
+    }
+  }
+
+  /** Planned Chilean season without fixtures (created before calendars were generated automatically). */
+  function handleGenerateSeasonCalendar() {
+    if (!tournament) return;
+    try {
+      const next = generateSeasonCalendar(tournament.id, scopedRepository);
+      setTournament(next);
+      setSavedTournaments(repository.findAll());
+      setFeedback(`Se generó un calendario local todos contra todos: ${next.matchdays.length} jornadas, sin fechas. No es un fixture oficial.`);
+      setPersistenceStatus("saved");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "No se pudo generar el calendario.");
       setPersistenceStatus("error");
     }
   }
@@ -1517,6 +1534,10 @@ function Application({ libraryBackend }: AppProps) {
                       setAlertsView(false);
                     }}>
                     {programmingView ? "Cerrar programación" : "Programar calendario"}
+                  </button>}
+                  {canGenerateSeasonCalendar(tournament) && <button className="small-action primary-library-action" type="button"
+                    onClick={() => { void runWrite(handleGenerateSeasonCalendar).catch(() => {}); }}>
+                    Generar calendario
                   </button>}
                   <button
                     aria-pressed={alertsView}

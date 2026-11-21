@@ -9,10 +9,10 @@ import type { DivisionTransition } from "./division-season-transition";
 const identity = (t: Tournament) => t.competitionId ?? getTournamentCompetitionId(t.id) ?? t.id;
 
 export function isChileanPrimera(t: Tournament): boolean {
-  return identity(t) === "anfp-liga-primera" && t.season === 2026;
+  return identity(t) === "anfp-liga-primera" && Number.isSafeInteger(t.season);
 }
 
-/** Chile 2026 → 2027: Primera's last places go down; Ascenso's champion and Liguilla winner go up; Ascenso's last goes to Segunda. */
+/** Chile, one season to the next (2026 → 2027, 2027 → 2028…): Primera's last places go down; Ascenso's champion and Liguilla winner go up; Ascenso's last goes to Segunda. */
 export function getChileanDivisionTransition(primera: Tournament, ascenso: Tournament): DivisionTransition {
   const outcome = getChileanAscensoOutcome(ascenso);
   const pending = [...outcome.pending];
@@ -20,7 +20,7 @@ export function getChileanDivisionTransition(primera: Tournament, ascenso: Tourn
     promoted: outcome.promoted, upperRelegated, lowerRelegated: outcome.relegated, pending: [...new Set(pending)],
   });
   if (!isChileanPrimera(primera) || !isChileanAscenso(ascenso) || primera.season !== ascenso.season) {
-    pending.push("Selecciona la Liga de Primera y la Liga de Ascenso de Chile de la misma temporada 2026."); return result();
+    pending.push("Selecciona la Liga de Primera y la Liga de Ascenso de Chile de la misma temporada."); return result();
   }
   if (!primera.matchdays.length || primera.matchdays.some(day => day.fixtures.some(fixture =>
     !isValidFixtureResult(primera, day, fixture))) || !hasCompleteRoundRobinSchedule(primera)) {

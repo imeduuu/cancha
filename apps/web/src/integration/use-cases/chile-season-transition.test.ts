@@ -81,5 +81,20 @@ describe("Chile 2026 → 2027 from simulated seasons (fase 10D)", () => {
     expect(lowerNames.some(name => names(transition.lowerRelegated, ascenso).includes(name))).toBe(false);
     expect(repository.findAll().filter(t => t.season === 2027)).toHaveLength(2);
     expect(repository.findActivity().at(-1)?.action).toBe("season-created");
+
+    // 2027 comes with its own local calendar: simulate it, close it and plan 2028 the same way.
+    expect(upper.matchdays).toHaveLength(30);expect(lower.matchdays).toHaveLength(30);
+    simulateChampionship(find(upper.id), "pendingOnly", repository, seeded(31));
+    simulateChampionship(find(lower.id), "pendingOnly", repository, seeded(47));
+    const primera27 = find(upper.id), ascenso27 = find(lower.id);
+    expect(ascenso27.matchdays.some(day => day.phaseName?.startsWith("Liguilla de Ascenso · Final"))).toBe(true);
+    for (const t of [primera27, ascenso27]) {
+      expect(evaluateSeasonClosure(t, repository.findAll(), repository.findActivity(), null).blockers).toEqual([]);
+      confirmSeasonClosure(reviewSeasonClosure(t.id, null, repository), null, repository, true);
+    }
+    const next = {...input, sourceId: primera27.id, partnerId: ascenso27.id, targetSeason: 2028,
+      incoming: [{id: "incoming-0", name: "Otro club ascendido de Segunda"}]};
+    const created2028 = confirmSeasonPlanning(reviewSeasonPlanning(next, repository), repository, true);
+    expect(created2028.map(t => [t.season, t.teams.length, t.matchdays.length])).toEqual([[2028, 16, 30], [2028, 16, 30]]);
   });
 });
