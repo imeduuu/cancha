@@ -7,6 +7,8 @@ import { reviewSeasonClosure, confirmSeasonClosure, type SeasonClosureReview } f
 import { useLibraryWrite } from "../library-write-context";
 import { sportingStorageKeys } from "../../infrastructure/persistence/library-write-lock";
 import { isHttpsReference } from "@cancha/core/domain/services/continental-plan";
+import { championTierLabels } from "@cancha/core/application/services/champion-tier";
+import { ChampionCards } from "./champion-card";
 
 export function SeasonClosureCenter({tournaments, repository, universeId, universeName, initialTournamentId, getUniverseId, onChanged, onCalendar, onAlerts, onEdit, onPlanning, onClose}: {
   tournaments: readonly Tournament[]; repository: TournamentRepository; universeId: string | null; universeName: string;
@@ -32,12 +34,15 @@ export function SeasonClosureCenter({tournaments, repository, universeId, univer
   const evaluation = review?.evaluation ?? (current ? evaluateSeasonClosure(current, liveTournaments, activity, universeId) : undefined);
   const t = evaluation?.tournament;
   const name = (teamId: string) => t?.teams.find(team => team.id === teamId)?.name ?? teamId;
+  const simulated = evaluation?.closureTier === "simulated";
   async function confirm() {
     if (!review || pending.current) return;
     pending.current = true;setBusy(true);
     try {
       await runWrite(() => confirmSeasonClosure(review, getUniverseId(), repository, true));
-      onChanged();setReview(null);setMessage("Cierre deportivo confirmado. Resultados conservados; no se creó una nueva edición.");
+      onChanged();setReview(null);setMessage(review.evaluation.closureTier === "simulated"
+        ? "Cierre simulado confirmado (no oficial). Resultados conservados; no se creó una nueva edición."
+        : "Cierre deportivo confirmado. Resultados conservados; no se creó una nueva edición.");
     } catch (error) { setReview(null);setMessage(error instanceof Error ? error.message : "No se pudo confirmar el cierre."); }
     finally { pending.current = false;setBusy(false); }
   }
@@ -53,7 +58,7 @@ export function SeasonClosureCenter({tournaments, repository, universeId, univer
     {t && evaluation && <>
       <p role="status">Estado: {evaluation.state}</p>
       <p>{t.name} · Edición {t.season ?? "Sin año"} · Formato: {t.competitionType ?? "No registrado"} / {t.format ?? "No registrado"}</p>
-      <p>{evaluation.overview.provenance}. Campeón deportivo calculado; no constituye certificación externa.</p>
+      <p>{evaluation.overview.provenance}. {evaluation.closureTier ? championTierLabels[evaluation.closureTier] : "Sin resultado deportivo determinado"}; no constituye certificación externa.</p>
       <p>{t.teams.length} participantes · {evaluation.overview.played} partidos disputados · {evaluation.overview.total - evaluation.overview.played} pendientes · {evaluation.matchdays.filter(p => p.complete).length}/{evaluation.matchdays.length} jornadas completas · {evaluation.phases.filter(p => p.complete).length}/{evaluation.phases.length} fases o ruedas completas.</p>
       <details><summary>Participantes y calendario</summary><ul>{t.teams.map(team => <li key={team.id}>{team.name}</li>)}</ul>
         <ul>{evaluation.phases.map(phase => <li key={phase.index}>{phase.label}: {phase.complete ? "Completa" : "Pendiente"}</li>)}</ul>
@@ -63,11 +68,12 @@ export function SeasonClosureCenter({tournaments, repository, universeId, univer
         <ul>{t.competitionRules?.sourceUrls?.map((url,index)=><li key={index}>{isHttpsReference(url)?<a href={url} target="_blank" rel="noreferrer">{url}</a>:url}</li>)}</ul>
         {t.matchRegulations && <p>Reglamento de partidos: {t.matchRegulations.season} · {t.matchRegulations.verification}. {t.matchRegulations.notes} {t.matchRegulations.sourceUrl && isHttpsReference(t.matchRegulations.sourceUrl) && <a href={t.matchRegulations.sourceUrl} target="_blank" rel="noreferrer">Fuente del reglamento de partidos</a>}</p>}</details>
       <h3>Resultados deportivos</h3>
-      {evaluation.honours.awards.length ? <ul>{evaluation.honours.awards.filter(a => ["Campeón", "Subcampeón"].includes(a.label)).map(a => <li key={a.label}>{a.label}: {name(a.teamId)}</li>)}</ul> : <p>No hay campeón acreditado por los servicios deportivos existentes.</p>}
+      <ChampionCards tournament={t} activity={activity} showRunnerUp={false} />
+      {evaluation.honours.awards.length ? <ul>{evaluation.honours.awards.filter(a => ["Campeón", "Subcampeón"].includes(a.label) || a.label.startsWith("Campeón del ")).map(a => <li key={a.label}>{a.label}: {name(a.teamId)}{a.tier && a.tier !== "verified" ? ` · ${championTierLabels[a.tier]}` : ""}</li>)}</ul> : <p>No hay campeón acreditado por los servicios deportivos existentes.</p>}
       {evaluation.tables.map(table => <div className="table-scroll" key={table.label}><table><caption>{table.label === "Clasificación final" && evaluation.blockers.length ? "Clasificación calculada · requiere revisión" : table.label}</caption><thead><tr><th>Posición</th><th>Club</th><th>Puntos</th><th>PJ</th></tr></thead><tbody>{table.rows.map((row, index) => <tr key={row.teamId}><td>{index + 1}</td><td>{row.teamName}</td><td>{row.points}</td><td>{row.played}</td></tr>)}</tbody></table></div>)}
       <h3>Ascensos, descensos y decisiones</h3>
       <p>Ascendidos calculados: {evaluation.division?.promoted.map(name).join(", ") || "Sin ascensos resueltos por un servicio aplicable"}.</p>
-      <p>Descensos calculados: {evaluation.relegated.map(row => `${name(row.teamId)} → ${row.destination}`).join("; ") || "Sin descensos resueltos por un servicio aplicable"}.</p>
+      <p>{simulated ? "Descensos calculados (simulado, no oficial)" : "Descensos calculados"}: {evaluation.relegated.map(row => `${name(row.teamId)} → ${row.destination}`).join("; ") || "Sin descensos resueltos por un servicio aplicable"}.</p>
       {evaluation.averages && <p>Proyección de descensos por promedio, separada de la tabla: {evaluation.averages.standings.filter(row => row.relegation).map(row => `${row.teamName} · ${row.status}`).join("; ") || "Sin plazas resueltas"}. {evaluation.averages.pendingReasons.join(" ")}</p>}
       <p>{t.competitionRules?.placementsNote ?? t.placementRules?.note ?? "No se deducen movimientos por el nombre de la competición."}</p>
       <details><summary>Resoluciones registradas ({evaluation.resolutions.length})</summary><ul>{evaluation.resolutions.map(resolution => <li key={resolution.id}>{resolution.key} · {resolution.verification} · {resolution.invalidation ? "Invalidada" : resolution.supersededBy ? "Sustituida" : "Registro vigente"} · <a href={resolution.source.url} target="_blank" rel="noreferrer">{resolution.source.reference}</a></li>)}</ul></details>
@@ -87,12 +93,12 @@ export function SeasonClosureCenter({tournaments, repository, universeId, univer
       <button type="button" className="small-action" disabled={busy || scopeChanged || !evaluation.canConfirm} onClick={() => {
         try { setReview(reviewSeasonClosure(t.id, universeId, repository));setMessage(""); }
         catch (error) { setMessage(error instanceof Error ? error.message : "No se pudo revisar."); }
-      }}>Revisar cierre deportivo</button>
+      }}>{simulated ? "Revisar cierre simulado" : "Revisar cierre deportivo"}</button>
       {review && <div aria-label="Vista previa del cierre deportivo"><h3>Vista previa de confirmación</h3>
         <p>Se registrará la revisión de {review.evaluation.tournament.name}: {review.evaluation.overview.played} partidos completos. No se cambiarán resultados, participantes, calendarios ni el archivo de la competición.</p>
         <p>Campeón: {name(review.evaluation.honours.awards.find(a => a.label === "Campeón")?.teamId ?? "No determinado")}. La clasificación, movimientos, decisiones y dependencias anteriores forman parte de esta revisión.</p>
         {review.evaluation.blockers.length > 0 && <ul>{review.evaluation.blockers.map(reason => <li key={reason}>{reason}</li>)}</ul>}
-        <button type="button" disabled={busy || scopeChanged || !review.evaluation.canConfirm} onClick={() => void confirm()}>{busy ? "Confirmando…" : "Confirmar cierre deportivo"}</button>
+        <button type="button" disabled={busy || scopeChanged || !review.evaluation.canConfirm} onClick={() => void confirm()}>{busy ? "Confirmando…" : review.evaluation.closureTier === "simulated" ? "Confirmar cierre simulado (no oficial)" : "Confirmar cierre deportivo"}</button>
         <button type="button" className="small-action" disabled={busy} onClick={() => setReview(null)}>Cancelar revisión de cierre</button>
       </div>}
       <button type="button" className="small-action" disabled={busy || scopeChanged || !evaluation.confirmed} onClick={() => onPlanning(t)}>Preparar siguiente edición en planificación</button>

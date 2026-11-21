@@ -15,7 +15,7 @@ function cup():Tournament{
 }
 describe("read-only honours and historical records",()=>{
  it("uses final league standings for champion, runner-up and highlighted places",()=>{
-  const t=league(),h=seasonHonours(t);expect(h.complete).toBe(true);expect(h.awards).toContainEqual({teamId:t.teams[0].id,label:"Campeón"});expect(h.awards).toContainEqual({teamId:t.teams[1].id,label:"Subcampeón"});
+  const t=league(),h=seasonHonours(t);expect(h.complete).toBe(true);expect(h.awards).toContainEqual({teamId:t.teams[0].id,label:"Campeón",tier:"verified"});expect(h.awards).toContainEqual({teamId:t.teams[1].id,label:"Subcampeón",tier:"verified"});
  });
  it("does not award an incomplete league",()=>{
   const t=league();expect(seasonHonours({...t,matchdays:t.matchdays.slice(1)}).awards).toEqual([]);
@@ -24,11 +24,13 @@ describe("read-only honours and historical records",()=>{
   const t=league();const drawn={...t,matchdays:t.matchdays.map(d=>({...d,fixtures:d.fixtures.map(f=>({...f,result:{homeGoals:0,awayGoals:0}}))}))};expect(seasonHonours(drawn).awards).toEqual([]);
  });
  it.each(["partial","unknown"] as const)("does not award with %s import coverage",coverage=>expect(seasonHonours({...league(),importCoverage:coverage}).complete).toBe(false));
- it("blocks provisional annual rules",()=>{
-  const t=league();expect(seasonHonours({...t,competitionRules:{...t.competitionRules!,verification:{standings:"provisional",placements:"pending"}}}).awards).toEqual([]);
+ it("labels provisional annual rules as calculated instead of verified",()=>{
+  const t=league(),h=seasonHonours({...t,competitionRules:{...t.competitionRules!,verification:{standings:"provisional",placements:"pending"}}});
+  expect(h.complete).toBe(false);expect(h.tier).toBe("calculated");expect(h.reasons).toEqual(["Reglamento pendiente, provisional o de otro año."]);
+  expect(h.awards.every(a=>a.tier==="calculated")).toBe(true);expect(h.awards).toContainEqual({teamId:t.teams[0].id,label:"Campeón",tier:"calculated"});
  });
  it("uses penalties and recorded final participants, not table second, for cups",()=>{
-  const t=cup(),h=seasonHonours(t);expect(h.awards).toContainEqual({teamId:t.teams[0].id,label:"Campeón"});expect(h.awards).toContainEqual({teamId:t.teams[2].id,label:"Subcampeón"});expect(h.awards.filter(a=>a.label==="Finalista")).toHaveLength(2);expect(h.awards.filter(a=>a.label==="Semifinalista")).toHaveLength(4);
+  const t=cup(),h=seasonHonours(t);expect(h.awards).toContainEqual({teamId:t.teams[0].id,label:"Campeón",tier:"verified"});expect(h.awards).toContainEqual({teamId:t.teams[2].id,label:"Subcampeón",tier:"verified"});expect(h.awards.filter(a=>a.label==="Finalista")).toHaveLength(2);expect(h.awards.filter(a=>a.label==="Semifinalista")).toHaveLength(4);
  });
  it("keeps Série B playoff completion separate from the regular table",()=>{
   const t=divisionFixture("brasil");expect(seasonHonours(t).awards).toEqual([]);expect(seasonHonours(t).reasons.join(" ")).toContain("incompleta");
@@ -42,7 +44,7 @@ describe("read-only honours and historical records",()=>{
  it("uses two-leg domain winners without adding aggregate rules",()=>{
   const t=cup(),final=t.matchdays[1].fixtures[0];
   const two={...t,knockoutStages:[t.knockoutStages![0],{name:"Final",legs:2 as const}],matchdays:[t.matchdays[0],{number:2,leg:2,phaseName:"Final · Ida",fixtures:[{...final,result:{homeGoals:1,awayGoals:0},knockoutResolution:undefined}]},{number:3,leg:3,phaseName:"Final · Vuelta",fixtures:[{...final,id:"f2",homeTeamId:final.awayTeamId,awayTeamId:final.homeTeamId,knockoutResolution:"aggregate-then-penalties" as const,result:{homeGoals:0,awayGoals:0}}]}]};
-  expect(seasonHonours(two).awards).toContainEqual({teamId:final.homeTeamId,label:"Campeón"});
+  expect(seasonHonours(two).awards).toContainEqual({teamId:final.homeTeamId,label:"Campeón",tier:"verified"});
  });
  it("does not infer a playoff runner-up from league table",()=>{
   const t=league();expect(seasonHonours({...t,format:"staged"}).awards).toEqual([]);

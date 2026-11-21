@@ -1,3 +1,4 @@
+import { championTierLabels } from "./club-honours";
 import {associationSeasonSummary} from "./club-associations";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { ActivityEvent } from "../../domain/entities/activity-event";
@@ -34,7 +35,9 @@ export function projectHistoricalArchive(all: readonly Tournament[], allActivity
     const confederation = ["Argentina", "Brasil", "Chile", "CONMEBOL"].includes(group.territory) ? "CONMEBOL" : "Sin confederación registrada";
     const champion = closure.honours.awards.find(a => a.label === "Campeón");
     const runner = closure.honours.awards.find(a => a.label === "Subcampeón");
-    const titleStatus = champion ? closure.confirmed ? "Campeón con cierre vigente" : "Campeón deportivo calculado"
+    const tier = champion?.tier ?? "verified";
+    const tierSuffix = tier === "verified" ? "" : ` · ${championTierLabels[tier]}`;
+    const titleStatus = champion ? (closure.confirmed ? "Campeón con cierre vigente" : "Campeón deportivo calculado") + tierSuffix
       : closure.overview.played ? "Resultado provisional o ganador no determinable" : "Campeón desconocido";
     const participation = t.teams.map(team => ({team, profileKey: profileByOccurrence.get(clubOccurrenceKey(t.id, team.id))!,
       scheduled: t.matchdays.some(day => day.fixtures.some(f => f.homeTeamId === team.id || f.awayTeamId === team.id))}));

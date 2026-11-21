@@ -4,6 +4,7 @@ import { isValidFixtureResult } from "./match-result-validation";
 import { getDivisionOutcome } from "./second-division-progression";
 import { secondDivisionKind } from "./second-division-rules";
 import { normalizeTeamName } from "./team-name";
+import { argentinaHalves, getArgentinaHalfFinalWinner } from "./argentina-half-champions";
 
 export interface DivisionTransition {
   readonly promoted: readonly string[];
@@ -49,14 +50,8 @@ export function getDivisionTransition(upper: Tournament, lower: Tournament,
     }
     return result(standings.slice(16).map(row => row.teamId));
   }
-  for (const half of ["Apertura", "Clausura"]) {
-    const final = upper.matchdays.find(day => day.phaseName === `Torneo ${half} · Final`);
-    const score = final?.fixtures[0]?.result;
-    const decisive = score && (score.homeGoals + (score.extraTime?.homeGoals ?? 0)
-      !== score.awayGoals + (score.extraTime?.awayGoals ?? 0)
-      || (score.penalties && score.penalties.homeGoals !== score.penalties.awayGoals));
-    if (final?.fixtures.length !== 1 || !isValidFixtureResult(upper, final, final.fixtures[0]) || !decisive)
-      pending.push(`Final del ${half} pendiente.`);
+  for (const half of argentinaHalves) {
+    if (!getArgentinaHalfFinalWinner(upper, half)) pending.push(`Final del ${half} pendiente.`);
   }
   const seasons = [2024, 2025, 2026];
   const seasonal: Tournament[] = [];

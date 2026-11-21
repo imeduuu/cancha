@@ -164,3 +164,19 @@ export function classifyPosition(
 
   return undefined;
 }
+
+/**
+ * Continental slot of a league position. Unlike classifyPosition, the champion zone does not
+ * hide a continental slot: a champion inside libertadoresPlaces still qualifies.
+ */
+export function classifyContinentalPosition(
+  position: number,
+  rules: TournamentPlacementRules,
+): "libertadores" | "libertadores-qualifying" | "sudamericana" | undefined {
+  const within = (range?: { readonly from: number; readonly to: number }) =>
+    !!range && position >= range.from && position <= range.to;
+  if (within(rules.libertadoresPlaces)) return "libertadores";
+  if (within(rules.libertadoresQualifyingPlaces)) return "libertadores-qualifying";
+  if (within(rules.sudamericanaPlaces)) return "sudamericana";
+  return undefined;
+}

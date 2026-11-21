@@ -3,14 +3,15 @@ import type { ActivityEvent } from "../../domain/entities/activity-event";
 import type { ContinentalCup, ContinentalEntry, ContinentalPlan } from "../../domain/entities/continental-plan";
 import { calculateInternationalQualifications, type InternationalQualification } from "../../domain/services/international-qualification";
 import { calculateStandings } from "../../domain/services/standings";
-import { classifyPosition } from "../../domain/services/placement-classification";
+import { classifyContinentalPosition } from "../../domain/services/placement-classification";
 import { normalizeTeamName } from "../../domain/services/team-name";
 import { canonical, continentalDestination } from "../../domain/services/continental-plan";
-import { competitionIdentity, hasLocalSeasonActivity } from "./competition-center";
+import { competitionIdentity } from "./competition-center";
+import { isLocalScenario } from "./champion-tier";
 
 export const entryKey = (e: ContinentalEntry) => JSON.stringify([e.sourceTournamentId, e.originTournamentId, e.sourceTeamId, e.destination]);
 export function sourceScenario(t: Tournament, activity: readonly ActivityEvent[]): ContinentalEntry["scenario"] {
-  if (t.seasonPreparation || t.continentalPlans?.some(plan => plan.mode === "incorporated" || plan.requiresReview) || hasLocalSeasonActivity(t.id,activity)) return "local";
+  if (isLocalScenario(t, activity)) return "local";
   return t.sourceUrl ? "provider" : "unknown";
 }
 export function continentalSourceSnapshot(id: string, tournaments: readonly Tournament[], activity: readonly ActivityEvent[]) {
@@ -33,8 +34,8 @@ export function nationalContinentalProjection(source: Tournament, tournaments: r
   const standings = calculateStandings(tableSource);
   const explicitRules = rules?.internationalQualification;
   const baseSlots = standings.flatMap((_row,index) => {
-    const destination = source.placementRules && classifyPosition(index + 1, standings.length, source.placementRules);
-    return destination && continentalDestination(destination) ? [{destination,position:index+1}] : [];
+    const destination = source.placementRules && classifyContinentalPosition(index + 1, source.placementRules);
+    return destination ? [{destination,position:index+1}] : [];
   });
   const calculated = calculateInternationalQualifications(standings, tableSource, tournaments,
     explicitRules ?? {verification:"provisional",slots:baseSlots},rules?.verification.placements ?? "provisional");

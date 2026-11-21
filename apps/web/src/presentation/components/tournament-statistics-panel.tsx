@@ -1,4 +1,4 @@
-import {seasonHonours} from "@cancha/core/application/services/club-honours";
+import {championTierLabels, seasonHonours} from "@cancha/core/application/services/club-honours";
 import {SeasonHonours} from "./club-honours-panel";
 import type {ActivityEvent} from "@cancha/core/domain/entities/activity-event";
 import { useEffect, useMemo, useState } from "react";
@@ -43,7 +43,8 @@ export function TournamentStatisticsPanel({
     ...(phaseName ? { phaseName } : {}),
     ...(groupName ? { groupName } : {}),
   });
-  const canShowChampion = useMemo(() => seasonHonours(tournament).complete, [tournament]);
+  const honours = useMemo(() => seasonHonours(tournament, activity), [tournament, activity]);
+  const champion = honours.awards.find(award => award.label === "Campeón");
   const teamNames = new Map(tournament.teams.map(({ id, name }) => [id, name]));
   let scorerPosition = 0;
   const scorersWithPositions = stats.topScorers.map((scorer, index) => {
@@ -137,8 +138,8 @@ export function TournamentStatisticsPanel({
         <Highlight label="Mejor diferencia de goles" value={leaderText(stats.standings, "goalDifference", teamNames, false, stats.played)} />
         <Highlight
           label="Campeón"
-          value={canShowChampion && stats.championTeamId
-            ? teamNames.get(stats.championTeamId) ?? "Equipo desconocido"
+          value={champion
+            ? `${teamNames.get(champion.teamId) ?? "Equipo desconocido"}${champion.tier && champion.tier !== "verified" ? ` · ${championTierLabels[champion.tier]}` : ""}`
             : "Aún no determinado"}
         />
       </div>

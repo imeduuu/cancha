@@ -143,3 +143,72 @@
 
 /* Centros y paneles anchos: el texto corrido no supera una medida legible. */
 :is(.sports-decisions-center, .draw-center, .historical-archive, .season-closure-center, .season-simulation-center, .competition-center, .season-planning, .club-history, .head-to-head, .club-performance, .continental-qualification, .save-recovery-center, .sports-universe-dashboard, .competition-alert-center, .statistics-panel, .calendar-programming-center, .match-calendar) :is(p, li) { max-width: 80ch; }
+
+/* Tarjeta de campeón (fase 10A): el nivel de acreditación siempre visible */
+.champion-cards { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); }
+.champion-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3) var(--space-4);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--zone-champion);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  min-width: 0;
+}
+.champion-card-simulated { border-left-color: var(--warning-line); }
+.champion-card-calculated { border-left-color: var(--info-line); }
+.champion-card-emblem {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  background: var(--zone-champion-tint);
+  color: var(--zone-champion-fg);
+  border: 2px solid var(--zone-champion);
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+.champion-card-body { min-width: 0; }
+.champion-card-body > p, .champion-card-title { margin: 0; }
+.champion-card-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--zone-champion-fg);
+}
+.champion-card-club {
+  font-family: var(--font-display);
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.champion-card-meta { font-size: var(--fs-sm); color: var(--fg-soft); }
+.champion-card-note { margin-top: var(--space-1); font-size: var(--fs-xs); color: var(--muted); }
+.champion-card-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 2px var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.champion-card-badge-verified { border-color: var(--zone-champion); background: var(--zone-champion-tint); color: var(--zone-champion-fg); }
+.champion-card-badge-calculated { border-color: var(--info-line); background: var(--info-bg); color: var(--info-fg); }
+.champion-card-badge-simulated { border-color: var(--warning-line); background: var(--warning-bg); color: var(--warning-fg); }
+@media (min-width: 720px) {
+  .champion-card { grid-template-columns: auto 1fr auto; }
+  .champion-card-badge { grid-column: auto; justify-self: end; align-self: start; }
+}

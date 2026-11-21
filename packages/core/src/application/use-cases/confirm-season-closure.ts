@@ -34,9 +34,12 @@ export function confirmSeasonClosure(review: SeasonClosureReview, universeId: st
   if (!repository.recordActivity || !repository.findActivity) throw new Error("El repositorio no permite registrar el cierre con su historial.");
   const championTeamId = current.honours.awards.find(award => award.label === "Campeón")?.teamId;
   if (!championTeamId) throw new Error("El servicio deportivo no acredita un campeón para cerrar esta edición.");
-  const after: SeasonClosureRecord = {schemaVersion: 1, universeId, foundation: current.foundation, championTeamId};
+  const simulated = current.closureTier === "simulated";
+  const after: SeasonClosureRecord = {schemaVersion: 1, universeId, foundation: current.foundation, championTeamId, ...(simulated ? {tier: "simulated" as const} : {})};
   const event = createActivityEvent(current.tournament, {action: "season-closure-confirmed", entityType: "season",
-    summary: "Se confirmó la revisión del cierre deportivo local. No certifica resultados oficiales ni crea la próxima edición.", after});
+    summary: simulated
+      ? "Se confirmó el cierre simulado (no oficial) de la temporada. No certifica resultados oficiales ni crea la próxima edición."
+      : "Se confirmó la revisión del cierre deportivo local. No certifica resultados oficiales ni crea la próxima edición.", after});
   recordActivity(repository, event);
   reviews.delete(review);
   return event;

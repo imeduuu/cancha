@@ -34,9 +34,10 @@ describe("historical archive read projection",()=>{
     const changed={...t,matchdays:t.matchdays.map((d,i)=>i?d:{...d,fixtures:d.fixtures.map(f=>({...f,result:{homeGoals:0,awayGoals:8}}))})};
     const row=project([changed],memory.state.activity).rows[0];expect(row.closure.state).toBe("Cierre desactualizado");expect(row.closure.history).toHaveLength(1);
   });
-  it("keeps provisional results visible without inventing a provisional champion",()=>{
+  it("labels a champion under provisional rules as calculated, never as verified",()=>{
     const t=closureLeague(),row=project([{...t,competitionRules:{...t.competitionRules!,verification:{standings:"provisional",placements:"verified"}}}]).rows[0];
-    expect(row.champion).toBeUndefined();expect(row.titleStatus).toContain("provisional");
+    expect(row.champion?.tier).toBe("calculated");expect(row.titleStatus).toContain("Calculado · reglamento pendiente");
+    expect(row.closure.canConfirm).toBe(false);
   });
   it("unknown cup formats have no fabricated winner or final",()=>{
     const t={...closureCup(),knockoutStages:undefined},row=project([t]).rows[0];expect(row.champion).toBeUndefined();expect(row.closure.blockers.length).toBeGreaterThan(0);

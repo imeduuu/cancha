@@ -1,14 +1,14 @@
 import {useMemo} from "react";
 import type {Tournament} from "@cancha/core/domain/entities/tournament";
 import type {ActivityEvent} from "@cancha/core/domain/entities/activity-event";
-import {seasonHonours,seasonRecordRows,seasonHighlights,historicalRecords,recordMetrics,provenanceLabels,type RecordMetric} from "@cancha/core/application/services/club-honours";
+import {championTierLabels,seasonHonours,seasonRecordRows,seasonHighlights,historicalRecords,recordMetrics,provenanceLabels,type RecordMetric} from "@cancha/core/application/services/club-honours";
 import type {ClubProfile} from "@cancha/core/application/services/club-history";
 import {sourceScenario} from "@cancha/core/application/services/continental-projection";
 import {groupCompetitions} from "@cancha/core/application/services/competition-center";
 import {useSessionDraft} from "../session-drafts";
 
 export function SeasonHonours({tournament,activity=[],teamId}:{tournament:Tournament;activity?:readonly ActivityEvent[];teamId?:string}){
- const honours=useMemo(()=>seasonHonours(tournament),[tournament]);
+ const honours=useMemo(()=>seasonHonours(tournament,activity),[tournament,activity]);
  const allRecords=useMemo(()=>seasonRecordRows(tournament,activity),[tournament,activity]);
  const records=allRecords.filter(r=>!teamId || r.team.id===teamId);
  const highlights=seasonHighlights(allRecords).filter(h=>!teamId || h.leaders.some(r=>r.team.id===teamId));
@@ -16,7 +16,7 @@ export function SeasonHonours({tournament,activity=[],teamId}:{tournament:Tourna
  return <section aria-label={`Palmarés y marcas de ${tournament.name}`} className="club-history-scope">
   <h4>Palmarés y marcas de temporada</h4>
   <p>{provenanceLabels[sourceScenario(tournament,activity)]}. Cálculo sobre datos guardados; no certifica un título oficial.</p>
-  {visible.map(a=><p key={`${a.teamId}-${a.label}`}>{a.label}: {tournament.teams.find(t=>t.id===a.teamId)?.name}</p>)}
+  {visible.map(a=><p key={`${a.teamId}-${a.label}`}>{a.label}: {tournament.teams.find(t=>t.id===a.teamId)?.name}{a.tier && a.tier!=="verified"?` · ${championTierLabels[a.tier]}`:""}</p>)}
   {!visible.length && <p>Sin distinción determinada para este alcance.</p>}
   {honours.reasons.map(reason=><p key={reason}>{reason}</p>)}
   <p>Marcas del tiempo reglamentario, separadas por fase. Las cifras parciales no son récords definitivos; no incluyen goles de prórroga ni tandas.</p>

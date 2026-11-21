@@ -18,6 +18,7 @@ import {
   parseTournamentBackupWithActivity,
 } from "@cancha/core/application/services/tournament-archive";
 import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event";
+import { championTierLabels, unverifiedTier } from "@cancha/core/application/services/champion-tier";
 import type { SportsUniverseLibrary } from "@cancha/core/domain/entities/sports-universe";
 import { emptySportsUniverseLibrary } from "@cancha/core/application/services/sports-universes";
 import { SportsUniverseControls } from "./sports-universe-controls";
@@ -844,6 +845,7 @@ export function TournamentLibrary({
           {summaryTournament && (
             <CompetitionSummary
               tournament={summaryTournament}
+              activity={allActivityEvents}
               onOpen={() => onOpen(summaryTournament)}
               onOpenCalendar={() => onOpenCalendar(summaryTournament)}
               onOpenAlerts={() => onOpenAlerts(summaryTournament)}
@@ -1007,9 +1009,7 @@ export function TournamentLibrary({
                   {tournament.archived && (
                     <div className="history-summary">
                       <span>Estadísticas: {statistics.played} partidos · {statistics.totalGoals} goles · promedio {statistics.averageGoals.toFixed(2)}</span>
-                      <span>Campeón: {statistics.championTeamId
-                        ? tournament.teams.find(({ id }) => id === statistics.championTeamId)?.name ?? "Desconocido"
-                        : "No confirmado"}</span>
+                      <span>Campeón: {championText(tournament, statistics, allActivityEvents, "No confirmado")}</span>
                       {finalStandings && (
                         <details>
                           <summary>Consultar tabla final</summary>
@@ -1299,14 +1299,26 @@ function normalizeSearch(value: string): string {
   return value.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es");
 }
 
+/** The verified champion keeps its plain name; simulated or calculated champions always carry their tier. */
+function championText(tournament: Tournament, statistics: ReturnType<typeof calculateTournamentStatistics>,
+  activity: readonly ActivityEvent[], fallback: string): string {
+  const name = (id: string) => tournament.teams.find(team => team.id === id)?.name ?? "Desconocido";
+  if (statistics.championTeamId) return name(statistics.championTeamId);
+  if (statistics.sportingChampionTeamId)
+    return `${name(statistics.sportingChampionTeamId)} · ${championTierLabels[unverifiedTier(tournament, activity)]}`;
+  return fallback;
+}
+
 function CompetitionSummary({
   tournament,
+  activity = [],
   onOpen,
   onOpenCalendar,
   onOpenAlerts,
   onClose,
 }: {
   tournament: Tournament;
+  activity?: readonly ActivityEvent[];
   onOpen: () => void;
   onOpenCalendar: () => void;
   onOpenAlerts: () => void;
@@ -1349,9 +1361,7 @@ function CompetitionSummary({
         <div><dt>Estado</dt><dd>{getControlStatusLabel(getControlStatus(tournament))}</dd></div>
         <div><dt>Partidos</dt><dd>{statistics.played} disputados · {statistics.pending} pendientes</dd></div>
         <div><dt>Avance</dt><dd>{getProgressText(tournament)}</dd></div>
-        <div><dt>Campeón</dt><dd>{statistics.championTeamId
-          ? teamName(statistics.championTeamId)
-          : "No confirmado"}</dd></div>
+        <div><dt>Campeón</dt><dd>{championText(tournament, statistics, activity, "No confirmado")}</dd></div>
         <div><dt>Estados operativos pendientes</dt><dd>{operationalSummary}</dd></div>
       </dl>
       {statistics.progressPercent > 0 && (tournament.format === "staged"
@@ -1368,7 +1378,7 @@ function CompetitionSummary({
             && `${statistics.invalidDetails} partido(s) tienen detalles individuales inválidos, excluidos de esas estadísticas.`}
         </p>
       )}
-      {!statistics.championTeamId && getTournamentCompletionStatus(tournament) === "Indeterminado" && (
+      {!statistics.sportingChampionTeamId && getTournamentCompletionStatus(tournament) === "Indeterminado" && (
         <p className="history-warning" role="note">
           El formato o las etapas pendientes no permiten confirmar el campeón con los datos actuales.
         </p>

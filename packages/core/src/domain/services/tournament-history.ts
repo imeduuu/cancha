@@ -25,9 +25,16 @@ export function getTournamentCompetitionId(tournamentId: string): string | undef
   return match?.[1] || undefined;
 }
 
-export function getTournamentCompletionStatus(tournament: Tournament): TournamentCompletionStatus {
+/**
+ * "verified" (default) requires the annual rules gate; "sporting" accepts the sporting
+ * outcome of simulated or calculated scenarios, which callers must label as such.
+ */
+export type ChampionBasis = "verified" | "sporting";
+
+export function getTournamentCompletionStatus(tournament: Tournament, basis: ChampionBasis = "verified"): TournamentCompletionStatus {
   if (secondDivisionKind(tournament)) return getDivisionOutcome(tournament).complete ? "Finalizado" : "En curso";
   const statistics = calculateTournamentStatistics(tournament);
+  const championTeamId = basis === "sporting" ? statistics.sportingChampionTeamId : statistics.championTeamId;
   const fixtures = tournament.matchdays.flatMap(({ fixtures: dayFixtures }) => dayFixtures);
   if (fixtures.length === 0) return "Indeterminado";
   if (statistics.incomplete > 0) return "Incompleto";
@@ -35,7 +42,7 @@ export function getTournamentCompletionStatus(tournament: Tournament): Tournamen
   if (statistics.played !== fixtures.length) return "Incompleto";
 
   if (tournament.competitionType === "cup") {
-    return statistics.championTeamId ? "Finalizado" : "Indeterminado";
+    return championTeamId ? "Finalizado" : "Indeterminado";
   }
   if (
     (tournament.format === undefined || tournament.format === "round-robin")
@@ -43,21 +50,25 @@ export function getTournamentCompletionStatus(tournament: Tournament): Tournamen
     && !tournament.teams.some((team) => team.groupName)
     && tournament.matchdays.every((matchday) => matchday.phaseName === undefined)
     && hasCompleteRoundRobinSchedule(tournament)
-    && statistics.championTeamId
+    && championTeamId
   ) {
     return "Finalizado";
   }
   return "Indeterminado";
 }
 
-export function getFinalStandings(tournament: Tournament): readonly TeamStanding[] | undefined {
-  return getTournamentCompletionStatus(tournament) === "Finalizado"
+export function getFinalStandings(tournament: Tournament, basis: ChampionBasis = "verified"): readonly TeamStanding[] | undefined {
+  return getTournamentCompletionStatus(tournament, basis) === "Finalizado"
     && tournament.competitionType !== "cup"
     && !tournament.teams.some((team) => team.groupName)
     && tournament.matchdays.every((matchday) => matchday.phaseName === undefined)
     && hasCompleteRoundRobinSchedule(tournament)
     ? calculateTournamentStatistics(tournament).standings
     : undefined;
+}
+
+export function getSportingFinalStandings(tournament: Tournament): readonly TeamStanding[] | undefined {
+  return getFinalStandings(tournament, "sporting");
 }
 
 export function canStartNewSeason(tournament: Tournament): boolean {

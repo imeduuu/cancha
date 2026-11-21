@@ -72,6 +72,8 @@ export interface TournamentStatistics {
     readonly minutesPlayed?: number;
   }[];
   readonly championTeamId?: string;
+  /** Sporting outcome without the annual-rules verification gate (simulated or calculated champions). */
+  readonly sportingChampionTeamId?: string;
 }
 
 export interface TournamentStatisticsFilter {
@@ -300,12 +302,13 @@ export function calculateTournamentStatistics(
 
   const totalFixtures = played + pending + incomplete;
   const allRecordedFixturesPlayed = totalFixtures > 0 && pending === 0 && incomplete === 0;
-  const championTeamId = getConfirmedChampion(
+  const sportingChampionTeamId = getSportingChampionFrom(
     tournament,
     standings,
     matchdays,
     allRecordedFixturesPlayed && !filter.phaseName && !filter.groupName,
   );
+  const championTeamId = hasVerifiedChampionRules(tournament) ? sportingChampionTeamId : undefined;
   const topScorers = [...scorerCounts.values()]
     .map((scorer) => ({
       ...scorer,
@@ -354,6 +357,7 @@ export function calculateTournamentStatistics(
           - (first.starts + first.substituteAppearances)
         || first.playerName.localeCompare(second.playerName, "es")),
     ...(championTeamId ? { championTeamId } : {}),
+    ...(sportingChampionTeamId ? { sportingChampionTeamId } : {}),
   };
 }
 
@@ -384,13 +388,22 @@ function getProgressLabel(
   return "Sin partidos programados";
 }
 
-function getConfirmedChampion(
+function hasVerifiedChampionRules(tournament: Tournament): boolean {
+  return !hasPendingAnnualRules(tournament)
+    && (tournament.competitionType === "cup" || !hasUnverifiedCompetitionRules(tournament, "standings"));
+}
+
+/** Champion of the sporting outcome itself; callers decide how it is accredited. */
+export function getSportingChampion(tournament: Tournament): string | undefined {
+  return calculateTournamentStatistics(tournament).sportingChampionTeamId;
+}
+
+function getSportingChampionFrom(
   tournament: Tournament,
   standings: readonly TeamStanding[],
   matchdays: readonly Matchday[],
   allFixturesPlayed: boolean,
 ): string | undefined {
-  if (hasPendingAnnualRules(tournament) || (tournament.competitionType !== "cup" && hasUnverifiedCompetitionRules(tournament, "standings"))) return undefined;
   if (secondDivisionKind(tournament)) {
     if (!hasCompleteDivisionLeague(tournament)) return undefined;
     if (secondDivisionKind(tournament) === "argentina") return getDivisionOutcome(tournament).promoted[0];

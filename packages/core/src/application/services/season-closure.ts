@@ -3,7 +3,7 @@ import type { ActivityEvent } from "../../domain/entities/activity-event";
 import { isSeasonClosureRecord } from "../../domain/entities/season-closure";
 import { validateTournamentIntegrity } from "../../domain/services/tournament-integrity";
 import { getCompetitionAlerts } from "../../domain/services/competition-alerts";
-import { getFinalStandings, getTournamentCompletionStatus } from "../../domain/services/tournament-history";
+import { getFinalStandings, getSportingFinalStandings, getTournamentCompletionStatus } from "../../domain/services/tournament-history";
 import { calculateStandings, getUnresolvedStandingsTieGroups } from "../../domain/services/standings";
 import { getDivisionOutcome, regularDivisionTournament, divisionZoneTournaments } from "../../domain/services/second-division-progression";
 import { secondDivisionKind } from "../../domain/services/second-division-rules";
@@ -24,23 +24,31 @@ export function evaluateSeasonClosure(t: Tournament, tournaments: readonly Tourn
   const blockers: string[] = [], warnings: string[] = [], nextSeasonPending: string[] = [];
   const integrity = validateTournamentIntegrity(t);
   blockers.push(...integrity);
-  const overview = seasonOverview(t, activity), honours = seasonHonours(t);
-  const finalStandings = getFinalStandings(t);
-  const completion = getTournamentCompletionStatus(t);
+  const overview = seasonOverview(t, activity), honours = seasonHonours(t, activity);
+  // A simulated scenario closes on its sporting outcome; accreditation gaps become warnings, never official results.
+  const simulated = honours.tier === "simulated";
+  const closureTier = honours.tier;
+  const finalStandings = simulated ? getSportingFinalStandings(t) : getFinalStandings(t);
+  const completion = getTournamentCompletionStatus(t, simulated ? "sporting" : "verified");
   const rules = t.competitionRules;
-  if (!Number.isSafeInteger(t.season) || !rules || rules.season !== t.season
+  const accreditation = simulated ? warnings : blockers;
+  if (!Number.isSafeInteger(t.season)) blockers.push("Verifica el reglamento anual de tabla y decisiones deportivas para esta edición.");
+  else if (!rules || rules.season !== t.season
     || rules.verification.standings !== "verified" || rules.verification.placements !== "verified")
-    blockers.push("Verifica el reglamento anual de tabla y decisiones deportivas para esta edición.");
+    accreditation.push(simulated
+      ? "Cierre simulado: el reglamento anual no está verificado; campeón, descensos y cupos no son oficiales."
+      : "Verifica el reglamento anual de tabla y decisiones deportivas para esta edición.");
   if (t.matchRegulations && (t.matchRegulations.season !== t.season || t.matchRegulations.verification !== "verified"))
-    blockers.push("El reglamento de partidos registrado necesita verificación para esta edición.");
+    accreditation.push("El reglamento de partidos registrado necesita verificación para esta edición.");
   if (!overview.total) blockers.push("No hay calendario: una temporada sin encuentros no está terminada.");
   if (overview.played < overview.total) blockers.push("Quedan encuentros pendientes o sin resultado deportivo válido.");
   if (t.matchdays.some(day => !day.fixtures.length)) blockers.push("Hay jornadas o fases registradas sin encuentros.");
   if (completion !== "Finalizado") blockers.push("El servicio de finalización no acredita todas las etapas obligatorias de este formato.");
-  blockers.push(...honours.reasons);
+  blockers.push(...(simulated ? honours.sportingReasons : honours.reasons));
+  if (simulated) warnings.push(...honours.reasons.filter(reason => !honours.sportingReasons.includes(reason)));
   const division = secondDivisionKind(t) ? getDivisionOutcome(t) : undefined;
   if (division) blockers.push(...division.pending);
-  const tables = finalStandings ? [{label: "Clasificación final", rows: finalStandings}]
+  const tables = finalStandings ? [{label: simulated ? "Clasificación final (simulada)" : "Clasificación final", rows: finalStandings}]
     : division ? (secondDivisionKind(t) === "argentina" ? divisionZoneTournaments(t) : [regularDivisionTournament(t)])
       .map(zone => ({label: zone.zoneName ?? "Fase regular", rows: calculateStandings(zone)})) : [];
   if (finalStandings && getUnresolvedStandingsTieGroups(t, finalStandings).length)
@@ -72,7 +80,7 @@ export function evaluateSeasonClosure(t: Tournament, tournaments: readonly Tourn
       && rules!.relegationAverage!.seasons.includes(source.season ?? 0)).forEach(source => ownDependencyIds.add(source.id));
   }
   const relegated = [...(division?.relegated ?? (finalStandings ? finalStandings.flatMap((row, index) =>
-    t.placementRules && classifyPosition(index + 1, finalStandings.length, t.placementRules) === "relegation" ? [{teamId: row.teamId, destination: "Descenso según reglamento registrado"}] : []) : []))];
+    t.placementRules && classifyPosition(index + 1, finalStandings.length, t.placementRules) === "relegation" ? [{teamId: row.teamId, destination: simulated ? "Descenso por tabla (simulado)" : "Descenso según reglamento registrado"}] : []) : []))];
   if (!division && t.placementRules?.relegationPlayoffPlaces) blockers.push("Hay plazas de promoción de descenso que requieren una resolución deportiva existente; la tabla no resuelve la promoción.");
   if (averages && t.placementRules?.relegationPlaces)
     blockers.push("Los descensos por tabla y promedio requieren una resolución conjunta en el flujo deportivo existente; no se sintetizan movimientos nuevos.");
@@ -97,7 +105,8 @@ export function evaluateSeasonClosure(t: Tournament, tournaments: readonly Tourn
   // Activity is append ordered. An obsolete last confirmation never revives an older one.
   const latest = history.at(-1);
   const confirmed = !!latest && isSeasonClosureRecord(latest.after) && latest.after.universeId === universeId
-    && latest.after.foundation === foundation && latest.after.championTeamId === honours.awards.find(award => award.label === "Campeón")?.teamId && !blockers.length;
+    && latest.after.foundation === foundation && latest.after.championTeamId === honours.awards.find(award => award.label === "Campeón")?.teamId
+    && (latest.after.tier === "simulated") === simulated && !blockers.length;
   const state: ClosureState = confirmed ? "Cierre confirmado" : latest ? "Cierre desactualizado"
     : !overview.total ? "Sin calendario" : overview.played < overview.total ? (overview.played ? "Temporada en disputa" : "Partidos pendientes")
     : blockers.length ? "Decisiones deportivas pendientes" : "Lista para revisión final";
@@ -109,7 +118,7 @@ export function evaluateSeasonClosure(t: Tournament, tournaments: readonly Tourn
   dependencyIds.delete(t.id);
   const dependencies = [...dependencyIds].map(id=>({id, name:tournaments.find(source=>source.id===id)?.name ?? id,
     available:tournaments.some(source=>source.id===id), kind:ownDependencyIds.has(id)?"Fundamento de esta edición":"Preparación o antecedente"}));
-  return {tournament: t, overview, integrity, honours, tables, division, relegated, averages, international, progression,matchdays,phases,dependencies,
+  return {tournament: t, closureTier, overview, integrity, honours, tables, division, relegated, averages, international, progression,matchdays,phases,dependencies,
     resolutions: t.officialResolutions ?? [], blockers: [...new Set(blockers)], warnings: [...new Set(warnings)],
     nextSeasonPending: [...new Set(nextSeasonPending)], foundation, history, latest, confirmed, state,
     canConfirm: !blockers.length && !confirmed};

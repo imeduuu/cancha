@@ -98,6 +98,7 @@ function getInitialTournamentLeg(tournament: Tournament): number {
 import { secondDivisionKind } from "@cancha/core/domain/services/second-division-rules";
 
 const SeasonPreparationPanel = lazy(() => import("./components/season-preparation-panel").then(module => ({ default: module.SeasonPreparationPanel })));
+const ChampionCards = lazy(() => import("./components/champion-card").then(module => ({ default: module.ChampionCards })));
 const TournamentStatisticsPanel = lazy(() => import("./components/tournament-statistics-panel").then(module => ({ default: module.TournamentStatisticsPanel })));
 const FixtureList = lazy(() => import("./components/fixture-list").then(module => ({ default: module.FixtureList })));
 const ImportOfficialTournament = lazy(() => import("./components/import-official-tournament").then(module => ({ default: module.ImportOfficialTournament })));
@@ -1725,6 +1726,7 @@ function Application({ libraryBackend }: AppProps) {
                 onCreated={(created) => { assignNewTournaments(created.map(({id})=>id)); setSavedTournaments(repository.findAll()); setFeedback("Se crearon ambas temporadas con participantes actualizados. Calendarios y reglamentos pendientes."); setPersistenceStatus("saved"); }} /></DeferredPanel>}
               </div>
               <div className="board-standings">
+              <DeferredPanel fallback={null}><ChampionCards tournament={tournament} activity={scopedActivityEvents} /></DeferredPanel>
               {isArgentinaTournament && (
                 <label className="table-view-select">
                   <span>Tabla que quieres consultar</span>

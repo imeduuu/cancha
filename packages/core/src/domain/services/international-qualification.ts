@@ -52,10 +52,11 @@ export function calculateInternationalQualifications(
   const leagueFixtures = league.matchdays.flatMap(({ fixtures }) => fixtures);
   const coverageKnownIncomplete = league.importCoverage === "partial" || league.importCoverage === "unknown";
   const standingsVerification = league.competitionRules?.verification.standings;
-  const leagueComplete = !coverageKnownIncomplete && leagueFixtures.length > 0
+  const allResultsValid = leagueFixtures.length > 0
     && league.matchdays.every((matchday) => matchday.fixtures.every((fixture) =>
       isValidFixtureResult(league, matchday, fixture),
     ));
+  const leagueComplete = !coverageKnownIncomplete && allResultsValid;
   const ruleStatus: QualificationStatus = rules.verification === "verified"
     && placementVerification === "verified"
     && (standingsVerification === undefined || standingsVerification === "verified")
@@ -71,7 +72,8 @@ export function calculateInternationalQualifications(
 
   if (coverageKnownIncomplete) pendingReasons.push("La cobertura del calendario es parcial o no está acreditada como completa.");
   if (standingsVerification && standingsVerification !== "verified") pendingReasons.push("Los criterios de la tabla no están verificados.");
-  if (!leagueComplete) {
+  // Coverage has its own reason above; this one only describes missing results.
+  if (!allResultsValid) {
     pendingReasons.push(leagueFixtures.length === 0
       ? "La liga todavía no tiene partidos suficientes para determinar plazas."
       : "La liga todavía tiene partidos sin resultado.");

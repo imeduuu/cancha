@@ -8,56 +8,94 @@ import { getCompletedStageWinners } from "../../domain/services/official-cup-pro
 import { hasUnverifiedCompetitionRules } from "../../domain/services/competition-rules";
 import { hasPendingAnnualRules } from "../../domain/services/season-preparation";
 import { canonical } from "../../domain/services/continental-plan";
+import { argentinaHalves, getArgentinaHalfChampions } from "../../domain/services/argentina-half-champions";
 import { buildClubProfiles, clubHistoryScopes, clubOccurrenceKey, type ClubHistoryScope } from "./club-history";
 import { competitionIdentity } from "./competition-center";
 import { sourceScenario } from "./continental-projection";
+import { unverifiedTier, type ChampionTier } from "./champion-tier";
 
 export const provenanceLabels = {local:"Escenario local, editado o simulado",provider:"Proveedor sin certificación oficial",unknown:"Procedencia no acreditada"};
-export interface Honour { teamId:string; label:string }
+export { championTierLabels, championTierTitles, unverifiedTier, type ChampionTier } from "./champion-tier";
+export interface Honour { teamId:string; label:string; tier?:ChampionTier }
+export interface SeasonHonours {
+ readonly awards:readonly Honour[];
+ /** Reasons the outcome is not verified; with a tier they are accreditation notices, not sporting gaps. */
+ readonly reasons:readonly string[];
+ /** True only for verified outcomes (unchanged meaning). */
+ readonly complete:boolean;
+ /** Accreditation of the awards; undefined when no sporting outcome is determined. */
+ readonly tier?:ChampionTier;
+ /** Reasons that block even a simulated or calculated outcome. */
+ readonly sportingReasons:readonly string[];
+}
+export const coverageReason="Cobertura incompleta o no acreditada.";
+export const rulesReason="Reglamento pendiente, provisional o de otro año.";
+const completionReason="Competición incompleta, clasificación pendiente o formato sin conclusión acreditada.";
+const championReason="El servicio deportivo no determina un campeón: revisa desempates, resultados y formato.";
+
 /** A read projection: sporting winners always come from the existing domain services. */
-export function seasonHonours(t:Tournament) {
- const stats=calculateTournamentStatistics(t),awards:Honour[]=[];
- const reasons:string[]=[];
- if(t.importCoverage==="partial" || t.importCoverage==="unknown")reasons.push("Cobertura incompleta o no acreditada.");
- if(hasPendingAnnualRules(t) || hasUnverifiedCompetitionRules(t))reasons.push("Reglamento pendiente, provisional o de otro año.");
- if(getTournamentCompletionStatus(t)!=="Finalizado")reasons.push("Competición incompleta, clasificación pendiente o formato sin conclusión acreditada.");
- if(!stats.championTeamId)reasons.push("El servicio deportivo no determina un campeón: revisa desempates, resultados y formato.");
- if(t.competitionType==="cup"){
-  const final=t.knockoutStages?.[t.knockoutStages.length-1];
-  if(!final || !/(?:^| · )final$/i.test(final.name) || final.advanceWinners===false || stageParticipants(t,final).length!==2)
-   reasons.push("No hay una final única de campeonato inequívocamente identificada.");
-  const scheduledTeams=new Set(t.matchdays.flatMap(d=>d.fixtures.flatMap(f=>[f.homeTeamId,f.awayTeamId])));
-  if(t.teams.some(team=>!scheduledTeams.has(team.id)))reasons.push("Hay participantes registrados sin encuentros: la cobertura de la copa no acredita su recorrido completo.");
-  const stages=t.knockoutStages ?? [];
-  for(let i=0;i<stages.length-1;i++){
-   if(stages[i].advanceWinners===false)continue;
-   const winners=getCompletedStageWinners(t.matchdays,stages[i]),next=stageParticipants(t,stages[i+1]);
-   if(!winners || winners.length!==next.length || new Set(winners).size!==next.length || winners.some(id=>!next.includes(id)))
-    reasons.push("Los participantes de etapas consecutivas no coinciden con los ganadores resueltos.");
-  }
- }
- if(reasons.length)return {awards,reasons,complete:false};
- const champion=stats.championTeamId!;
- awards.push({teamId:champion,label:"Campeón"});
- const table=getFinalStandings(t);
+export function seasonHonours(t:Tournament,activity:readonly ActivityEvent[]=[]):SeasonHonours {
+ const stats=calculateTournamentStatistics(t);
+ // Reasons keep their historical order; each one is either an accreditation notice or a sporting gap.
+ const tagged:{reason:string;sporting:boolean}[]=[];
+ if(t.importCoverage==="partial" || t.importCoverage==="unknown")tagged.push({reason:coverageReason,sporting:t.importCoverage==="partial"});
+ if(hasPendingAnnualRules(t) || hasUnverifiedCompetitionRules(t))tagged.push({reason:rulesReason,sporting:false});
+ if(getTournamentCompletionStatus(t,"sporting")!=="Finalizado")tagged.push({reason:completionReason,sporting:true});
+ if(!stats.sportingChampionTeamId)tagged.push({reason:championReason,sporting:true});
+ if(t.competitionType==="cup")tagged.push(...cupStructureReasons(t).map(reason=>({reason,sporting:true})));
+ const reasons=[...new Set(tagged.map(r=>r.reason))];
+ const sportingReasons=[...new Set(tagged.filter(r=>r.sporting).map(r=>r.reason))];
+ const accredited=!tagged.some(r=>!r.sporting);
+ const tier:ChampionTier=accredited?"verified":unverifiedTier(t,activity);
+ const halves=getArgentinaHalfChampions(t);
+ // Half finals are self-contained: an Apertura champion exists before the Clausura is played.
+ const halfAwards:Honour[]=argentinaHalves.flatMap(half=>halves[half]?[{teamId:halves[half]!,label:`Campeón del ${half}`,tier}]:[]);
+ if(sportingReasons.length)
+  return {awards:halfAwards,reasons,complete:false,sportingReasons,...(halfAwards.length?{tier}:{})};
+ if(accredited && stats.championTeamId && getTournamentCompletionStatus(t)==="Finalizado")
+  return {awards:[...halfAwards,...podium(t,stats.championTeamId,"verified","verified")],reasons:[],complete:true,tier:"verified",sportingReasons:[]};
+ const unverified=accredited?unverifiedTier(t,activity):tier;
+ return {awards:[...halfAwards,...podium(t,stats.sportingChampionTeamId!,unverified,"sporting")],reasons,complete:false,tier:unverified,sportingReasons:[]};
+}
+function podium(t:Tournament,champion:string,tier:ChampionTier,basis:"verified"|"sporting"):Honour[]{
+ const awards:Honour[]=[{teamId:champion,label:"Campeón",tier}];
+ const table=getFinalStandings(t,basis);
  if(table){
   const tied=new Set(getUnresolvedStandingsTieGroups(t,table).flatMap(g=>g.map(r=>r.teamId)));
-  table.slice(1,4).forEach((row,i)=>{if(!tied.has(row.teamId))awards.push({teamId:row.teamId,label:i===0?"Subcampeón":`Posición destacada: ${i+2}.º`});});
+  table.slice(1,4).forEach((row,i)=>{if(!tied.has(row.teamId))awards.push({teamId:row.teamId,label:i===0?"Subcampeón":`Posición destacada: ${i+2}.º`,tier});});
  }else if(t.competitionType==="cup" && t.knockoutStages?.length){
   const stage=t.knockoutStages[t.knockoutStages.length-1];
   const participants=stageParticipants(t,stage);
   if(participants.length===2 && participants.includes(champion)){
-   awards.push({teamId:participants.find(id=>id!==champion)!,label:"Subcampeón"});
-   participants.forEach(teamId=>awards.push({teamId,label:"Finalista"}));
+   awards.push({teamId:participants.find(id=>id!==champion)!,label:"Subcampeón",tier});
+   participants.forEach(teamId=>awards.push({teamId,label:"Finalista",tier}));
    const semi=t.knockoutStages[t.knockoutStages.length-2];
    if(semi && semi.advanceWinners!==false){
     const ids=stageParticipants(t,semi),winners=getCompletedStageWinners(t.matchdays,semi);
     if(ids.length===4 && winners?.length===2 && winners.every(id=>participants.includes(id)))
-     ids.forEach(teamId=>awards.push({teamId,label:"Semifinalista"}));
+     ids.forEach(teamId=>awards.push({teamId,label:"Semifinalista",tier}));
    }
   }
  }
- return {awards,reasons,complete:true};
+ return awards;
+}
+function cupStructureReasons(t:Tournament):string[]{
+ const reasons:string[]=[];
+ const final=t.knockoutStages?.[t.knockoutStages.length-1];
+ if(!final || !/(?:^| · )final$/i.test(final.name) || final.advanceWinners===false || stageParticipants(t,final).length!==2)
+  reasons.push("No hay una final única de campeonato inequívocamente identificada.");
+ const scheduledTeams=new Set(t.matchdays.flatMap(d=>d.fixtures.flatMap(f=>[f.homeTeamId,f.awayTeamId])));
+ if(t.teams.some(team=>!scheduledTeams.has(team.id)))reasons.push("Hay participantes registrados sin encuentros: la cobertura de la copa no acredita su recorrido completo.");
+ const stages=t.knockoutStages ?? [];
+ for(let i=0;i<stages.length-1;i++){
+  if(stages[i].advanceWinners===false)continue;
+  const participants=stageParticipants(t,stages[i]),winners=getCompletedStageWinners(t.matchdays,stages[i]),next=stageParticipants(t,stages[i+1]);
+  // Clubs may enter in later rounds (e.g. Libertadores preliminaries): winners must advance and losers must not.
+  if(!winners || new Set(winners).size!==winners.length || winners.some(id=>!next.includes(id))
+   || participants.some(id=>!winners.includes(id) && next.includes(id)))
+   reasons.push("Los participantes de etapas consecutivas no coinciden con los ganadores resueltos.");
+ }
+ return reasons;
 }
 function stageParticipants(t:Tournament,s:KnockoutStage){
  return [...new Set(t.matchdays.filter(d=>d.phaseName===s.name || (s.legs===2 && (d.phaseName===`${s.name} · Ida` || d.phaseName===`${s.name} · Vuelta`)))
