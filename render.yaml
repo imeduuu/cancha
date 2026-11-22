@@ -4,6 +4,8 @@
 services:
   - type: web
     name: cancha-api
+    # Sólo la rama publicada; main es para desarrollo y vistas previas.
+    branch: production
     runtime: docker
     # free: se duerme tras 15 min sin tráfico (la primera petición tarda ~1 min) y
     # pierde la caché de fuentes y el rate limit en memoria. Ver docs/deployment.md.

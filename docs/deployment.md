@@ -19,6 +19,24 @@ Navegador ──► Vercel (web estática)
 
 Archivos del repositorio que usa esta guía: [`render.yaml`](../render.yaml), [`apps/web/vercel.json`](../apps/web/vercel.json), [`apps/api/Dockerfile`](../apps/api/Dockerfile) y [`apps/api/.env.example`](../apps/api/.env.example).
 
+## Flujo de ramas y publicación manual
+
+- `main` es la rama de desarrollo. Vercel crea vistas previas para sus cambios.
+- `production` es la rama publicada: Render construye la API desde ella y Vercel sirve desde ella el entorno Production.
+- Para publicar los cambios de `main`, ejecuta desde un checkout local:
+
+  ```bash
+  git checkout production
+  git merge main
+  git push
+  git checkout main
+  ```
+
+  El push a `production` dispara el CI. Render despliega esa rama sólo cuando el CI termina en verde (`autoDeployTrigger: checksPass`).
+- En Vercel configura `production` en **Settings → Environments → Production → Branch Tracking / Production Branch**. Así `main` conserva sus vistas previas y `production` queda como producción.
+- En Render configura la rama del servicio en **Build & Deploy → Branch** como `production`; `render.yaml` también declara `branch: production`.
+- Las vistas previas de Vercel no mantienen la sesión con cuenta: sus dominios no están incluidos en `CORS_ORIGINS`. Usa la URL de producción para probar cuentas.
+
 ### Antes de empezar
 
 - El repositorio debe estar en GitHub, con `render.yaml` y `apps/web/vercel.json` en `main` y el CI en verde (pestaña **Actions**).
@@ -103,7 +121,7 @@ Corrige en **Environment** y guarda con **Save, rebuild, and deploy**.
 
 ### 2.3 Despliegues siguientes
 
-`render.yaml` usa `autoDeployTrigger: checksPass`: cada push a `main` se despliega **sólo cuando el CI de GitHub termina en verde**. Para desplegar a mano: **Manual Deploy → Deploy latest commit**. Cambiar una variable en **Environment** también redespliega.
+`render.yaml` usa `branch: production` y `autoDeployTrigger: checksPass`: los cambios de `main` se publican al fusionar `main` en `production`; Render despliega cada push a `production` **sólo cuando el CI de GitHub termina en verde**. Consulta [Flujo de ramas y publicación manual](#flujo-de-ramas-y-publicaci%C3%B3n-manual). Cambiar una variable en **Environment** también redespliega.
 
 > **Plan free de Render:** el servicio se duerme tras 15 minutos sin tráfico. La primera petición después tarda cerca de un minuto (la web mostrará la carga de la sesión mientras tanto). Al despertar, la caché de fuentes oficiales y los contadores de rate limit empiezan vacíos: están en memoria.
 
@@ -139,7 +157,7 @@ En [`apps/web/vercel.json`](../apps/web/vercel.json), reemplaza las **5** aparic
 { "source": "/official-source(/.*)?", "destination": "https://cancha-api.onrender.com/official-source$1" },
 ```
 
-Comprueba que esté completo con `npm test -w @cancha/web -- scripts/vercel-config.test.mjs`. La prueba compila los rewrites con `@vercel/routing-utils`, la misma librería que usa Vercel, y simula rutas reales: con y sin barra final, el prefijo solo y con query. Exige una sola API con https y el fallback de la SPA al final. Haz commit y push a `main`.
+Comprueba que esté completo con `npm test -w @cancha/web -- scripts/vercel-config.test.mjs`. La prueba compila los rewrites con `@vercel/routing-utils`, la misma librería que usa Vercel, y simula rutas reales: con y sin barra final, el prefijo solo y con query. Exige una sola API con https y el fallback de la SPA al final. Para publicar, sigue [Flujo de ramas y publicación manual](#flujo-de-ramas-y-publicaci%C3%B3n-manual).
 
 > **No uses `:path*`** en las fuentes oficiales. `"/official-source/:path*"` sólo acepta segmentos no vacíos, así que **no** captura una barra final: `/official-source/ligas/liga-de-primera-mercado-libre/` (las rutas de ANFP terminan en `/`) caía en el fallback y Vercel respondía `index.html` con 200. `(/.*)?` con `$1` captura cualquier subruta, la barra final y el prefijo solo.
 

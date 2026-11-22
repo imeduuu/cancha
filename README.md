@@ -384,6 +384,15 @@ Playwright ejecuta los recorridos en perfiles aislados con un servidor local ded
 
 [docs/deployment.md](docs/deployment.md) es la guía paso a paso: cluster M0 en MongoDB Atlas, API en Render con Docker y web en Vercel, dónde va cada variable, cómo verificar `TRUST_PROXY` y una lista de verificación final.
 
+### Ramas y publicación manual
+
+- `main` es desarrollo y genera vistas previas de Vercel; `production` es lo publicado.
+- Para publicar: `git checkout production`, `git merge main`, `git push` y `git checkout main`. El CI también corre al hacer push a `production`; Render despliega esa rama cuando el CI pasa.
+- En Vercel, selecciona `production` en **Settings → Environments → Production → Branch Tracking / Production Branch**. En Render, selecciona `production` en **Build & Deploy → Branch** (también está declarada en `render.yaml`).
+- Las vistas previas no mantienen la sesión con cuenta porque sus URL no están en `CORS_ORIGINS`; prueba las cuentas en la URL de producción.
+
+Ver [docs/deployment.md](docs/deployment.md) para el flujo completo.
+
 - [`render.yaml`](render.yaml): blueprint de la API.
   - Docker con `apps/api/Dockerfile`, health check en `/health` y despliegue sólo con el CI en verde (`autoDeployTrigger: checksPass`).
   - Declara todas las variables sin secretos: `MONGODB_URI` y `CORS_ORIGINS` se pegan en el panel y `JWT_ACCESS_SECRET` lo genera Render.
