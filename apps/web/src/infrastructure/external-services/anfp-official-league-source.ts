@@ -398,6 +398,94 @@ function parseCompetitionGroups(document: Document): OfficialMatchday[] {
   return parseGroupMatchdays(groups[0]);
 }
 
+function parsePrimeraBLiguilla(section: Element, phaseName: string): OfficialMatchday[] {
+  const firstLeg: OfficialMatch[] = [];
+  const returnLeg: OfficialMatch[] = [];
+  const ties = Array.from(function* () {
+    for (
+      let sibling = section.nextElementSibling;
+      sibling && !sibling.querySelector(".competition__stage-title");
+      sibling = sibling.nextElementSibling
+    ) {
+      if (sibling.matches(".competition__group-wrapper")) yield sibling;
+    }
+  }());
+
+  if (ties.length === 0) {
+    throw new Error("La fuente oficial anunció la Liguilla Ascenso, pero no publicó sus llaves.");
+  }
+
+  for (const [index, tie] of ties.entries()) {
+    const elements = Array.from(tie.querySelectorAll(":scope > .anwp-fl-game"));
+    if (elements.length !== 2) {
+      throw new Error(`La llave ${index + 1} de la Liguilla Ascenso debe publicar sus dos partidos.`);
+    }
+    const dateTimes = elements.map((element) => element.getAttribute("data-fl-game-datetime") ?? "");
+    const instant = (value: string): number => {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+        throw new Error(`La llave ${index + 1} de la Liguilla Ascenso tiene una fecha u hora inválida.`);
+      }
+      const parsed = Date.parse(value);
+      const datePart = value.slice(0, 10);
+      const calendarDate = new Date(`${datePart}T00:00:00.000Z`);
+      if (
+        !Number.isFinite(parsed)
+        || Number.isNaN(calendarDate.getTime())
+        || calendarDate.toISOString().slice(0, 10) !== datePart
+      ) {
+        throw new Error(`La llave ${index + 1} de la Liguilla Ascenso tiene una fecha u hora inválida.`);
+      }
+      return parsed;
+    };
+    const times = dateTimes.map(instant);
+    if (times[0] === times[1]) {
+      throw new Error(`La llave ${index + 1} de la Liguilla Ascenso no permite identificar ida y vuelta.`);
+    }
+    // Sort the original match nodes by their published kick-off, keeping each card's data together.
+    const orderedMatches = elements
+      .map((element, elementIndex) => ({ match: parseMatch(element), time: times[elementIndex] }))
+      .sort((left, right) => left.time - right.time);
+    const [first, second] = orderedMatches.map(({ match }) => match);
+    const sameTie = normalizeTeamName(first.homeTeamName) === normalizeTeamName(second.awayTeamName)
+      && normalizeTeamName(first.awayTeamName) === normalizeTeamName(second.homeTeamName);
+    if (!sameTie) {
+      throw new Error(`Los dos partidos publicados en la llave ${index + 1} de la Liguilla Ascenso no son recíprocos.`);
+    }
+    firstLeg.push(first);
+    returnLeg.push(second);
+  }
+
+  return [
+    { number: 1, phaseName, matches: firstLeg },
+    { number: 2, phaseName, matches: returnLeg },
+  ];
+}
+
+function parsePrimeraBMatchdays(document: Document): OfficialMatchday[] {
+  const headings = Array.from(document.querySelectorAll(".competition__stage-title"));
+  if (headings.length === 0) return parseCompetitionGroups(document);
+
+  return headings.flatMap((heading) => {
+    const phaseName = heading.textContent?.trim();
+    const section = heading.closest(".anwp-section");
+    const group = section?.nextElementSibling;
+    if (!phaseName || !section || !group?.classList.contains("competition__group-wrapper")) {
+      throw new Error("La fuente oficial contiene una etapa sin calendario identificable.");
+    }
+    if (normalizeTeamName(phaseName) === "liguilla ascenso") {
+      return parsePrimeraBLiguilla(section, phaseName);
+    }
+    const matchdays = parseGroupMatchdays(
+      group,
+      normalizeTeamName(phaseName) === "fixture" ? undefined : phaseName,
+    );
+    if (matchdays.length === 0) {
+      throw new Error(`La etapa oficial "${phaseName}" no contiene fechas.`);
+    }
+    return matchdays;
+  });
+}
+
 function validateMatchdays(matchdays: readonly OfficialMatchday[]): void {
   if (matchdays.length === 0) {
     throw new Error("No se encontraron fechas en la página oficial de Campeonato Chileno.");
@@ -494,6 +582,8 @@ export class AnfpOfficialLeagueSource implements OfficialLeagueSource {
           singleMatchPhaseSuffix: false,
           postponedFinalWithoutSchedule: true,
         })
+      : league === "primera-b"
+        ? parsePrimeraBMatchdays(document)
       : document.querySelectorAll(".anwp-fl-matchweek-slides__swiper-slide").length > 0
         ? parseMatchweekSlides(document)
         : parseCompetitionGroups(document);
@@ -564,6 +654,10 @@ export class AnfpOfficialLeagueSource implements OfficialLeagueSource {
           ],
           rulesNote: "Fase regular con cuatro grupos de cuatro equipos; semifinales a ida y vuelta y final a partido único. Los desempates de grupos no se aplican por esta importación.",
         }
+        : league === "primera-b"
+          ? {
+            knockoutStages: [{ name: "Liguilla Ascenso", legs: 2 as const, advanceWinners: false }],
+          }
         : league === "copa-chile"
         ? {
           competitionType: "cup" as const,

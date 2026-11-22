@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Fixture, Matchday, Tournament } from "../entities/tournament";
 import { generateRoundRobinSchedule } from "./round-robin-scheduler";
-import { advanceChileanAscensoPlayoff } from "./chilean-ascenso-playoff-progression";
+import {
+  advanceChileanAscensoPlayoff,
+  chileanAscensoRegularMatchdays,
+} from "./chilean-ascenso-playoff-progression";
 
 function createFinishedAscenso(): Tournament {
   const teams = Array.from({ length: 16 }, (_, index) => ({
@@ -103,6 +106,34 @@ describe("advanceChileanAscensoPlayoff", () => {
     )).toBe(true);
     expect(advanced.matchdays.filter(({ phaseName }) => phaseName === "Fase regular"))
       .toHaveLength(30);
+  });
+
+  it("preserves ANFP's published Liguilla and excludes it from the regular standings", () => {
+    const base = createFinishedAscenso();
+    const official: Tournament = {
+      ...base,
+      knockoutStages: [{ name: "Liguilla Ascenso", legs: 2, advanceWinners: false }],
+      matchdays: [
+        ...base.matchdays,
+        {
+          number: 1,
+          leg: 1,
+          phaseName: "Liguilla Ascenso · Ida",
+          fixtures: [{ id: "official-2026-63078", homeTeamId: "team-03", awayTeamId: "team-08" }],
+        },
+        {
+          number: 1,
+          leg: 2,
+          phaseName: "Liguilla Ascenso · Vuelta",
+          fixtures: [{ id: "official-2026-63083", homeTeamId: "team-08", awayTeamId: "team-03" }],
+        },
+      ],
+    };
+
+    expect(chileanAscensoRegularMatchdays(official)).toHaveLength(30);
+    expect(advanceChileanAscensoPlayoff(official)).toBe(official);
+    expect(official.matchdays.flatMap(({ fixtures }) => fixtures).map(({ id }) => id))
+      .toContain("official-2026-63078");
   });
 
   it("does not complete the league from a preserved postponed score", () => {

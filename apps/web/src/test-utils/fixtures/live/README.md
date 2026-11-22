@@ -10,4 +10,6 @@ Capturadas el 16 de octubre de 2026 (America/Santiago), 17 de octubre UTC. El in
 - `cbf-aggregate-penalties.json`: ida y vuelta reales de Atlético Mineiro/Ceará en la fase 1999, con tanda publicada tras empate global.
 - `espn-continental-schedule.json`: dos eventos reales de Sudamericana, reducidos a fecha, fase, estado, clubes y marcador cuando existe.
 
+- `primera-b-liguilla-2026.json`: seis partidos reales de las tres llaves de ida y vuelta bajo `Liguilla Ascenso`, reducidos a identificador, clubes, fecha/hora, estado y marcador. Los contenedores no tienen el titulo `Fecha N`; el adaptador reconoce la etapa y valida cada pareja.
+
 Los JSON con `capturedAt` y `sourceUrl` conservan su procedencia. Las respuestas completas pueden incluir información de jugadores y fotografías que no se guarda aquí. El capturador auxiliar `scripts/capture-live-import-samples.mjs` exige que los casos sigan presentes y falla si no los encuentra; no fabrica un reemplazo. Los snapshots usados por `npm test` no requieren red.

@@ -43,6 +43,26 @@ Cada respuesta aceptada pasó por `importOfficialTournament`, las validaciones d
 
 Las capturas técnicas están en [live-importers-results.json](live-importers-results.json), con URL de cada solicitud, hora, HTTP, tamaño y resumen de estructura. [live-importers-before.json](live-importers-before.json) conserva la primera ejecución anterior a las correcciones. No se guardaron respuestas completas con jugadores, fotos u otros campos innecesarios.
 
+## Revisión ANFP del 22 de noviembre de 2026
+
+La verificación actual se ejecutó por acceso directo y por el proxy compartido con `--only=primera-b,primera,segunda,copa-chile,copa-liga`. Los informes técnicos completos están en `docs/validation/live-anfp-direct-after.json` y `docs/validation/live-anfp-proxy-after.json` (artefactos locales ignorados por Git).
+
+La Primera B importó **246 partidos**: 240 de `Fixture` y seis de `Liguilla Ascenso`, organizados en tres llaves de ida y vuelta. La página pone el encabezado `Liguilla Ascenso` y luego tres contenedores sin título `Fecha N`; las seis tarjetas sí tienen fecha/hora ISO válida. El fallo original confundía el nombre de la jornada con la fecha de calendario y aplicaba el parser de la fase regular.
+
+| Ida | Vuelta | Fecha publicada |
+| --- | --- | --- |
+| `63078` Deportes Recoleta ? Santiago Wanderers | `63083` Santiago Wanderers ? Deportes Recoleta | 20 y 26 de noviembre |
+| `63079` Deportes Copiapó ? Deportes Antofagasta | `63082` Deportes Antofagasta ? Deportes Copiapó | 21 y 27 de noviembre |
+| `63080` San Marcos de Arica ? Magallanes | `63081` Magallanes ? San Marcos de Arica | 22 y 28 de noviembre |
+
+El adaptador ahora toma los contenedores como llaves de la etapa explícita, exige dos partidos con equipos recíprocos y fechas/horas válidas, y ordena cada ida/vuelta por el inicio publicado. La importación comprueba los 246 partidos sin cambiar los seis IDs oficiales. `advanceChileanAscensoPlayoff` conserva la Liguilla publicada y no la sustituye por el bracket local provisional.
+
+En ambos modos, las otras fuentes chilenas también importaron sin cambios: Liga de Primera (240), Segunda División (42 en cada zona), Copa Chile (120) y Copa de la Liga (53). No se observó HTTP 403/429/5xx en estas pasadas; el nuevo reintento de una vez ante esos estados del origen está implementado y probado en `@cancha/official-source-proxy`.
+
+El `npm run verify:live` completo todavia devuelve codigo 1 por validaciones independientes en Primera Nacional y Serie B, y por los 404 de mantenimiento de ANFA Tercera A/B Norte/Sur. El subconjunto ANFP descrito arriba pasa en directo y por proxy.
+
+La muestra mínima reproducible está en [`apps/web/src/test-utils/fixtures/live/primera-b-liguilla-2026.json`](../apps/web/src/test-utils/fixtures/live/primera-b-liguilla-2026.json); no se guarda el HTML completo de 1,4 MB.
+
 ## Resultado por competición
 
 Todos los resultados de esta tabla proceden de **consultas reales**, no de los mocks de las pruebas. Los partidos son los normalizados por el adaptador; los descartes respecto de los registros brutos se detallan después.

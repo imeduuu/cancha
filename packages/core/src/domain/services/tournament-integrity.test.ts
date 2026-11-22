@@ -150,6 +150,37 @@ describe("validateTournamentIntegrity", () => {
     expect(validateTournamentIntegrity(staged)).toEqual([]);
   });
 
+  it("allows a league playoff to replay a pairing already played in the regular season", () => {
+    const base = createTournament(4);
+    const regularFixture = base.matchdays[0].fixtures[0];
+    const tournament: Tournament = {
+      ...base,
+      knockoutStages: [{ name: "Liguilla Ascenso", legs: 2, advanceWinners: false }],
+      matchdays: [
+        ...base.matchdays,
+        {
+          number: 1,
+          leg: 1,
+          phaseName: "Liguilla Ascenso · Ida",
+          fixtures: [{ ...regularFixture, id: "playoff-first-leg" }],
+        },
+        {
+          number: 1,
+          leg: 2,
+          phaseName: "Liguilla Ascenso · Vuelta",
+          fixtures: [{
+            ...regularFixture,
+            id: "playoff-return-leg",
+            homeTeamId: regularFixture.awayTeamId,
+            awayTeamId: regularFixture.homeTeamId,
+          }],
+        },
+      ],
+    };
+
+    expect(validateTournamentIntegrity(tournament)).toEqual([]);
+  });
+
   it("accepts the configured ida and vuelta of a two-leg knockout stage", () => {
     const base = createTournament(4);
     const staged: Tournament = {

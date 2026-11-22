@@ -1,0 +1,19 @@
+{
+  "capturedAt": "2026-11-22T02:57:03Z",
+  "sourceUrl": "https://www.campeonatochileno.cl/competition/campeonato-de-ascenso-caixun-2026/",
+  "stage": "Liguilla Ascenso",
+  "ties": [
+    [
+      { "id": "63078", "home": "Deportes Recoleta", "away": "Santiago Wanderers", "datetime": "2026-11-20T18:00:00-03:00", "status": 1, "homeGoals": "3", "awayGoals": "1" },
+      { "id": "63083", "home": "Santiago Wanderers", "away": "Deportes Recoleta", "datetime": "2026-11-26T19:00:00-03:00", "status": 0, "homeGoals": "-", "awayGoals": "-" }
+    ],
+    [
+      { "id": "63079", "home": "Deportes Copiapó", "away": "Deportes Antofagasta", "datetime": "2026-11-21T21:00:00-03:00", "status": 0, "homeGoals": "-", "awayGoals": "-" },
+      { "id": "63082", "home": "Deportes Antofagasta", "away": "Deportes Copiapó", "datetime": "2026-11-27T20:00:00-03:00", "status": 0, "homeGoals": "-", "awayGoals": "-" }
+    ],
+    [
+      { "id": "63080", "home": "San Marcos de Arica", "away": "Magallanes", "datetime": "2026-11-22T12:00:00-03:00", "status": 0, "homeGoals": "-", "awayGoals": "-" },
+      { "id": "63081", "home": "Magallanes", "away": "San Marcos de Arica", "datetime": "2026-11-28T18:00:00-03:00", "status": 0, "homeGoals": "-", "awayGoals": "-" }
+    ]
+  ]
+}

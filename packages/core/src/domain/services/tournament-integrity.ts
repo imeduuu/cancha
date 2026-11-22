@@ -111,6 +111,11 @@ export function validateTournamentIntegrity(tournament: Tournament): string[] {
 
   for (const [matchdayIndex, matchday] of tournament.matchdays.entries()) {
     const path = `Fecha/fase ${matchdayIndex + 1}`;
+    const isConfiguredKnockoutPhase = tournament.knockoutStages?.some((stage) => {
+      const phaseName = normalizeTeamName(matchday.phaseName ?? "");
+      const stageName = normalizeTeamName(stage.name);
+      return phaseName === stageName || phaseName.startsWith(`${stageName} ·`);
+    }) ?? false;
     if (!Number.isSafeInteger(matchday.number) || matchday.number < 1) {
       issues.push(`${path}, número: debe ser un entero positivo.`);
     }
@@ -173,7 +178,7 @@ export function validateTournamentIntegrity(tournament: Tournament): string[] {
         issues.push(`${fixturePath}: el mismo cruce está duplicado en la fecha.`);
       }
       pairsInMatchday.add(pair);
-      if (tournament.format !== "staged") {
+      if (tournament.format !== "staged" && !isConfiguredKnockoutPhase) {
         const pairByLegKey = `${matchday.leg}|${pair}`;
         if (pairByLeg.has(pairByLegKey)) {
           issues.push(`${fixturePath}: el cruce entre esos equipos está duplicado en la rueda.`);

@@ -3,6 +3,7 @@ import type { Team } from "../entities/team";
 import { calculateStandings } from "./standings";
 import { reconcileFixtureParticipants } from "./knockout-fixture-reconciliation";
 import { isValidFixtureResult } from "./match-result-validation";
+import { normalizeTeamName } from "./team-name";
 
 const ASCENSO_COMPETITION_ID = "anfp-liga-de-ascenso";
 /** Competition identity without depending on the season year (2026 id or a planned season's UUID). */
@@ -35,7 +36,9 @@ const stages: readonly StageSpec[] = [
 ];
 
 function isPlayoffMatchday(matchday: Matchday): boolean {
-  return matchday.phaseName?.startsWith(PLAYOFF_PREFIX) ?? false;
+  const phaseName = normalizeTeamName(matchday.phaseName ?? "");
+  return phaseName.startsWith(normalizeTeamName(PLAYOFF_PREFIX))
+    || phaseName.startsWith("liguilla ascenso");
 }
 
 function isRegularMatchday(matchday: Matchday): boolean {
@@ -272,6 +275,10 @@ export function getChileanAscensoPlayoffWinner(tournament: Tournament): string |
 
 export function advanceChileanAscensoPlayoff(tournament: Tournament): Tournament {
   if (!isChileanAscenso(tournament)) return tournament;
+  // Preserve ANFP's published Liguilla instead of replacing it with a provisional bracket.
+  if (tournament.matchdays.some((matchday) =>
+    normalizeTeamName(matchday.phaseName ?? "").startsWith("liguilla ascenso"),
+  )) return tournament;
   const bracket = computeBracket(tournament);
   if (!bracket) return removeStalePlayoff(tournament);
   const { regularMatchdays, quarterfinals, semifinals, final } = bracket;

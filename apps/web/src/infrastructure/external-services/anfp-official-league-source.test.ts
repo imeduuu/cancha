@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { TournamentRepository } from "@cancha/core/application/ports/tournament-repository";
 import { importOfficialTournament } from "@cancha/core/application/use-cases/import-official-tournament";
+import primeraBLiguillaSample from "../../test-utils/fixtures/live/primera-b-liguilla-2026.json";
 import { AnfpOfficialLeagueSource } from "./anfp-official-league-source";
 
 const groups = [
@@ -170,5 +171,78 @@ describe("AnfpOfficialLeagueSource · Copa de la Liga", () => {
     const season = await new AnfpOfficialLeagueSource().fetchSeason("copa-chile");
     expect(season.matchdays.some(({ phaseName }) => phaseName?.startsWith("Copa Chile · Semifinal"))).toBe(true);
     expect(season.matchdays.some(({ phaseName }) => phaseName === "Copa Chile · Grupo A")).toBe(true);
+  });
+});
+
+describe("AnfpOfficialLeagueSource · Liguilla Ascenso", () => {
+  const sample = primeraBLiguillaSample as {
+    readonly stage: string;
+    readonly ties: readonly (readonly {
+      readonly id: string;
+      readonly home: string;
+      readonly away: string;
+      readonly datetime: string;
+      readonly status: 0 | 1;
+      readonly homeGoals: string;
+      readonly awayGoals: string;
+    }[])[];
+  };
+
+  function page(ties = sample.ties): string {
+    const liguilla = `<div class="anwp-section"><div class="competition__stage-title">${sample.stage}</div></div>`
+      + ties.map((tie) => `<div class="competition__group-wrapper">${tie.map((match) => game(
+        match.id,
+        match.home,
+        match.away,
+        {
+          status: match.status,
+          score: `${match.homeGoals}-${match.awayGoals}`,
+          date: match.datetime,
+        },
+      )).join("")}</div>`).join("");
+    const fixture = `<div class="anwp-section"><div class="competition__stage-title">Fixture</div></div>
+      <div class="competition__group-wrapper"><div class="anwp-section"><div class="competition__round-title">Fecha 1</div></div>
+        ${game("regular-1", "Deportes Recoleta", "Deportes Copiapó", { score: "2-0" })}
+      </div>`;
+    return liguilla + fixture;
+  }
+
+  it("imports the untitled two-leg Liguilla wrappers as one validated stage", async () => {
+    vi.stubGlobal("DOMParser", new JSDOM("").window.DOMParser);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(page())));
+    const source = new AnfpOfficialLeagueSource();
+    const season = await source.fetchSeason("primera-b");
+    const tournament = await importOfficialTournament(
+      source,
+      createRepository(),
+      () => new Date("2026-11-22T12:00:00.000Z"),
+      "primera-b",
+      undefined,
+      { seasonData: season },
+    );
+    const firstLeg = season.matchdays.find(({ phaseName, number }) => phaseName === sample.stage && number === 1);
+    const returnLeg = season.matchdays.find(({ phaseName, number }) => phaseName === sample.stage && number === 2);
+    const importedReturn = tournament.matchdays.find(({ phaseName }) => phaseName === `${sample.stage} · Vuelta`);
+
+    expect(season.knockoutStages).toEqual([{ name: sample.stage, legs: 2, advanceWinners: false }]);
+    expect(firstLeg?.matches.map(({ id }) => id)).toEqual(["63078", "63079", "63080"]);
+    expect(returnLeg?.matches.map(({ id }) => id)).toEqual(["63083", "63082", "63081"]);
+    expect(firstLeg?.matches).toHaveLength(3);
+    expect(returnLeg?.matches).toHaveLength(3);
+    expect(importedReturn?.fixtures).toHaveLength(3);
+    expect(importedReturn?.fixtures.find(({ id }) => id.endsWith("63083")))
+      .toMatchObject({ knockoutResolution: "aggregate-then-penalties" });
+    expect(tournament.matchdays.flatMap(({ fixtures }) => fixtures)).toHaveLength(7);
+  });
+
+  it("rejects a published pair when the return leg does not reverse the same clubs", async () => {
+    vi.stubGlobal("DOMParser", new JSDOM("").window.DOMParser);
+    const brokenTies = sample.ties.map((tie, index) => index === 0
+      ? [tie[0], { ...tie[1], away: "Deportes Copiapó" }]
+      : tie);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(page(brokenTies))));
+
+    await expect(new AnfpOfficialLeagueSource().fetchSeason("primera-b"))
+      .rejects.toThrow(/no son recíprocos/);
   });
 });

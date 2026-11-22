@@ -94,6 +94,8 @@ export const officialSourceMessages = {
 
 const maximumUrlLength = 2048;
 const maximumRedirects = 3;
+const maximumTransientOriginRetries = 1;
+const transientOriginRetryDelayMs = 250;
 const userAgent = "Cancha (importador de fuentes oficiales)";
 /** Sólo Copa do Brasil la necesita: con `RSC: 1` la CBF responde el payload de React Server Components. */
 const rscPrefix: OfficialSourcePrefix = "/brazil-cup-source";
@@ -258,33 +260,44 @@ export function createOfficialSourceProxy(options: OfficialSourceProxyOptions = 
   async function download(url: URL, origin: string, headers: Record<string, string>): Promise<CachedBody> {
     const signal = AbortSignal.timeout(limits.timeoutMs);
     try {
-      let current = url;
-      for (let redirects = 0; ; redirects += 1) {
-        let response: Response;
-        try {
-          response = await doFetch(current, { method: "GET", headers, redirect: "manual", signal });
-        } catch {
-          if (signal.aborted) throw new ProxyFailure(504, officialSourceMessages.timeout);
-          throw new ProxyFailure(502, officialSourceMessages.unreachable);
+      attempts: for (let attempt = 0; ; attempt += 1) {
+        let current = url;
+        for (let redirects = 0; ; redirects += 1) {
+          let response: Response;
+          try {
+            response = await doFetch(current, { method: "GET", headers, redirect: "manual", signal });
+          } catch {
+            if (signal.aborted) throw new ProxyFailure(504, officialSourceMessages.timeout);
+            throw new ProxyFailure(502, officialSourceMessages.unreachable);
+          }
+          if (redirectStatuses.has(response.status)) {
+            await response.body?.cancel().catch(() => {});
+            const location = response.headers.get("location");
+            if (!location) throw new ProxyFailure(502, officialSourceMessages.upstreamStatus(response.status));
+            let next: URL;
+            try { next = new URL(location, current); } catch { throw new ProxyFailure(502, officialSourceMessages.foreignRedirect); }
+            if (next.origin !== origin) throw new ProxyFailure(502, officialSourceMessages.foreignRedirect);
+            if (redirects + 1 > maximumRedirects) throw new ProxyFailure(502, officialSourceMessages.tooManyRedirects);
+            try { current = upstreamUrl(origin, next.pathname, next.search); }
+            catch { throw new ProxyFailure(502, officialSourceMessages.foreignRedirect); }
+            continue;
+          }
+          if (
+            attempt < maximumTransientOriginRetries
+            && (response.status === 403 || response.status === 429 || (response.status >= 500 && response.status <= 599))
+          ) {
+            await response.body?.cancel().catch(() => {});
+            await new Promise(resolve => setTimeout(resolve, transientOriginRetryDelayMs));
+            if (signal.aborted) throw new ProxyFailure(504, officialSourceMessages.timeout);
+            continue attempts;
+          }
+          if (response.status < 200 || response.status > 299) {
+            await response.body?.cancel().catch(() => {});
+            throw new ProxyFailure(502, officialSourceMessages.upstreamStatus(response.status));
+          }
+          const body = await readLimited(response, limits.maxResponseBytes);
+          return { contentType: response.headers.get("content-type") ?? "application/octet-stream", body };
         }
-        if (redirectStatuses.has(response.status)) {
-          await response.body?.cancel().catch(() => {});
-          const location = response.headers.get("location");
-          if (!location) throw new ProxyFailure(502, officialSourceMessages.upstreamStatus(response.status));
-          let next: URL;
-          try { next = new URL(location, current); } catch { throw new ProxyFailure(502, officialSourceMessages.foreignRedirect); }
-          if (next.origin !== origin) throw new ProxyFailure(502, officialSourceMessages.foreignRedirect);
-          if (redirects + 1 > maximumRedirects) throw new ProxyFailure(502, officialSourceMessages.tooManyRedirects);
-          try { current = upstreamUrl(origin, next.pathname, next.search); }
-          catch { throw new ProxyFailure(502, officialSourceMessages.foreignRedirect); }
-          continue;
-        }
-        if (response.status < 200 || response.status > 299) {
-          await response.body?.cancel().catch(() => {});
-          throw new ProxyFailure(502, officialSourceMessages.upstreamStatus(response.status));
-        }
-        const body = await readLimited(response, limits.maxResponseBytes);
-        return { contentType: response.headers.get("content-type") ?? "application/octet-stream", body };
       }
     } catch (error) {
       if (error instanceof ProxyFailure) throw error;

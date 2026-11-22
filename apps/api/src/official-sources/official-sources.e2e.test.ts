@@ -100,7 +100,7 @@ describe("proxy de fuentes oficiales en la API", () => {
     expect(first.headers["content-type"]).toBe("text/plain; charset=utf-8");
     expect(first.text).toBe("La fuente oficial respondió con HTTP 500.");
     await http().get("/official-source/fail");
-    expect(origin.hits).toHaveLength(2);
+    expect(origin.hits).toHaveLength(4);
   });
 
   it("no sigue una redirección hacia otro host", async () => {

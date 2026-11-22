@@ -309,6 +309,36 @@ describe("límites", () => {
   });
 });
 
+describe("reintentos del origen", () => {
+  it.each([403, 429, 503])("reintenta una vez un HTTP %i transitorio", async status => {
+    let attempts = 0;
+    const proxy = proxyWith({ fetch: async () => {
+      attempts += 1;
+      return attempts === 1
+        ? new Response("temporal", { status })
+        : new Response("recuperado", { status: 200, headers: { "content-type": "text/plain" } });
+    } });
+
+    const response = await proxy.respond(get("/official-source/transient"));
+    expect(response.status).toBe(200);
+    expect(body(response)).toBe("recuperado");
+    expect(attempts).toBe(2);
+  });
+
+  it("limita a uno el reintento si el origen sigue bloqueando", async () => {
+    let attempts = 0;
+    const proxy = proxyWith({ fetch: async () => {
+      attempts += 1;
+      return new Response("bloqueado", { status: 403 });
+    } });
+
+    const response = await proxy.respond(get("/official-source/still-blocked"));
+    expect(response.status).toBe(502);
+    expect(body(response)).toMatch(/HTTP 403/);
+    expect(attempts).toBe(2);
+  });
+});
+
 describe("caché", () => {
   it("guarda una respuesta correcta y la sirve sin consultar el origen", async () => {
     const proxy = proxyWith();
@@ -331,7 +361,7 @@ describe("caché", () => {
     const proxy = proxyWith();
     await proxy.respond(get("/official-source/fail"));
     await proxy.respond(get("/official-source/fail"));
-    expect(hits).toHaveLength(2);
+    expect(hits).toHaveLength(4);
   });
 
   it("vence según el TTL", async () => {

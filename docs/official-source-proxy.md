@@ -32,6 +32,7 @@ Los sitios de ANFP (Campeonato Chileno), ANFA (Tercera División), Copa Argentin
 - **Errores del origen**:
   - un status que no es 2xx responde 502 "La fuente oficial respondió con HTTP <n>.";
   - un error de red o TLS responde 502 "No se pudo conectar con la fuente oficial.".
+  - 403, 429 y 5xx del origen reciben un solo reintento tras 250 ms, dentro del timeout total de la consulta. No se reintentan errores de red, otros 4xx, fallos de validación/redirección ni el 429 del rate limit local.
   - Los errores van en texto plano en español. La web los trata como hoy: el importador lanza "… respondió con HTTP 502." y no hay importación parcial.
 - **Caché en memoria** (LRU):
   - La clave es la URL final de destino, más `RSC` si se envió.
