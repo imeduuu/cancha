@@ -21,7 +21,11 @@ function createFinishedAscenso(): Tournament {
       ...day,
       fixtures: day.fixtures.map((fixture) => ({
         ...fixture,
-        result: { homeGoals: 0, awayGoals: 0 },
+        result: fixture.homeTeamId === "team-01"
+          ? { homeGoals: 1, awayGoals: 0 }
+          : fixture.awayTeamId === "team-01"
+            ? { homeGoals: 0, awayGoals: 1 }
+            : { homeGoals: 0, awayGoals: 0 },
       })),
     })),
     createdAt: "2026-01-01T00:00:00.000Z",
@@ -60,7 +64,9 @@ function setStageResults(matchdays: readonly Matchday[], stage: string): Matchda
     updated = updateFixture(
       updated,
       fixture.id,
-      stage === "Cuartos de final" && fixture.id.endsWith("-1-vuelta")
+      stage === "Final" && fixture.id.endsWith("-vuelta")
+        ? { homeGoals: 0, awayGoals: 1, extraTime: { homeGoals: 0, awayGoals: 0 }, penalties: { homeGoals: 4, awayGoals: 3 } }
+        : stage === "Cuartos de final" && fixture.id.endsWith("-1-vuelta")
         ? { homeGoals: 1, awayGoals: 0, penalties: { homeGoals: 4, awayGoals: 3 } }
         : { homeGoals: 0, awayGoals: 1 },
     );
@@ -69,6 +75,34 @@ function setStageResults(matchdays: readonly Matchday[], stage: string): Matchda
 }
 
 describe("advanceChileanAscensoPlayoff", () => {
+  it("creates the title decider only when first place is tied and feeds its loser into the semifinals", () => {
+    const tied = createFinishedAscenso();
+    const level = {
+      ...tied,
+      matchdays: tied.matchdays.map(day => ({
+        ...day,
+        fixtures: day.fixtures.map(fixture => ({ ...fixture, result: { homeGoals: 0, awayGoals: 0 } })),
+      })),
+    };
+    let advanced = advanceChileanAscensoPlayoff(level);
+    const definition = advanced.matchdays.find(day => day.phaseName === "Definición del título")!;
+    expect(definition.fixtures[0]).toMatchObject({ homeTeamId: "team-01", awayTeamId: "team-02", knockoutResolution: "penalties" });
+    advanced = advanceChileanAscensoPlayoff({
+      ...advanced,
+      matchdays: updateFixture(advanced.matchdays, definition.fixtures[0].id, {
+        homeGoals: 0, awayGoals: 0, penalties: { homeGoals: 5, awayGoals: 4 },
+      }),
+    });
+    advanced = advanceChileanAscensoPlayoff({
+      ...advanced,
+      matchdays: setStageResults(advanced.matchdays, "Cuartos de final"),
+    });
+    expect(advanced.matchdays.find(day => day.phaseName === "Definición del título")?.fixtures[0].result?.penalties)
+      .toEqual({ homeGoals: 5, awayGoals: 4 });
+    expect(advanced.matchdays.find(day => day.phaseName === "Liguilla de Ascenso · Semifinal · Ida")?.fixtures)
+      .toContainEqual(expect.objectContaining({ awayTeamId: "team-02" }));
+  });
+
   it("waits for the full league and builds the documented seven-team bracket", () => {
     const complete = createFinishedAscenso();
     const pending = {
@@ -97,9 +131,9 @@ describe("advanceChileanAscensoPlayoff", () => {
     expect(stages[0].fixtures.map(({ homeTeamId, awayTeamId }) =>
       [homeTeamId, awayTeamId],
     )).toEqual([
-      ["team-03", "team-08"],
-      ["team-04", "team-07"],
-      ["team-05", "team-06"],
+      ["team-08", "team-03"],
+      ["team-07", "team-04"],
+      ["team-06", "team-05"],
     ]);
     expect(stages[1].fixtures.every((fixture) =>
       fixture.knockoutResolution === "aggregate-then-penalties",
@@ -118,21 +152,22 @@ describe("advanceChileanAscensoPlayoff", () => {
         {
           number: 1,
           leg: 1,
-          phaseName: "Liguilla Ascenso · Ida",
-          fixtures: [{ id: "official-2026-63078", homeTeamId: "team-03", awayTeamId: "team-08" }],
+          phaseName: "Liguilla de Ascenso · Cuartos de final · Ida",
+          fixtures: [{ id: "official-2026-63078", homeTeamId: "team-08", awayTeamId: "team-03" }],
         },
         {
           number: 1,
           leg: 2,
-          phaseName: "Liguilla Ascenso · Vuelta",
-          fixtures: [{ id: "official-2026-63083", homeTeamId: "team-08", awayTeamId: "team-03" }],
+          phaseName: "Liguilla de Ascenso · Cuartos de final · Vuelta",
+          fixtures: [{ id: "official-2026-63083", homeTeamId: "team-03", awayTeamId: "team-08" }],
         },
       ],
     };
 
     expect(chileanAscensoRegularMatchdays(official)).toHaveLength(30);
-    expect(advanceChileanAscensoPlayoff(official)).toBe(official);
-    expect(official.matchdays.flatMap(({ fixtures }) => fixtures).map(({ id }) => id))
+    const advanced = advanceChileanAscensoPlayoff(official);
+    expect(advanced).not.toBe(official);
+    expect(advanced.matchdays.flatMap(({ fixtures }) => fixtures).map(({ id }) => id))
       .toContain("official-2026-63078");
   });
 
@@ -174,6 +209,9 @@ describe("advanceChileanAscensoPlayoff", () => {
     expect(tournament.matchdays.find(({ phaseName }) =>
       phaseName === "Liguilla de Ascenso · Final · Ida",
     )?.fixtures).toHaveLength(1);
+    expect(tournament.matchdays.find(({ phaseName }) =>
+      phaseName === "Liguilla de Ascenso · Final · Vuelta",
+    )?.fixtures[0].knockoutResolution).toBe("extra-time-then-penalties");
 
     const changedReturn = tournament.matchdays
       .find(({ phaseName }) => phaseName === "Liguilla de Ascenso · Cuartos de final · Vuelta")
@@ -191,13 +229,10 @@ describe("advanceChileanAscensoPlayoff", () => {
       phaseName === "Liguilla de Ascenso · Semifinal · Ida"
       || phaseName === "Liguilla de Ascenso · Semifinal · Vuelta",
     );
-    expect(semifinalLegs[0].fixtures[0].awayTeamId).toBe("team-03");
+    expect(semifinalLegs[0].fixtures[0].awayTeamId).toBe("team-02");
     expect(semifinalLegs[0].fixtures[0].result).toBeUndefined();
     expect(semifinalLegs[1].fixtures[0].result).toBeUndefined();
-    expect(semifinalLegs[0].fixtures[1].result).toMatchObject({
-      homeGoals: 1,
-      awayGoals: 0,
-    });
+    expect(semifinalLegs[0].fixtures[1].result).toBeUndefined();
     expect(tournament.matchdays.find(({ phaseName }) =>
       phaseName === "Liguilla de Ascenso · Final · Ida",
     )?.fixtures).toHaveLength(0);
@@ -237,7 +272,7 @@ describe("advanceChileanAscensoPlayoff", () => {
     const semifinalFixtures = advanced.matchdays
       .filter(({ phaseName }) => phaseName?.includes("Semifinal"))
       .flatMap(({ fixtures }) => fixtures);
-    expect(semifinalFixtures).toHaveLength(2);
+    expect(semifinalFixtures).toHaveLength(0);
     expect(advanced.matchdays.flatMap(({ fixtures }) => fixtures)
       .find(({ id }) => id.endsWith("-Cuartos de final-1-vuelta"))?.result)
       .toEqual(preservedResult);

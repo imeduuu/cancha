@@ -245,4 +245,16 @@ describe("AnfpOfficialLeagueSource · Liguilla Ascenso", () => {
     await expect(new AnfpOfficialLeagueSource().fetchSeason("primera-b"))
       .rejects.toThrow(/no son recíprocos/);
   });
+
+  it("imports an ANFP title-decider phase under the canonical name with penalty resolution", async () => {
+    vi.stubGlobal("DOMParser", new JSDOM("").window.DOMParser);
+    const title = `<div class="anwp-section"><div class="competition__stage-title">Definición del Campeonato</div></div>
+      <div class="competition__group-wrapper"><div class="anwp-section"><div class="competition__round-title">Fecha 1</div></div>${game("title-1", "Cobreloa", "San Luis", { score: "0-0" })}</div>`;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(page().replace("<div class=\"anwp-section\"><div class=\"competition__stage-title\">Fixture", `${title}<div class=\"anwp-section\"><div class=\"competition__stage-title\">Fixture`))));
+    const season = await new AnfpOfficialLeagueSource().fetchSeason("primera-b");
+    const definition = season.matchdays.find(({ phaseName }) => phaseName === "Definición del título");
+    expect(definition?.matches[0]).toMatchObject({
+      id: "title-1", homeTeamName: "Cobreloa", awayTeamName: "San Luis", knockoutResolution: "penalties",
+    });
+  });
 });

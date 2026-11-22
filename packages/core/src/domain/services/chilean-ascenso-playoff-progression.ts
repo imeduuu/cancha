@@ -1,4 +1,4 @@
-import type { Fixture, Matchday, Tournament } from "../entities/tournament";
+import type { Fixture, KnockoutResolution, Matchday, Tournament } from "../entities/tournament";
 import type { Team } from "../entities/team";
 import { calculateStandings } from "./standings";
 import { reconcileFixtureParticipants } from "./knockout-fixture-reconciliation";
@@ -11,8 +11,9 @@ const competitionOf = (tournament: Tournament) =>
   tournament.competitionId ?? /^(.*?)-(?:19|20)\d{2}$/.exec(tournament.id)?.[1] ?? tournament.id;
 const PLAYOFF_PREFIX = "Liguilla de Ascenso";
 const REGULAR_PHASE = "Fase regular";
+const TITLE_PHASE = "Definición del título";
 const FORMAT_NOTE =
-  "Liguilla de Ascenso basada en el formato ANFP documentado para 2025; estructura provisional para 2026.";
+  "Liga de Ascenso 2026: partido único de definición del título si hay empate en el primer lugar; Liguilla oficial a ida y vuelta.";
 
 interface Tie {
   readonly homeTeamId: string;
@@ -23,22 +24,23 @@ interface StageSpec {
   readonly name: string;
   readonly leg: number;
   readonly returnLeg: boolean;
-  readonly resolution: boolean;
+  readonly resolution: KnockoutResolution | false;
 }
 
 const stages: readonly StageSpec[] = [
   { name: "Cuartos de final", leg: 2, returnLeg: false, resolution: false },
-  { name: "Cuartos de final", leg: 3, returnLeg: true, resolution: true },
+  { name: "Cuartos de final", leg: 3, returnLeg: true, resolution: "aggregate-then-penalties" },
   { name: "Semifinal", leg: 4, returnLeg: false, resolution: false },
-  { name: "Semifinal", leg: 5, returnLeg: true, resolution: true },
+  { name: "Semifinal", leg: 5, returnLeg: true, resolution: "aggregate-then-penalties" },
   { name: "Final", leg: 6, returnLeg: false, resolution: false },
-  { name: "Final", leg: 7, returnLeg: true, resolution: true },
+  { name: "Final", leg: 7, returnLeg: true, resolution: "extra-time-then-penalties" },
 ];
 
 function isPlayoffMatchday(matchday: Matchday): boolean {
   const phaseName = normalizeTeamName(matchday.phaseName ?? "");
   return phaseName.startsWith(normalizeTeamName(PLAYOFF_PREFIX))
-    || phaseName.startsWith("liguilla ascenso");
+    || phaseName.startsWith("liguilla ascenso")
+    || phaseName === normalizeTeamName(TITLE_PHASE);
 }
 
 function isRegularMatchday(matchday: Matchday): boolean {
@@ -98,21 +100,25 @@ function hasCompleteRoundRobin(
 function getTieWinner(
   tournament: Tournament,
   matchdays: readonly Matchday[],
-  tieNumber: number,
   phaseName: string,
   expectedTie: Tie,
 ): string | undefined {
   // Fixture ids are prefixed by the tournament id: for 2026 that is exactly "anfp-liga-de-ascenso-2026", so they do not change.
-  const tieId = `${tournament.id}-${phaseName}-${tieNumber}`;
-  const fixtures = matchdays.flatMap(({ fixtures: dayFixtures }) => dayFixtures);
-  const firstLeg = fixtures.find(({ id }) => id === `${tieId}-ida`);
-  const returnLeg = fixtures.find(({ id }) => id === `${tieId}-vuelta`);
-  const firstMatchday = matchdays.find(({ fixtures: dayFixtures }) =>
-    dayFixtures.some(({ id }) => id === firstLeg?.id),
-  );
-  const returnMatchday = matchdays.find(({ fixtures: dayFixtures }) =>
-    dayFixtures.some(({ id }) => id === returnLeg?.id),
-  );
+  const stageKey = normalizeTeamName(phaseName);
+  const stageMatches = (day: Matchday) => {
+    const name = normalizeTeamName(day.phaseName ?? "");
+    return (name.includes(stageKey) && !(stageKey === "final"
+      && (name.includes("semifinal") || name.includes("cuartos de final"))))
+      || (stageKey === "cuartos de final" && name.startsWith("liguilla ascenso"));
+  };
+  const firstMatchday = matchdays.find(day => stageMatches(day)
+    && normalizeTeamName(day.phaseName ?? "").endsWith("ida"));
+  const returnMatchday = matchdays.find(day => stageMatches(day)
+    && normalizeTeamName(day.phaseName ?? "").endsWith("vuelta"));
+  const firstLeg = firstMatchday?.fixtures.find(fixture =>
+    fixture.homeTeamId === expectedTie.homeTeamId && fixture.awayTeamId === expectedTie.awayTeamId);
+  const returnLeg = returnMatchday?.fixtures.find(fixture =>
+    fixture.homeTeamId === expectedTie.awayTeamId && fixture.awayTeamId === expectedTie.homeTeamId);
   if (
     !firstLeg?.result
     || !returnLeg?.result
@@ -130,14 +136,16 @@ function getTieWinner(
 
   const firstResult = firstLeg.result;
   const returnResult = returnLeg.result;
-  const homeAggregate = firstResult.homeGoals
-    + (returnLeg.homeTeamId === firstLeg.homeTeamId
-      ? returnResult.homeGoals
-      : returnResult.awayGoals);
-  const awayAggregate = firstResult.awayGoals
-    + (returnLeg.homeTeamId === firstLeg.awayTeamId
-      ? returnResult.homeGoals
-      : returnResult.awayGoals);
+  let homeAggregate = firstResult.homeGoals
+    + (returnLeg.homeTeamId === firstLeg.homeTeamId ? returnResult.homeGoals : returnResult.awayGoals);
+  let awayAggregate = firstResult.awayGoals
+    + (returnLeg.homeTeamId === firstLeg.awayTeamId ? returnResult.homeGoals : returnResult.awayGoals);
+  if (phaseName === "Final" && returnResult.extraTime) {
+    homeAggregate += returnLeg.homeTeamId === firstLeg.homeTeamId
+      ? returnResult.extraTime.homeGoals : returnResult.extraTime.awayGoals;
+    awayAggregate += returnLeg.homeTeamId === firstLeg.awayTeamId
+      ? returnResult.extraTime.homeGoals : returnResult.extraTime.awayGoals;
+  }
   if (homeAggregate !== awayAggregate) {
     return homeAggregate > awayAggregate ? firstLeg.homeTeamId : firstLeg.awayTeamId;
   }
@@ -154,13 +162,13 @@ function makeFixture(
   tieNumber: number,
   tie: Tie,
   returnLeg: boolean,
-  aggregateResolution: boolean,
+  resolution: KnockoutResolution | false,
 ): Fixture {
   return {
     id: `${prefix}-${phaseName}-${tieNumber}-${returnLeg ? "vuelta" : "ida"}`,
     homeTeamId: returnLeg ? tie.awayTeamId : tie.homeTeamId,
     awayTeamId: returnLeg ? tie.homeTeamId : tie.awayTeamId,
-    ...(aggregateResolution ? { knockoutResolution: "aggregate-then-penalties" as const } : {}),
+    ...(resolution ? { knockoutResolution: resolution } : {}),
   };
 }
 
@@ -171,8 +179,12 @@ function reconcileStageMatchday(
   ties: readonly (Tie | undefined)[],
 ): Matchday {
   const phaseName = `${PLAYOFF_PREFIX} · ${spec.name}${spec.returnLeg ? " · Vuelta" : " · Ida"}`;
-  const previousFixtures = current.matchdays.find(({ phaseName: name }) => name === phaseName)
-    ?.fixtures ?? [];
+  const previousFixtures = current.matchdays.find(({ phaseName: name }) => name === phaseName)?.fixtures
+    ?? (spec.name === "Cuartos de final"
+      ? current.matchdays.find(day => normalizeTeamName(day.phaseName ?? "").startsWith("liguilla ascenso")
+        && normalizeTeamName(day.phaseName ?? "").endsWith(spec.returnLeg ? "vuelta" : "ida"))?.fixtures
+      : undefined)
+    ?? [];
   const fixtures: Fixture[] = [];
   const usedTeams = new Set<string>();
 
@@ -183,14 +195,16 @@ function reconcileStageMatchday(
     usedTeams.add(tie.awayTeamId);
 
     const candidate = makeFixture(current.id, spec.name, index + 1, tie, spec.returnLeg, spec.resolution);
-    const previous = previousFixtures.find(({ id }) => id === candidate.id);
+    const previous = previousFixtures.find(({ id }) => id === candidate.id)
+      ?? previousFixtures.find(fixture => fixture.homeTeamId === candidate.homeTeamId
+        && fixture.awayTeamId === candidate.awayTeamId);
     const reconciled = previous
       ? reconcileFixtureParticipants(previous, candidate.homeTeamId, candidate.awayTeamId)
       : candidate;
     if (!reconciled) return;
     fixtures.push({
       ...reconciled,
-      ...(spec.resolution ? { knockoutResolution: "aggregate-then-penalties" } : {}),
+      ...(spec.resolution ? { knockoutResolution: spec.resolution } : {}),
     });
   });
 
@@ -242,29 +256,54 @@ function computeBracket(tournament: Tournament): AscensoBracket | undefined {
   const standings = calculateStandings({ ...tournament, matchdays: regularMatchdays });
   if (standings.length < 8) return undefined;
   const seeds = standings.slice(0, 8).map(({ teamId }) => teamId);
+  const tiedForFirst = standings.length > 1 && standings[0].points === standings[1].points;
+  const definition = tournament.matchdays
+    .filter(day => normalizeTeamName(day.phaseName ?? "") === normalizeTeamName(TITLE_PHASE))
+    .flatMap(day => day.fixtures)[0];
+  const titleWinner = tiedForFirst && definition?.result && definition.homeTeamId === seeds[0]
+    && definition.awayTeamId === seeds[1]
+    && isValidFixtureResult(tournament, tournament.matchdays.find(day => day.fixtures.includes(definition))!, definition)
+    ? definition.result.homeGoals === definition.result.awayGoals
+      ? definition.result.penalties && definition.result.penalties.homeGoals !== definition.result.penalties.awayGoals
+        ? definition.result.penalties.homeGoals > definition.result.penalties.awayGoals ? definition.homeTeamId : definition.awayTeamId
+        : undefined
+      : definition.result.homeGoals > definition.result.awayGoals ? definition.homeTeamId : definition.awayTeamId
+    : undefined;
   const quarterfinals: Tie[] = [
-    { homeTeamId: seeds[2], awayTeamId: seeds[7] },
-    { homeTeamId: seeds[3], awayTeamId: seeds[6] },
-    { homeTeamId: seeds[4], awayTeamId: seeds[5] },
+    { homeTeamId: seeds[7], awayTeamId: seeds[2] },
+    { homeTeamId: seeds[6], awayTeamId: seeds[3] },
+    { homeTeamId: seeds[5], awayTeamId: seeds[4] },
   ];
-  const quarterfinalWinners = quarterfinals.map((tie, index) =>
-    getTieWinner(tournament, tournament.matchdays, index + 1, "Cuartos de final", tie),
+  const quarterfinalWinners = quarterfinals.map((tie) =>
+    getTieWinner(tournament, tournament.matchdays, "Cuartos de final", tie),
   );
-  const semifinals: (Tie | undefined)[] = [
-    quarterfinalWinners[0]
-      ? { homeTeamId: seeds[1], awayTeamId: quarterfinalWinners[0] }
-      : undefined,
-    quarterfinalWinners[1] && quarterfinalWinners[2]
-      ? { homeTeamId: quarterfinalWinners[1], awayTeamId: quarterfinalWinners[2] }
-      : undefined,
+  const titleLoser = tiedForFirst && titleWinner ? (titleWinner === seeds[0] ? seeds[1] : seeds[0]) : undefined;
+  const topSeed = tiedForFirst ? titleLoser : seeds[1];
+  const availableWinners = quarterfinalWinners.filter((id): id is string => !!id);
+  const lowestWinner = availableWinners.length === 3
+    ? [...availableWinners].sort((a, b) => seeds.indexOf(b) - seeds.indexOf(a))[0]
+    : undefined;
+  const otherWinners = lowestWinner
+    ? availableWinners.filter(id => id !== lowestWinner)
+    : [];
+  const semifinalPairs: (readonly [string, string] | undefined)[] = [
+    topSeed && lowestWinner ? [topSeed, lowestWinner] : undefined,
+    otherWinners.length === 2 ? [otherWinners[0], otherWinners[1]] : undefined,
   ];
-  const semifinalWinners = semifinals.map((tie, index) =>
-    tie ? getTieWinner(tournament, tournament.matchdays, index + 1, "Semifinal", tie) : undefined,
+  const semifinals: (Tie | undefined)[] = semifinalPairs.map(pair => !pair ? undefined
+    : seeds.indexOf(pair[0]) > seeds.indexOf(pair[1])
+      ? { homeTeamId: pair[0], awayTeamId: pair[1] }
+      : { homeTeamId: pair[1], awayTeamId: pair[0] });
+  while (semifinals.length < 2) semifinals.push(undefined);
+  const semifinalWinners = semifinals.map((tie) =>
+    tie ? getTieWinner(tournament, tournament.matchdays, "Semifinal", tie) : undefined,
   );
   const final: Tie[] = semifinalWinners[0] && semifinalWinners[1]
-    ? [{ homeTeamId: semifinalWinners[0], awayTeamId: semifinalWinners[1] }]
+    ? [seeds.indexOf(semifinalWinners[0]) > seeds.indexOf(semifinalWinners[1])
+      ? { homeTeamId: semifinalWinners[0], awayTeamId: semifinalWinners[1] }
+      : { homeTeamId: semifinalWinners[1], awayTeamId: semifinalWinners[0] }]
     : [];
-  const finalWinner = final[0] ? getTieWinner(tournament, tournament.matchdays, 1, "Final", final[0]) : undefined;
+  const finalWinner = final[0] ? getTieWinner(tournament, tournament.matchdays, "Final", final[0]) : undefined;
   return { regularMatchdays, quarterfinals, semifinals, final, ...(finalWinner ? { finalWinner } : {}) };
 }
 
@@ -273,12 +312,28 @@ export function getChileanAscensoPlayoffWinner(tournament: Tournament): string |
   return isChileanAscenso(tournament) ? computeBracket(tournament)?.finalWinner : undefined;
 }
 
+export function getChileanAscensoTitleWinner(tournament: Tournament): string | undefined {
+  if (!isChileanAscenso(tournament)) return undefined;
+  const regular = chileanAscensoRegularMatchdays(tournament);
+  if (!hasCompleteRoundRobin(tournament, regular)) return undefined;
+  const standings = calculateStandings({ ...tournament, matchdays: regular });
+  if (standings.length < 2 || standings[0].points !== standings[1].points) return standings[0]?.teamId;
+  const definitionDay = tournament.matchdays.find(day =>
+    normalizeTeamName(day.phaseName ?? "") === normalizeTeamName(TITLE_PHASE));
+  const fixture = definitionDay?.fixtures[0];
+  if (!fixture || fixture.homeTeamId !== standings[0].teamId || fixture.awayTeamId !== standings[1].teamId
+    || !isValidFixtureResult(tournament, definitionDay, fixture)) return undefined;
+  if (fixture.result!.homeGoals !== fixture.result!.awayGoals) {
+    return fixture.result!.homeGoals > fixture.result!.awayGoals ? fixture.homeTeamId : fixture.awayTeamId;
+  }
+  const penalties = fixture.result!.penalties;
+  if (!penalties || penalties.homeGoals === penalties.awayGoals) return undefined;
+  return penalties.homeGoals > penalties.awayGoals ? fixture.homeTeamId : fixture.awayTeamId;
+}
+
 export function advanceChileanAscensoPlayoff(tournament: Tournament): Tournament {
   if (!isChileanAscenso(tournament)) return tournament;
-  // Preserve ANFP's published Liguilla instead of replacing it with a provisional bracket.
-  if (tournament.matchdays.some((matchday) =>
-    normalizeTeamName(matchday.phaseName ?? "").startsWith("liguilla ascenso"),
-  )) return tournament;
+  // Keep published fixture ids and schedules while resolving their winners by participants.
   const bracket = computeBracket(tournament);
   if (!bracket) return removeStalePlayoff(tournament);
   const { regularMatchdays, quarterfinals, semifinals, final } = bracket;
@@ -288,6 +343,21 @@ export function advanceChileanAscensoPlayoff(tournament: Tournament): Tournament
     leg: 1,
     phaseName: REGULAR_PHASE,
   }));
+  const standings = calculateStandings({ ...tournament, matchdays: regularMatchdays });
+  const needsTitleDefinition = standings.length > 1 && standings[0].points === standings[1].points;
+  const hasPublishedTitleDefinition = tournament.matchdays.some(day =>
+    normalizeTeamName(day.phaseName ?? "") === normalizeTeamName(TITLE_PHASE));
+  const generatedDefinition: Matchday | undefined = needsTitleDefinition && !hasPublishedTitleDefinition
+    ? { number: regularMatchdays.length + 1, leg: 1, phaseName: TITLE_PHASE, fixtures: [{
+      id: `${tournament.id}-definicion-titulo-1`,
+      homeTeamId: standings[0].teamId,
+      awayTeamId: standings[1].teamId,
+      knockoutResolution: "penalties",
+    }] }
+    : undefined;
+  const definition = generatedDefinition ?? (needsTitleDefinition
+    ? tournament.matchdays.find(day => normalizeTeamName(day.phaseName ?? "") === normalizeTeamName(TITLE_PHASE))
+    : undefined);
   const playoffMatchdays = stages.map((spec) => reconcileStageMatchday(
     tournament,
     regularMatchdays,
@@ -298,7 +368,7 @@ export function advanceChileanAscensoPlayoff(tournament: Tournament): Tournament
         ? semifinals
         : final,
   ));
-  const matchdays = [...regular, ...playoffMatchdays];
+  const matchdays = [...regular, ...(definition ? [definition] : []), ...playoffMatchdays];
   if (
     JSON.stringify(matchdays) === JSON.stringify(tournament.matchdays)
     && tournament.format === "staged"

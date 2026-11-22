@@ -466,7 +466,13 @@ function parsePrimeraBMatchdays(document: Document): OfficialMatchday[] {
   if (headings.length === 0) return parseCompetitionGroups(document);
 
   return headings.flatMap((heading) => {
-    const phaseName = heading.textContent?.trim();
+    const headingName = heading.textContent?.trim();
+    const normalizedHeading = normalizeTeamName(headingName ?? "");
+    const isTitleDefinition = normalizedHeading.includes("definicion")
+      && ["campeon", "titulo", "primer lugar", "ascenso"].some(token => normalizedHeading.includes(token));
+    const phaseName = isTitleDefinition
+      ? "Definición del título"
+      : headingName;
     const section = heading.closest(".anwp-section");
     const group = section?.nextElementSibling;
     if (!phaseName || !section || !group?.classList.contains("competition__group-wrapper")) {
@@ -482,7 +488,12 @@ function parsePrimeraBMatchdays(document: Document): OfficialMatchday[] {
     if (matchdays.length === 0) {
       throw new Error(`La etapa oficial "${phaseName}" no contiene fechas.`);
     }
-    return matchdays;
+    return isTitleDefinition
+      ? matchdays.map(day => ({
+        ...day,
+        matches: day.matches.map(match => ({ ...match, knockoutResolution: "penalties" as const })),
+      }))
+      : matchdays;
   });
 }
 

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { ActivityEvent } from "../../domain/entities/activity-event";
 import type { Tournament } from "../../domain/entities/tournament";
 import { generateRoundRobinSchedule } from "../../domain/services/round-robin-scheduler";
+import { calculateStandings } from "../../domain/services/standings";
 import { chileanPrimera2026PlacementRules } from "../../domain/services/chilean-primera-placement-rules";
 import { getArgentinaLeagueChampion } from "../../domain/services/argentina-league-champion";
 import { getChileanAscensoOutcome } from "../../domain/services/chilean-division-outcome";
+import { advanceChileanAscensoPlayoff } from "../../domain/services/chilean-ascenso-playoff-progression";
 import { getDivisionTransition } from "../../domain/services/division-season-transition";
 import { getTournamentCompletionStatus, hasCompleteRoundRobinSchedule } from "../../domain/services/tournament-history";
 import { validateTournamentIntegrity } from "../../domain/services/tournament-integrity";
@@ -41,6 +43,46 @@ function simulatedAscenso() {
   const random = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
   const t = simulateChampionship(base, "pendingOnly", memory.repository, random).tournament;
   return {t, memory};
+}
+function simulatedRealTitleDeciderAscenso() {
+  const base = orderedLeague("anfp-liga-de-ascenso-2026", "anfp-liga-de-ascenso", "r");
+  const teamIds = { cobreloa: "r0", sanLuis: "r1" };
+  let cobreloaWins = 0, sanLuisWins = 0, headToHead = 0;
+  const complete: Tournament = {
+    ...base,
+    teams: base.teams.map(team => team.id === teamIds.cobreloa ? { ...team, name: "Cobreloa" }
+      : team.id === teamIds.sanLuis ? { ...team, name: "San Luis" } : team),
+    placementRules: { championPlaces: 1, playoffPlaces: {from: 2, to: 8}, relegationPlaces: 1 },
+    matchdays: base.matchdays.map(day => ({ ...day, fixtures: day.fixtures.map(fixture => {
+      const homeTop = fixture.homeTeamId === teamIds.cobreloa || fixture.homeTeamId === teamIds.sanLuis;
+      const awayTop = fixture.awayTeamId === teamIds.cobreloa || fixture.awayTeamId === teamIds.sanLuis;
+      const homeNumber = Number(fixture.homeTeamId.slice(1));
+      const awayNumber = Number(fixture.awayTeamId.slice(1));
+      let winner: string | undefined;
+      if (homeTop && awayTop) {
+        winner = headToHead++ === 0 ? teamIds.cobreloa : teamIds.sanLuis;
+      } else if (homeTop || awayTop) {
+        const topId = homeTop ? fixture.homeTeamId : fixture.awayTeamId;
+        const won = topId === teamIds.cobreloa ? cobreloaWins++ < 18 : sanLuisWins++ < 18;
+        winner = won ? topId : (topId === fixture.homeTeamId ? fixture.awayTeamId : fixture.homeTeamId);
+      }
+      return { ...fixture, result: winner
+        ? winner === fixture.homeTeamId ? {homeGoals: 1, awayGoals: 0} : {homeGoals: 0, awayGoals: 1}
+        : homeTop || awayTop ? fixture.result : {homeGoals: homeNumber + awayNumber, awayGoals: homeNumber + awayNumber} };
+    }) })),
+  };
+  const staged = advanceChileanAscensoPlayoff(complete);
+  const title = staged.matchdays.find(day => day.phaseName === "Definición del título")!;
+  const decided: Tournament = { ...staged, matchdays: staged.matchdays.map(day => day !== title ? day : {
+    ...day, fixtures: day.fixtures.map(fixture => ({ ...fixture,
+      result: {homeGoals: 0, awayGoals: 0, penalties: {homeGoals: 5, awayGoals: 4}},
+    })),
+  }) };
+  const memory = closureMemory([decided]);
+  let seed = 2468;
+  const random = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  const t = simulateChampionship(decided, "pendingOnly", memory.repository, random).tournament;
+  return { t, memory };
 }
 
 describe("Liga Profesional 2026: Campeón de Liga (art. 24)", () => {
@@ -80,6 +122,21 @@ describe("Liga Profesional 2026: Campeón de Liga (art. 24)", () => {
 });
 
 describe("Liga de Ascenso (Chile): champion, Liguilla and relegation", () => {
+  it("simulates the 2026 Cobreloa–San Luis title decider through the Liguilla and second promotion", () => {
+    const {t} = simulatedRealTitleDeciderAscenso();
+    const outcome = getChileanAscensoOutcome(t);
+    const regular = t.matchdays.filter(day => !day.phaseName || day.phaseName === "Fase regular");
+    expect(calculateStandings({...t, matchdays: regular}).slice(0, 2).map(row => row.points)).toEqual([57, 57]);
+    expect(outcome.champion).toBe("r0");
+    expect(outcome.playoffWinner).toBeDefined();
+    expect(outcome.promoted).toHaveLength(2);
+    expect(outcome.pending).toEqual([]);
+    expect(t.matchdays.find(day => day.phaseName === "Definición del título")?.fixtures[0].result?.penalties)
+      .toEqual({homeGoals: 5, awayGoals: 4});
+    expect(getTournamentCompletionStatus(t, "sporting")).toBe("Finalizado");
+    expect(getDivisionTransition(primera(), t, []).pending).toEqual([]);
+  });
+
   it("the leader is champion, the Liguilla winner also goes up and the last goes down", () => {
     const {t} = simulatedAscenso(), outcome = getChileanAscensoOutcome(t);
     expect(outcome.pending).toEqual([]);
@@ -125,9 +182,11 @@ describe("Chile transition Primera ↔ Liga de Ascenso", () => {
 });
 
 describe("planning Chile 2027 from confirmed simulated closures", () => {
-  function library(withPrimeraSimulation = true) {
-    const {t: ascenso, memory} = simulatedAscenso(), p = primera();
+  function library(withPrimeraSimulation = true, ascensoOverride?: Tournament) {
+    const {t: standardAscenso, memory} = simulatedAscenso(), p = primera();
+    const ascenso = ascensoOverride ?? standardAscenso;
     memory.state.tournaments = [p, ascenso];
+    memory.state.activity = [...memory.state.activity, simulation(ascenso)];
     if (withPrimeraSimulation) memory.state.activity = [...memory.state.activity, simulation(p)];
     const repository = {...memory.repository, saveManyWithActivity: (items: readonly Tournament[], event: ActivityEvent) => {
       items.forEach(item => memory.repository.save(item));memory.repository.recordActivity!(event);
@@ -195,5 +254,22 @@ describe("planning Chile 2027 from confirmed simulated closures", () => {
     expect(plan.blockers).toEqual([]);
     const created = confirmSeasonPlanning(reviewSeasonPlanning(next, repository), repository, true);
     expect(created.map(t => [t.season, t.teams.length, t.matchdays.length])).toEqual([[2028, 16, 30], [2028, 16, 30]]);
+  });
+
+  it("plans 2027 using the real title decider winner and the simulated Liguilla winner", () => {
+    const {t: ascenso} = simulatedRealTitleDeciderAscenso();
+    const {repository, primera: p} = library(true, ascenso);
+    close(p.id, repository);close(ascenso.id, repository);
+    const transition = getDivisionTransition(p, ascenso, []);
+    expect(transition.pending).toEqual([]);
+    const [upper, lower] = confirmSeasonPlanning(reviewSeasonPlanning(input(p, ascenso), repository), repository, true);
+    expect(upper.season).toBe(2027);
+    expect(upper.teams.map(team => team.name)).toContain("Cobreloa");
+    const playoffName = ascenso.teams.find(team => team.id === getChileanAscensoOutcome(ascenso).playoffWinner)?.name;
+    expect(upper.teams.map(team => team.name)).toContain(playoffName);
+    expect(lower.teams.map(team => team.name)).toEqual(expect.arrayContaining([
+      "Club de Segunda", "P Club 14", "P Club 15",
+    ]));
+    expect(lower.teams.map(team => team.name)).not.toContain("R Club 12");
   });
 });

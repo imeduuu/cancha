@@ -1,6 +1,6 @@
 import type { Tournament } from "../entities/tournament";
 import { calculateStandings, getUnresolvedStandingsTieGroups, type TeamStanding } from "./standings";
-import { chileanAscensoRegularMatchdays, getChileanAscensoPlayoffWinner, isChileanAscenso } from "./chilean-ascenso-playoff-progression";
+import { chileanAscensoRegularMatchdays, getChileanAscensoPlayoffWinner, getChileanAscensoTitleWinner, isChileanAscenso } from "./chilean-ascenso-playoff-progression";
 import { isValidFixtureResult } from "./match-result-validation";
 
 export interface ChileanAscensoOutcome {
@@ -36,9 +36,9 @@ export function getChileanAscensoOutcome(tournament: Tournament): ChileanAscenso
   if (!regularComplete) return empty("La fase regular de la Liga de Ascenso tiene partidos pendientes.");
   const table = calculateStandings(regular);
   let champion: string | undefined = table[0]?.teamId;
-  if (tieCrossesCut(regular, table, 1)) {
-    champion = undefined;
-    pending.push("Desempate por el primer puesto de la Liga de Ascenso pendiente.");
+  if (table.length > 1 && table[0].points === table[1].points) {
+    champion = getChileanAscensoTitleWinner(tournament);
+    if (!champion) pending.push("Desempate por el primer puesto de la Liga de Ascenso pendiente.");
   }
   const playoffWinner = getChileanAscensoPlayoffWinner(tournament);
   if (!playoffWinner) pending.push("Final de la Liguilla de Ascenso pendiente.");

@@ -55,7 +55,7 @@ La Primera B importó **246 partidos**: 240 de `Fixture` y seis de `Liguilla Asc
 | `63079` Deportes Copiapó ? Deportes Antofagasta | `63082` Deportes Antofagasta ? Deportes Copiapó | 21 y 27 de noviembre |
 | `63080` San Marcos de Arica ? Magallanes | `63081` Magallanes ? San Marcos de Arica | 22 y 28 de noviembre |
 
-El adaptador ahora toma los contenedores como llaves de la etapa explícita, exige dos partidos con equipos recíprocos y fechas/horas válidas, y ordena cada ida/vuelta por el inicio publicado. La importación comprueba los 246 partidos sin cambiar los seis IDs oficiales. `advanceChileanAscensoPlayoff` conserva la Liguilla publicada y no la sustituye por el bracket local provisional.
+El adaptador toma los contenedores como llaves de la etapa explícita, exige dos partidos con equipos recíprocos y fechas/horas válidas, y ordena cada ida/vuelta por el inicio publicado. La importación comprueba los 246 partidos sin cambiar los seis IDs oficiales. `advanceChileanAscensoPlayoff` conserva esas llaves, calcula sus ganadores y genera las semifinales y la final según las bases de 2026. Si los puntos del primer lugar están empatados, crea «Definición del título» solo cuando ANFP no la publica; el ganador es campeón y el perdedor entra a semifinales. La final se juega a ida y vuelta y permite prórroga y penales.
 
 En ambos modos, las otras fuentes chilenas también importaron sin cambios: Liga de Primera (240), Segunda División (42 en cada zona), Copa Chile (120) y Copa de la Liga (53). No se observó HTTP 403/429/5xx en estas pasadas; el nuevo reintento de una vez ante esos estados del origen está implementado y probado en `@cancha/official-source-proxy`.
 
