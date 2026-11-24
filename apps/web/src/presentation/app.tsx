@@ -21,6 +21,7 @@ import { AccountAccess } from "./components/account-access";
 import { localLibraryNeedsMigration } from "../infrastructure/persistence/local-library-migration";
 import { DeferredPanel } from "./components/deferred-panel";
 import { publishedSeasonSource } from "../infrastructure/external-services/load-official-league-source";
+import { groupCompetitions } from "@cancha/core/application/services/competition-center";
 import { lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { GoalScorer, Matchday, MatchSchedule, Tournament } from "@cancha/core/domain/entities/tournament";
 import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event";
@@ -283,6 +284,7 @@ function Application({ libraryBackend }: AppProps) {
     } catch (error) { setFeedback(error instanceof Error ? error.message : "No se pudo abrir la biblioteca actual."); }
   }
   const [tournament, setTournament] = useState<Tournament | null>(null);
+  const activeCompetition = tournament ? groupCompetitions([tournament])[0] : null;
   const [savedTournaments, setSavedTournaments] = useState<readonly Tournament[]>([]);
   const [screen, setScreen] = useState<"library" | "setup" | "tournament">("library");
   const clearSessionDrafts = useClearSessionDrafts();
@@ -1334,15 +1336,17 @@ function Application({ libraryBackend }: AppProps) {
           )}
           <AccountAccess />
         </div>
-        {tournament && screen === "tournament" && (
-          <span className="topbar-active-tournament" title={tournament.name}>
-            ACTIVO · {tournament.name}
-          </span>
-        )}
         <span className="topbar-status"><span /> TU TORNEO, TUS REGLAS</span>
       </header>
 
-      <section className="hero">
+      {tournament && activeCompetition && (
+        <section className="active-tournament-bar" aria-label="Torneo activo">
+          <span className="active-tournament-label">TORNEO ACTIVO</span>
+          <strong>{tournament.name}</strong>
+          <span>{activeCompetition.territory} · {activeCompetition.name} · Temporada {tournament.season ?? "sin año"}</span>
+        </section>
+      )}
+      {!tournament && <section className="hero">
         <div className="hero-copy">
           <span className="eyebrow hero-eyebrow">FÚTBOL CHILENO · TEMPORADA 2026</span>
           <h1>El campeonato<br />lo armas <em>tú.</em></h1>
@@ -1356,7 +1360,7 @@ function Application({ libraryBackend }: AppProps) {
           <div className="art-line art-line-one" />
           <div className="art-line art-line-two" />
         </div>
-      </section>
+      </section>}
 
       <section key={libraryRevision} className={`workspace${decisionsOpen || drawOpen || archiveOpen || closureOpen || screen !== "tournament" ? " workspace-setup" : ""}`}>
         {h2hFocus && <div id="head-to-head-calendar" tabIndex={-1}>

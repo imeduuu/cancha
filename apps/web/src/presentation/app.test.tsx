@@ -369,7 +369,8 @@ describe("simulator UI integration", () => {
     cleanup();
     await renderApplication(<App />);
     expect(await screen.findByRole("heading", { name: "Campeonato UI" })).toBeInTheDocument();
-    expect(screen.getByText(/ACTIVO · Campeonato UI/)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Torneo activo" })).toHaveTextContent("Campeonato UI");
+    expect(screen.queryByRole("heading", { name: /El campeonato lo armas tú/ })).not.toBeInTheDocument();
   }, 10_000);
 
   it("switches active tournaments from the library and persists the selected tournament", async () => {
