@@ -508,6 +508,22 @@ function FixtureRow({
       role="group"
       tabIndex={-1}
     >
+      <div className="fixture-compact-row">
+        <div className="fixture">
+          <span>{homeTeam}</span>
+          <span className="versus">{result ? `${displayedHomeGoals}–${displayedAwayGoals}` : "vs"}</span>
+          <span>{awayTeam}</span>
+        </div>
+        <button className="small-action secondary-action" disabled={simulationBlocked} type="button" onClick={onSimulate}>
+          {simulationBlocked ? "No simulable" : "Simular"}
+        </button>
+        <details className="fixture-detail-disclosure">
+          <summary aria-label={`Detalle de ${homeTeam} contra ${awayTeam}`}>Detalle</summary>
+          <section className="fixture-detail-panel" role="region" aria-label={`Detalle del partido: ${homeTeam} contra ${awayTeam}`}>
+            <header className="fixture-detail-heading">
+              <h3>Detalle del partido</h3>
+              <p>{homeTeam} · {displayedHomeGoals ?? "–"}–{displayedAwayGoals ?? "–"} · {awayTeam}</p>
+            </header>
       <span className={`fixture-status${fixtureStatus === "Datos inválidos" ? " invalid" : ""}`}>
         {fixtureStatus}
       </span>
@@ -916,6 +932,9 @@ function FixtureRow({
         onSaveSchedule={onSaveSchedule}
       />
       {resultError && <p className="field-error result-error" role="alert">{resultError}</p>}
+          </section>
+        </details>
+      </div>
     </div>
   );
 }

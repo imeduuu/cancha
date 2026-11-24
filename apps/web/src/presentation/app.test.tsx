@@ -81,6 +81,7 @@ function getFixtureGroup(): HTMLElement {
     candidate.getAttribute("aria-label")?.includes(" contra "),
   );
   if (!group) throw new Error("No se encontró un grupo accesible de partido.");
+  fireEvent.click(within(group).getByText("Detalle"));
   return group;
 }
 
@@ -321,7 +322,7 @@ describe("simulator UI integration", () => {
     expect(screen.getByText(/Desempates: Puntos.*Diferencia de goles → Goles a favor/))
       .toBeInTheDocument();
     const fixture = getFixtureGroup();
-    await user.click(within(fixture).getByRole("button", { name: "Simular partido" }));
+    await user.click(within(fixture).getByRole("button", { name: "Simular" }));
     await waitFor(() => expect(within(fixture).getByText(/\d+ — \d+/)).toBeInTheDocument());
 
     const goalInputs = within(fixture).getAllByRole("spinbutton");
@@ -435,6 +436,7 @@ describe("simulator UI integration", () => {
     expect(statistics).toHaveTextContent("Todavía no hay información suficiente");
 
     const fixture = screen.getByRole("group", { name: "Club A contra Club B" });
+    await user.click(within(fixture).getByText("Detalle"));
     await user.click(within(fixture).getByText("Autores de goles (0)"));
     await user.type(within(fixture).getByRole("textbox", { name: "Nombre del nuevo autor" }), "Jugador A");
     await user.type(within(fixture).getByRole("spinbutton", { name: "Minuto del nuevo autor" }), "20");
@@ -792,6 +794,7 @@ describe("simulator UI integration", () => {
     expect(await screen.findByRole("region", { name: "Calendario de Liga Uno" })).toBeInTheDocument();
     const fixture = screen.getByRole("group", { name: "Club A contra Club B" });
     expect(fixture).toBeInTheDocument();
+    await user.click(within(fixture).getByText("Detalle"));
     await user.clear(within(fixture).getByRole("spinbutton", { name: "Goles de Club A" }));
     await user.type(within(fixture).getByRole("spinbutton", { name: "Goles de Club A" }), "3");
     await user.click(within(fixture).getByRole("button", { name: "Guardar" }));
