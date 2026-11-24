@@ -227,6 +227,27 @@ afterEach(() => {
 });
 
 describe("simulator UI integration", () => {
+  it("keeps primary navigation visible and groups advanced centers in the tools menu", async () => {
+    localStorage.setItem("cancha.tournaments", JSON.stringify([tournament]));
+    localStorage.setItem("cancha.activeTournamentId", tournament.id);
+    const user = userEvent.setup();
+    await renderApplication(<App />);
+
+    expect(screen.getByRole("button", { name: "Biblioteca" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Crear torneo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cuenta" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Torneo activo" })).toHaveTextContent("Liga Uno");
+    const menu = screen.getByText("Más herramientas");
+    expect(menu.closest("details")).not.toHaveAttribute("open");
+    menu.focus();
+    expect(document.activeElement).toBe(menu);
+    await user.click(menu);
+    expect(menu.closest("details")).toHaveAttribute("open");
+    for (const name of ["Decisiones deportivas", "Asociaciones y afiliaciones", "Sorteos y cruces", "Archivo histórico", "Centro de cierre", "Centro de simulación"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+
   it("keeps the library usable and reports an unavailable LocalStorage", async () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("browser storage unavailable");

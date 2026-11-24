@@ -1316,24 +1316,26 @@ function Application({ libraryBackend }: AppProps) {
         </a>
         <span className="topbar-note">SIMULADOR DE CAMPEONATOS</span>
         <div className="topbar-actions">
-          <button id="open-sports-decisions" className="topbar-nav" type="button" disabled={libraryLoading} onClick={()=>openDecisions(tournament ?? undefined)}>Decisiones deportivas</button>
-          <ClubAssociationsAccess tournament={tournament ?? undefined}/><button id="open-draw-center" className="topbar-nav" type="button" disabled={libraryLoading} onClick={()=>openDraws(tournament ?? undefined)}>Sorteos y cruces</button>
-          <button id="open-historical-archive" className="topbar-nav" type="button" disabled={libraryLoading} onClick={openArchive}>Archivo histórico</button>
-          <button id="open-season-closure" className="topbar-nav" type="button" disabled={libraryLoading} onClick={() => openClosure(tournament ?? undefined)}>Centro de cierre</button>
-          <button className="topbar-nav" disabled={libraryLoading} type="button" onClick={() => {setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setSimulationCenterOpen(value => !value);}}>Centro de simulación</button>
-          {screen !== "library" && (
-            <button className="topbar-nav" disabled={libraryLoading} onClick={() => {setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("library");}} type="button">
-              Biblioteca
-            </button>
-          )}
-          {screen !== "setup" && (
-            <button className="topbar-nav" disabled={libraryLoading} onClick={() => {
-              setLoadError("");
-              setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("setup");
-            }} type="button">
-              Crear torneo
-            </button>
-          )}
+          <button className="topbar-nav" disabled={libraryLoading} onClick={() => {setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("library");}} type="button">
+            Biblioteca
+          </button>
+          <button className="topbar-nav" disabled={libraryLoading} onClick={() => {
+            setLoadError("");
+            setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("setup");
+          }} type="button">
+            Crear torneo
+          </button>
+          <details className="topbar-tools">
+            <summary className="topbar-nav">Más herramientas</summary>
+            <div className="topbar-tools-menu">
+              <button id="open-sports-decisions" className="topbar-nav" type="button" disabled={libraryLoading} onClick={()=>openDecisions(tournament ?? undefined)}>Decisiones deportivas</button>
+              <ClubAssociationsAccess tournament={tournament ?? undefined}/>
+              <button id="open-draw-center" className="topbar-nav" type="button" disabled={libraryLoading} onClick={()=>openDraws(tournament ?? undefined)}>Sorteos y cruces</button>
+              <button id="open-historical-archive" className="topbar-nav" type="button" disabled={libraryLoading} onClick={openArchive}>Archivo histórico</button>
+              <button id="open-season-closure" className="topbar-nav" type="button" disabled={libraryLoading} onClick={() => openClosure(tournament ?? undefined)}>Centro de cierre</button>
+              <button className="topbar-nav" disabled={libraryLoading} type="button" onClick={() => {setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setSimulationCenterOpen(value => !value);}}>Centro de simulación</button>
+            </div>
+          </details>
           <AccountAccess />
         </div>
         <span className="topbar-status"><span /> TU TORNEO, TUS REGLAS</span>
