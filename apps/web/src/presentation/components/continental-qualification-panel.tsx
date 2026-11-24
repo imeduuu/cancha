@@ -1,5 +1,6 @@
 import { useLibraryWrite } from "../library-write-context";
 import { useMemo, useState } from "react";
+import { userFacingLabels } from "@cancha/core/application/services/user-facing-labels";
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event";
 import type { ContinentalCup } from "@cancha/core/domain/entities/continental-plan";
@@ -78,7 +79,7 @@ export function ContinentalQualificationPanel({ tournament:t, tournaments, activ
       {projection.entries.map(entry => <label className="continental-choice" key={entryKey(entry)}><input type="checkbox"
         disabled={entry.status === "pending" || projection.conflicts.includes(entryKey(entry))} checked={form.selectedKeys.includes(entryKey(entry))}
         onChange={e => change({selectedKeys:e.target.checked ? [...form.selectedKeys,entryKey(entry)] : form.selectedKeys.filter(key => key !== entryKey(entry))})}/>
-        {entry.teamName} · {statusLabel[entry.status]} · {scenarioLabel[entry.scenario]} · {entry.destination} · {entry.originTournamentName} ({entry.sourceSeason}) · cálculo de {entry.sourceTournamentName}
+        {entry.teamName} · {statusLabel[entry.status]} · {scenarioLabel[entry.scenario]} · {userFacingLabels.destination(entry.destination)} · {entry.originTournamentName} ({entry.sourceSeason}) · cálculo de {entry.sourceTournamentName}
         {projection.conflicts.includes(entryKey(entry)) && " · Conflicto de identidad o cupo"}</label>)}
     </fieldset>
     {projection.reasons.length > 0 && <details><summary>Cupos pendientes, dependencias y advertencias ({projection.reasons.length})</summary><ul>{projection.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul></details>}

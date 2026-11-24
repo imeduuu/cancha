@@ -8,6 +8,7 @@ import {DrawConfigurationEditor} from "./draw-configuration-editor";
 import {SportsDecisionsAccess} from "./sports-decisions-access";
 import {useEffect,useRef,useState} from "react";
 import type {Tournament} from "@cancha/core/domain/entities/tournament";
+import {userFacingLabels} from "@cancha/core/application/services/user-facing-labels";
 import type {TournamentRepository} from "@cancha/core/application/ports/tournament-repository";
 import type {StageDrawRecord} from "@cancha/core/domain/entities/stage-draw";
 import {inspectDrawPreparation} from "@cancha/core/application/services/draw-and-bracket";
@@ -55,7 +56,7 @@ export function DrawAndBracketCenter(props:Props){
     <label>Temporada para sorteos<select disabled={busy} value={id} onChange={e=>{setId(e.target.value);reset();}}><option value="">Selecciona una temporada</option>{tournaments.map(t=><option key={t.id} value={t.id}>{t.name} · {t.season ?? "Sin año"}</option>)}</select></label>
     {!t && <ClubAssociationCatalog activity={activity} universeId={props.universeId}/>}
     {t && inspection && <>
-      <p>{t.name} · {t.season ?? "Sin año"} · Formato: {t.format ?? "No registrado"} / {t.competitionType ?? "No registrado"} · {t.teams.length} participantes.</p>
+      <p>{t.name} · {t.season ?? "Sin año"} · Formato: {userFacingLabels.competitionFormat(t.format)} · {userFacingLabels.competitionType(t.competitionType)} · {t.teams.length} participantes.</p>
       <details><summary>Participantes, reglamento y dependencias</summary><ul>{t.teams.map(team=><li key={team.id}>{team.name} · {team.id} · {team.groupName ?? "Sin grupo"}</li>)}</ul><p>Reglamento {t.competitionRules?.season}: tabla {t.competitionRules?.verification.standings ?? "pendiente"}; decisiones {t.competitionRules?.verification.placements ?? "pendiente"}. {t.competitionRules?.standingsNote} {t.competitionRules?.placementsNote}</p><p>Origen de resultados: {t.sourceName ?? "No registrado"}. No se modifica su procedencia al revisar.</p><ul>{t.seasonPreparation?.sourceTournamentIds.map(id=><li key={id}>{tournaments.find(source=>source.id===id)?.name ?? `Referencia no resuelta: ${id}`}</li>)}</ul></details>
       <p role="status">{inspection.groups.length} grupos registrados · {inspection.unassigned.length} participantes sin grupo · {t.knockoutStages?.length ?? 0} etapas eliminatorias registradas.</p>
       <div className="draw-stage-grid">{inspection.stages.map(s=><article key={s.key}><h3>{s.name}</h3><p>{s.state} · {s.legs===2?"Ida y vuelta":s.legs===1?"Una rueda o partido único":`${s.legs} ruedas registradas`}</p><p>{s.fixtures.length} encuentros · {s.played} con resultado válido · {s.fixtures.filter(f=>f.schedule?.date).length} con fecha registrada.</p><button className="small-action" type="button" disabled={busy} onClick={()=>choose(s.key)}>Revisar {s.name}</button></article>)}</div>

@@ -8,6 +8,7 @@ import {reviewSportsResolution,confirmSportsResolution,type SportsResolutionRevi
 import {OfficialResolutionManager} from "./official-resolution-manager";
 import {useLibraryWrite} from "../library-write-context";
 import {sportingStorageKeys} from "../../infrastructure/persistence/library-write-lock";
+import {userFacingLabels} from "@cancha/core/application/services/user-facing-labels";
 
 interface Props {
  repository:TournamentRepository;universeId:string|null;getUniverseId:()=>string|null;universeName:string;initialTournamentId?:string;
@@ -37,7 +38,7 @@ export function SportsDecisionsCenter(props:Props){
   {scopeChanged?<p role="alert">El universo activo cambió. Abre la biblioteca actual antes de revisar o confirmar decisiones.</p>:<>
    <label>Competición y temporada para decisiones<select value={id} disabled={busy} onChange={e=>{setId(e.target.value);setReview(null);setFilter("");setMessage("");}}><option value="">Selecciona una temporada</option>{tournaments.map(t=><option key={t.id} value={t.id}>{t.name} · {t.season ?? "Sin año"}</option>)}</select></label>
    {t && view && <>
-    <p>{t.name} · {t.season ?? "Sin año"} · {t.competitionType ?? "Tipo no registrado"} / {t.format ?? "Formato no registrado"} · {t.teams.length} participantes.</p>
+    <p>{t.name} · {t.season ?? "Sin año"} · {userFacingLabels.competitionType(t.competitionType)} · {userFacingLabels.competitionFormat(t.format)} · {t.teams.length} participantes.</p>
     <dl className="decisions-counts" aria-label="Indicadores de decisiones">{Object.entries({"Pendientes":view.counts.pending,"Resueltas":view.counts.resolved,"Resoluciones desactualizadas":view.counts.stale,"Bloqueos":view.counts.blocked,"Dependencias registradas":view.counts.dependencies}).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     {view.counts.pending===0 && <p role="status">No hay decisiones pendientes acreditadas por los servicios actuales.</p>}
     <div className="decisions-actions"><button className="small-action" type="button" disabled={busy} onClick={()=>props.onCalendar(t)}>Calendario de la temporada</button><button className="small-action" type="button" disabled={busy} onClick={()=>props.onDraw(t)}>Centro de sorteos</button><button className="small-action" type="button" disabled={busy} onClick={()=>props.onSimulation(t)}>Centro de simulación</button><button className="small-action" type="button" disabled={busy} onClick={()=>props.onClosure(t)}>Centro de cierre</button><button className="small-action" type="button" disabled={busy} onClick={()=>props.onPlanning(t)}>Planificación de temporadas</button></div>

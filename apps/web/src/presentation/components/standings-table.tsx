@@ -8,6 +8,7 @@ import type { Fixture, Tournament, TournamentPlacementRules } from "@cancha/core
 import { tieBreakerOptions } from "@cancha/core/domain/value-objects/tie-breaker";
 import type { InternationalQualificationResult } from "@cancha/core/domain/services/international-qualification";
 import type { RelegationAverageResult } from "@cancha/core/domain/services/relegation-averages";
+import { userFacingLabels } from "@cancha/core/application/services/user-facing-labels";
 
 interface StandingsTableProps {
   standings: readonly TeamStanding[];
@@ -22,12 +23,6 @@ interface StandingsTableProps {
   internationalQualifications?: InternationalQualificationResult;
   relegationAverages?: RelegationAverageResult;
   unresolvedTies?: readonly UnresolvedStandingsTieDetail[];
-}
-
-function verificationLabel(status: "confirmed" | "provisional" | "pending"): string {
-  if (status === "confirmed") return "confirmado";
-  if (status === "provisional") return "provisional";
-  return "pendiente";
 }
 
 export function StandingsTable({
@@ -90,7 +85,7 @@ export function StandingsTable({
           )}
           {competitionRules.conditionalPlacements?.map((condition) => (
             <p key={condition.description}>
-              Cupo condicionado ({condition.status}): {condition.description}
+              Cupo condicionado ({userFacingLabels.verificationStatus(condition.status)}): {condition.description}
             </p>
           ))}
           {competitionRules.sourceUrls && competitionRules.sourceUrls.length > 0 && (
@@ -228,7 +223,7 @@ export function StandingsTable({
             ? <p>No hay cupos calculables con la configuración disponible.</p>
             : internationalQualifications.qualifications.map((qualification) => (
               <p key={`${qualification.teamId}:${qualification.destination}:${qualification.source}`}>
-                {qualification.teamName}: {qualification.destination} · {verificationLabel(qualification.status)}
+                {qualification.teamName}: {userFacingLabels.destination(qualification.destination)} · {userFacingLabels.verificationStatus(qualification.status)}
                 {" "}({qualification.source})
               </p>
             ))}
@@ -261,10 +256,10 @@ export function StandingsTable({
               {standing.tiedAtBoundary ? " · empate en zona de descenso" : ""}
               {standing.relegation
                 ? ` · descenso ${standing.status === "confirmed" && !standing.tiedAtBoundary
-                  ? verificationLabel("confirmed")
-                  : verificationLabel(standing.status)}`
+                  ? userFacingLabels.verificationStatus("confirmed")
+                  : userFacingLabels.verificationStatus(standing.status)}`
                 : ""}
-              {" · "}{verificationLabel(standing.status)}
+              {" · "}{userFacingLabels.verificationStatus(standing.status)}
             </p>
           ))}
           {relegationAverages.pendingReasons.map((reason) => (

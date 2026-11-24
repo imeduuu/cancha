@@ -8,6 +8,7 @@ import {
   type ManualMatchdayInput,
 } from "@cancha/core/application/use-cases/program-season-calendar";
 import { validateTournamentIntegrity } from "@cancha/core/domain/services/tournament-integrity";
+import { userFacingLabels } from "@cancha/core/application/services/user-facing-labels";
 
 interface Props {
   readonly tournaments: readonly Tournament[];
@@ -142,7 +143,7 @@ export function CalendarProgrammingCenter({
   const automaticGenerationBlocker = tournament?.competitionType === "cup"
     ? "Las copas requieren reglas de admisión y etapas específicas."
     : tournament?.teams.some((team) => team.groupName)
-      ? "El generador round-robin general no conserva los grupos existentes."
+      ? "El generador general de todos contra todos no conserva los grupos existentes."
       : undefined;
 
   return (
@@ -174,7 +175,7 @@ export function CalendarProgrammingCenter({
       {!tournament ? <p role="status">No hay una temporada disponible en el universo activo.</p> : <>
         <dl className="calendar-programming-summary">
           <div><dt>Participantes</dt><dd>{tournament.teams.length}</dd></div>
-          <div><dt>Formato registrado</dt><dd>{tournament.format ?? "Pendiente"}</dd></div>
+          <div><dt>Formato registrado</dt><dd>{userFacingLabels.competitionFormat(tournament.format)}</dd></div>
           <div><dt>Reglamento</dt><dd>{tournament.competitionRules?.verification.standings ?? "Pendiente"} · {tournament.competitionRules?.verification.placements ?? "Pendiente"}</dd></div>
           <div><dt>Etapas configuradas</dt><dd>{tournament.knockoutStages?.map(({ name }) => name).join(", ") || "No registradas"}</dd></div>
           <div><dt>Jornadas / fases</dt><dd>{tournament.matchdays.length}</dd></div>
@@ -199,7 +200,7 @@ export function CalendarProgrammingCenter({
 
         <section aria-label="Generar propuesta local">
           <h4>Generar propuesta local</h4>
-          <p>Únicamente se reutiliza el generador round-robin existente. Confirmarlo registrará ese formato como local; no es una declaración oficial. No se crean formatos por grupos ni etapas oficiales.</p>
+          <p>Únicamente se reutiliza el generador de todos contra todos existente. Confirmarlo registrará ese formato como local; no es una declaración oficial. No se crean formatos por grupos ni etapas oficiales.</p>
           {automaticGenerationBlocker && <p role="status">{automaticGenerationBlocker} La generación automática está bloqueada.</p>}
           <label>Ruedas propuestas
             <input type="number" min="1" max="20" value={legs} onChange={(event) => {

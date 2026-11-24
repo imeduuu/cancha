@@ -57,7 +57,7 @@ export function SeasonPreparationPanel({ tournament: t, repository, source, onCh
       {t.seasonPreparation?.calendarReviews.map((item,index) => <p key={index}>{item.at}: <a href={item.sourceUrl} target="_blank" rel="noreferrer">Calendario revisado</a>. Faltaban: {item.missing.join(", ") || "ninguno"}. Agregados: {item.added.join(", ") || "ninguno"}. {item.discrepancyReason}</p>)}
     </details>
     <details><summary>Registrar reglamento anual documentado</summary>
-      <p>Verificación manual: la aplicación no certifica los documentos. Ascensos, descensos y formatos futuros requieren soporte deportivo específico; la generación automática local solo reutiliza el generador round-robin.</p>
+      <p>Verificación manual: la aplicación no certifica los documentos. Ascensos, descensos y formatos futuros requieren soporte deportivo específico; la generación automática local solo reutiliza el generador de todos contra todos.</p>
       <label>Reglas de tabla<select value={standings} onChange={e => setStandings(e.target.value as RulesVerificationStatus)}>{["pending","provisional","verified"].map(s => <option key={s} value={s}>{s === "verified" ? "Verificado por el usuario" : s === "pending" ? "Pendiente" : "Provisional"}</option>)}</select></label>
       <label>Clasificaciones y movimientos<select value={placements} onChange={e => setPlacements(e.target.value as RulesVerificationStatus)}>{["pending","provisional","verified"].map(s => <option key={s} value={s}>{s === "verified" ? "Verificado por el usuario" : s === "pending" ? "Pendiente" : "Provisional"}</option>)}</select></label>
       <label>Fuentes oficiales HTTPS (una por línea)<textarea value={sources} onChange={e => setSources(e.target.value)} /></label>

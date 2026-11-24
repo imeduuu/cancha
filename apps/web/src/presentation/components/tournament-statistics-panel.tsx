@@ -111,7 +111,6 @@ export function TournamentStatisticsPanel({
         <StatisticCard label="Pendientes" value={stats.pending} />
         <StatisticCard label="Resultados incompletos / inválidos" value={stats.incomplete} />
         <StatisticCard label="Partidos con detalles inválidos" value={stats.invalidDetails} />
-        <StatisticCard label="No disputados" value={stats.notPlayed} detail="No existe ese estado en el modelo" />
         <StatisticCard label="Goles" value={stats.totalGoals} detail={`${stats.averageGoals.toFixed(2)} por partido jugado`} />
         <StatisticCard label="Avance" value={`${stats.progressPercent}%`} detail={stats.progressLabel} />
       </div>

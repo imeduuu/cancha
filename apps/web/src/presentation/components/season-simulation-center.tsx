@@ -5,6 +5,7 @@ import { useLibraryWrite } from "../library-write-context";
 import { matchResultOrigin } from "@cancha/core/application/services/match-result-origin";
 import { useEffect, useRef, useState } from "react";
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
+import { userFacingLabels } from "@cancha/core/application/services/user-facing-labels";
 import type { TournamentRepository } from "@cancha/core/application/ports/tournament-repository";
 import { previewSeasonSimulation, confirmSeasonSimulation, type SeasonSimulationPreview, type SeasonSimulationScope } from "@cancha/core/application/use-cases/simulate-season-scope";
 import { seasonOverview } from "@cancha/core/application/services/competition-center";
@@ -44,7 +45,7 @@ export function SeasonSimulationCenter({ tournaments, repository, universeId, ge
       <option value="">Selecciona una temporada</option>{tournaments.map(t => <option key={t.id} value={t.id}>{t.name} · {t.season ?? "Sin año"}</option>)}
     </select></label>
     {t && overview && <>
-      <p>Formato: {t.format ?? "No registrado"} · Disputados: {overview.played} · Pendientes: {overview.total - overview.played}</p>
+      <p>Formato: {userFacingLabels.competitionFormat(t.format)} · Disputados: {overview.played} · Pendientes: {overview.total - overview.played}</p>
       <p>Estado: {overview.status} · {overview.rules}</p>
       <p>{overview.provenance}</p>
       <SeasonClosureAccess tournament={t} /><DrawCenterAccess tournament={t} /><SportsDecisionsAccess tournament={t} />

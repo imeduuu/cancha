@@ -16,6 +16,7 @@ import {calculateStandings,getUnresolvedStandingsTieGroups} from "../../domain/s
 import {validateTournamentIntegrity} from "../../domain/services/tournament-integrity";
 import {buildClubProfiles,clubOccurrenceKey} from "./club-history";
 import {competitionIdentity,seasonOrigins,seasonOverview} from "./competition-center";
+import {userFacingLabels} from "./user-facing-labels";
 import {continentalProjection,nationalContinentalProjection,continentalPlanState,entryKey,sourceScenario} from "./continental-projection";
 
 export type PlanningState="Lista para revisión"|"Pendiente de resultados"|"Pendiente de desempate"|"Pendiente de reglamento"|"Pendiente de participantes"|"Conflicto de identidad"|"Dependencia desactualizada"|"Planificación local";
@@ -110,7 +111,7 @@ export function projectSeasonPlanning(input:SeasonPlanningInput,tournaments:read
   continental=continentalProjection(ids,qualifyingSeason,input.cup ?? "libertadores",tournaments,activity);
   for(const d of continental.dependencies)dependency(d.tournamentId,"Regla internacional o campeón de copa referenciado por el origen seleccionado",true);
   for(const e of continental.entries){const origin=tournaments.find(t=>t.id===e.originTournamentId),team=origin?.teams.find(team=>team.id===e.sourceTeamId);if(!origin || !team)continue;
-   const chosen=(input.selectedKeys ?? []).includes(entryKey(e));add(origin,team,`Clasificación internacional: ${e.destination} · cálculo de ${e.sourceTournamentName}`,e.status,targetCompetitionId,chosen);participants[participants.length-1].key=entryKey(e);participants[participants.length-1].scenario=e.scenario;
+   const chosen=(input.selectedKeys ?? []).includes(entryKey(e));add(origin,team,`Clasificación internacional: ${userFacingLabels.destination(e.destination)} · cálculo de ${e.sourceTournamentName}`,e.status,targetCompetitionId,chosen);participants[participants.length-1].key=entryKey(e);participants[participants.length-1].scenario=e.scenario;
    if(chosen && (e.status==="pending" || continental.conflicts.includes(entryKey(e))))block(e.status==="pending"?"Pendiente de participantes":"Conflicto de identidad",`${e.teamName}: el servicio continental mantiene el cupo pendiente o en conflicto.`);
   }
   notes.push(...continental.reasons);if(continental.reasons.length || continental.entries.some(e=>e.status==="pending"))states.add("Pendiente de participantes");

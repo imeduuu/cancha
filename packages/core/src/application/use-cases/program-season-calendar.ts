@@ -78,10 +78,10 @@ export function previewGeneratedCalendar(
     throw new Error(`El número de ruedas debe ser un entero entre 1 y ${MAX_TOURNAMENT_LEGS}.`);
   }
   if (tournament.competitionType === "cup") {
-    throw new Error("Las copas requieren reglas de admisión y etapas específicas; el generador round-robin no es compatible.");
+    throw new Error("Las copas requieren reglas de admisión y etapas específicas; el generador de todos contra todos no es compatible.");
   }
   if (tournament.teams.some((team) => team.groupName)) {
-    throw new Error("El round-robin general no conserva grupos. Este formato requiere un generador específico.");
+    throw new Error("El generador general de todos contra todos no conserva grupos. Este formato requiere un generador específico.");
   }
   const existingFixtures = tournament.matchdays.flatMap((day) => day.fixtures);
   if (existingFixtures.length > 0) {
