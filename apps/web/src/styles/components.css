@@ -88,6 +88,13 @@
 .rules-verification-note summary { font-weight: 700; color: var(--warning-fg); }
 .rules-verification-note ul { margin: var(--space-1) 0 0; padding-left: 18px; overflow-wrap: anywhere; }
 
+.compact-disclosure { margin: 0 0 var(--space-2); color: var(--fg-soft); font-size: var(--fs-xs); line-height: 1.55; }
+.compact-disclosure > summary { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; cursor: pointer; color: var(--warning-fg); font-weight: 700; }
+.compact-disclosure > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+.compact-disclosure-content { margin-top: var(--space-1); padding: var(--space-2) var(--space-3); border-left: 2px solid var(--warning-line); background: var(--surface-2); }
+.compact-disclosure-content > :first-child { margin-top: 0; }
+.compact-disclosure-content > :last-child { margin-bottom: 0; }
+
 /* Solo para lectores de pantalla */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 

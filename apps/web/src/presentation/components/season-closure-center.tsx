@@ -12,6 +12,7 @@ import { ChampionCards } from "./champion-card";
 import { isChileanAscenso } from "@cancha/core/domain/services/chilean-ascenso-playoff-progression";
 import { isArgentinaAnnualLeague } from "@cancha/core/domain/services/argentina-league-champion";
 import { userFacingLabels } from "@cancha/core/application/services/user-facing-labels";
+import { CompactDisclosure } from "./compact-disclosure";
 
 export function SeasonClosureCenter({tournaments, repository, universeId, universeName, initialTournamentId, getUniverseId, onChanged, onCalendar, onAlerts, onEdit, onPlanning, onClose}: {
   tournaments: readonly Tournament[]; repository: TournamentRepository; universeId: string | null; universeName: string;
@@ -61,15 +62,16 @@ export function SeasonClosureCenter({tournaments, repository, universeId, univer
     {t && evaluation && <>
       <p role="status">Estado: {evaluation.state}</p>
       <p>{t.name} · Edición {t.season ?? "Sin año"} · Formato: {userFacingLabels.competitionType(t.competitionType)} · {userFacingLabels.competitionFormat(t.format)}</p>
-      <p>{evaluation.overview.provenance}. {evaluation.closureTier ? championTierLabels[evaluation.closureTier] : "Sin resultado deportivo determinado"}; no constituye certificación externa.</p>
+      <CompactDisclosure className="closure-provenance-note"><p>{evaluation.overview.provenance}. {evaluation.closureTier ? championTierLabels[evaluation.closureTier] : "Sin resultado deportivo determinado"}; no constituye certificación externa.</p></CompactDisclosure>
       <p>{t.teams.length} participantes · {evaluation.overview.played} partidos disputados · {evaluation.overview.total - evaluation.overview.played} pendientes · {evaluation.matchdays.filter(p => p.complete).length}/{evaluation.matchdays.length} jornadas completas · {evaluation.phases.filter(p => p.complete).length}/{evaluation.phases.length} fases o ruedas completas.</p>
       <details><summary>Participantes y calendario</summary><ul>{t.teams.map(team => <li key={team.id}>{team.name}</li>)}</ul>
         <ul>{evaluation.phases.map(phase => <li key={phase.index}>{phase.label}: {phase.complete ? "Completa" : "Pendiente"}</li>)}</ul>
         <ul>{evaluation.matchdays.map(day=><li key={day.index}>{day.label}: {day.complete?"Completa":"Pendiente"}</li>)}</ul></details>
-      <p>Reglamento: {evaluation.overview.rules}. Integridad: {evaluation.integrity.length ? "Requiere corrección" : "Sin incidencias detectadas"}.</p>
+      <CompactDisclosure><p>Reglamento: {evaluation.overview.rules}. Integridad: {evaluation.integrity.length ? "Requiere corrección" : "Sin incidencias detectadas"}.</p>
       <details><summary>Reglamento registrado y fuentes</summary><p>Edición reglamentaria: {t.competitionRules?.season ?? "No registrada"}. {t.competitionRules?.standingsNote}</p>
         <ul>{t.competitionRules?.sourceUrls?.map((url,index)=><li key={index}>{isHttpsReference(url)?<a href={url} target="_blank" rel="noreferrer">{url}</a>:url}</li>)}</ul>
         {t.matchRegulations && <p>Reglamento de partidos: {t.matchRegulations.season} · {t.matchRegulations.verification}. {t.matchRegulations.notes} {t.matchRegulations.sourceUrl && isHttpsReference(t.matchRegulations.sourceUrl) && <a href={t.matchRegulations.sourceUrl} target="_blank" rel="noreferrer">Fuente del reglamento de partidos</a>}</p>}</details>
+      </CompactDisclosure>
       <h3>Resultados deportivos</h3>
       <ChampionCards tournament={t} activity={activity} showRunnerUp={false} />
       {evaluation.honours.awards.length ? <ul>{evaluation.honours.awards.filter(a => ["Campeón", "Subcampeón"].includes(a.label) || a.label.startsWith("Campeón del ")).map(a => <li key={a.label}>{a.label}: {name(a.teamId)}{a.tier && a.tier !== "verified" ? ` · ${championTierLabels[a.tier]}` : ""}</li>)}</ul> : <p>No hay campeón acreditado por los servicios deportivos existentes.</p>}
@@ -79,7 +81,7 @@ export function SeasonClosureCenter({tournaments, repository, universeId, univer
         ? `${name(teamId)} · ${index === 0 ? "Asciende como campeón" : "Asciende por Liguilla"}` : name(teamId)).join(", ") || "Sin ascensos resueltos por un servicio aplicable"}.</p>
       <p>{simulated ? "Descensos calculados (simulado, no oficial)" : "Descensos calculados"}: {evaluation.relegated.map(row => `${name(row.teamId)} → ${userFacingLabels.destination(row.destination)}`).join("; ") || "Sin descensos resueltos por un servicio aplicable"}.</p>
       {evaluation.averages && <p>Proyección de descensos por promedio, separada de la tabla: {evaluation.averages.standings.filter(row => row.relegation).map(row => `${row.teamName} · ${row.status}`).join("; ") || "Sin plazas resueltas"}. {evaluation.averages.pendingReasons.join(" ")}</p>}
-      <p>{t.competitionRules?.placementsNote ?? t.placementRules?.note ?? "No se deducen movimientos por el nombre de la competición."}</p>
+      <CompactDisclosure><p>{t.competitionRules?.placementsNote ?? t.placementRules?.note ?? "No se deducen movimientos por el nombre de la competición."}</p></CompactDisclosure>
       {isArgentinaAnnualLeague(t) && <p>Campeón de Liga 2026: primero de la Tabla General, que suma solo las fases de zonas del Apertura y del Clausura (art. 24). Trofeo de Campeones 2026: no modelado (art. 20); no bloquea el cierre.</p>}
       <details><summary>Resoluciones registradas ({evaluation.resolutions.length})</summary><ul>{evaluation.resolutions.map(resolution => <li key={resolution.id}>{resolution.key} · {resolution.verification} · {resolution.invalidation ? "Invalidada" : resolution.supersededBy ? "Sustituida" : "Registro vigente"} · <a href={resolution.source.url} target="_blank" rel="noreferrer">{resolution.source.reference}</a></li>)}</ul></details>
       <h3>Clasificación internacional y próxima edición</h3>

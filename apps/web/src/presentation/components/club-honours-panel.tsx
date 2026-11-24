@@ -6,6 +6,7 @@ import type {ClubProfile} from "@cancha/core/application/services/club-history";
 import {sourceScenario} from "@cancha/core/application/services/continental-projection";
 import {groupCompetitions} from "@cancha/core/application/services/competition-center";
 import {useSessionDraft} from "../session-drafts";
+import {CompactDisclosure} from "./compact-disclosure";
 
 export function SeasonHonours({tournament,activity=[],teamId}:{tournament:Tournament;activity?:readonly ActivityEvent[];teamId?:string}){
  const honours=useMemo(()=>seasonHonours(tournament,activity),[tournament,activity]);
@@ -15,6 +16,7 @@ export function SeasonHonours({tournament,activity=[],teamId}:{tournament:Tourna
  const visible=honours.awards.filter(a=>!teamId || a.teamId===teamId);
  return <section aria-label={`Palmarés y marcas de ${tournament.name}`} className="club-history-scope">
   <h4>Palmarés y marcas de temporada</h4>
+  <CompactDisclosure>
   <p>{provenanceLabels[sourceScenario(tournament,activity)]}. Cálculo sobre datos guardados; no certifica un título oficial.</p>
   {visible.map(a=><p key={`${a.teamId}-${a.label}`}>{a.label}: {tournament.teams.find(t=>t.id===a.teamId)?.name}{a.tier && a.tier!=="verified"?` · ${championTierLabels[a.tier]}`:""}</p>)}
   {!visible.length && <p>Sin distinción determinada para este alcance.</p>}
@@ -25,6 +27,7 @@ export function SeasonHonours({tournament,activity=[],teamId}:{tournament:Tourna
    <p>{r.scope.positionStatus} · {r.scope.metrics.wins} victorias · {r.scope.metrics.goalsFor} GF · {r.scope.metrics.goalsAgainst} GC · {r.scope.metrics.goalDifference} DG{r.scope.kind==="league"?` · ${r.scope.metrics.points} puntos de liga`:""}</p>
    {r.streaks.reason?<p>{r.streaks.reason}</p>:<p>Racha máxima: {r.streaks.wins} victorias · {r.streaks.unbeaten} invicto. Orden por fecha, hora y zona de todos los encuentros de la fase.</p>}
   </details>)}
+  </CompactDisclosure>
  </section>;
 }
 export function ClubHonours({profile,activity,onOpen}:{profile:ClubProfile;activity:readonly ActivityEvent[];onOpen:(t:Tournament)=>void}){

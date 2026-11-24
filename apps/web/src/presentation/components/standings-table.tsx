@@ -9,6 +9,7 @@ import { tieBreakerOptions } from "@cancha/core/domain/value-objects/tie-breaker
 import type { InternationalQualificationResult } from "@cancha/core/domain/services/international-qualification";
 import type { RelegationAverageResult } from "@cancha/core/domain/services/relegation-averages";
 import { userFacingLabels } from "@cancha/core/application/services/user-facing-labels";
+import { CompactDisclosure } from "./compact-disclosure";
 
 interface StandingsTableProps {
   standings: readonly TeamStanding[];
@@ -62,7 +63,7 @@ export function StandingsTable({
         <span className="standings-updated">Se actualiza con cada resultado</span>
       </div>
       {competitionRules && (
-        <div className="rules-verification-note" role="note">
+        <CompactDisclosure className="standings-verification-note">
           <p>
             Desempates de {competitionRules.season}:{" "}
             {competitionRules.verification.standings === "verified"
@@ -100,7 +101,7 @@ export function StandingsTable({
               </ul>
             </details>
           )}
-        </div>
+        </CompactDisclosure>
       )}
       {unresolvedTies.map((tie, index) => (
         <p className="rules-verification-note" role="note" key={`${tie.criterion}-${index}`}>

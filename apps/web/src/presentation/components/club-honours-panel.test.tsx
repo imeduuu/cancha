@@ -27,11 +27,13 @@ it("includes honours within the existing club identity profile",()=>{
  render(<ClubHistoryPanel tournaments={[t]} activity={[]} onOpen={vi.fn()}/>);
  const profile=buildClubProfiles([t]).find(p=>p.teamIds.includes(t.teams[0].id))!;
  fireEvent.change(screen.getByLabelText("Club registrado"),{target:{value:profile.key}});
+ fireEvent.click(screen.getAllByText("Datos no oficiales")[0].closest("summary")!);
  expect(within(screen.getByRole("region",{name:"Palmarés y récords del club"})).getByText("Campeón: Alfa")).toBeVisible();
 });
 it("labels incomplete season marks and explains missing streak chronology",()=>{
  render(<SeasonHonours tournament={{...t,matchdays:t.matchdays.slice(1)}}/>);
  expect(screen.queryByText("Campeón: Alfa")).not.toBeInTheDocument();expect(screen.getAllByText(/Marca parcial, no definitiva/).length).toBeGreaterThan(0);
  fireEvent.click(screen.getAllByRole("group")[0].querySelector("summary")!);
+ fireEvent.click(screen.getAllByRole("group").find(group=>group.querySelector("summary")?.textContent?.includes("Alfa"))!.querySelector("summary")!);
  expect(screen.getAllByText(/Rachas no disponibles/)[0]).toBeVisible();
 });
