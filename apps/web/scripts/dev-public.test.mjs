@@ -189,11 +189,21 @@ it("recovers from a temporary DNS failure", async () => {
   expect(onAttempt).toHaveBeenCalledWith({ attempts: 1, diagnostic: expect.stringContaining("DNS:") });
 });
 it("bounds stalled requests and reports timeout", async () => {
+  vi.useFakeTimers();
   const fetcher = vi.fn((url, { signal }) => new Promise((resolve, reject) => {
     signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   }));
-  await expect(waitForHttp(probeUrl, { ...probeOptions(), timeoutMs: 50, requestTimeoutMs: 10, fetcher })).rejects.toThrow("timeout:");
-  expect(fetcher.mock.calls.length).toBeGreaterThan(1);
+  const timeoutSignal = ms => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException("Timed out", "TimeoutError")), ms);
+    return controller.signal;
+  };
+  const pending = waitForHttp(probeUrl, { ...probeOptions(), timeoutMs: 50, requestTimeoutMs: 10, retryMs: 1, fetcher, timeoutSignal, now: vi.now });
+  const outcome = pending.then(() => undefined, error => error);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(await outcome).toMatchObject({ message: expect.stringContaining("timeout:") });
+  expect(fetcher).toHaveBeenCalledTimes(5);
+  expect(fetcher.mock.calls.every(([, options]) => options.signal.aborted)).toBe(true);
 });
 it.each([302, 403, 502, 503])("reports invalid HTTP %s", async status => {
   const fetcher = async () => new Response(null, { status });

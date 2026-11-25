@@ -55,13 +55,13 @@ export function httpDiagnostic(error) {
 
 export async function waitForHttp(url, {
   signal, marker, timeoutMs = 180000, requestTimeoutMs = 10000, retryMs = 3000,
-  fetcher = fetch, onAttempt = () => {},
+  fetcher = fetch, onAttempt = () => {}, timeoutSignal = ms => AbortSignal.timeout(ms), now = () => Date.now(),
 }) {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = now() + timeoutMs;
   let attempts = 0, diagnostic = "timeout: se agotó el plazo de comprobación";
-  while (!signal.aborted && Date.now() < deadline) {
+  while (!signal.aborted && now() < deadline) {
     attempts++;
-    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, Math.min(requestTimeoutMs, deadline - Date.now())))]);
+    const requestSignal = AbortSignal.any([signal, timeoutSignal(Math.max(1, Math.min(requestTimeoutMs, deadline - now())))]);
     try {
       const response = await fetcher(url, { signal: requestSignal, redirect: "manual" });
       const valid = response.ok && response.headers.get("X-Cancha-Dev") === marker;
@@ -75,7 +75,7 @@ export async function waitForHttp(url, {
       diagnostic = httpDiagnostic(error);
     }
     onAttempt({ attempts, diagnostic });
-    const remaining = deadline - Date.now();
+    const remaining = deadline - now();
     if (remaining > 0) await pause(Math.min(retryMs, remaining), signal);
   }
   if (signal.aborted) throw signal.reason;

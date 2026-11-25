@@ -122,3 +122,19 @@ Windows x64, ejecuciones consecutivas sin solapamiento, workers por defecto. `np
 No hubo ningún timeout en los recorridos de App en las seis ejecuciones.
 
 El único fallo, en la ejecución 1, no tiene relación con estos timeouts: `scripts/dev-public.test.mjs › bounds stalled requests and reports timeout` (`expected 1 to be greater than 1`). Esa prueba usa temporizadores reales con una ventana total de 50 ms y 10 ms por petición, y exige al menos dos intentos. Con la máquina cargada, el primer intento consumió toda la ventana. Ni `testTimeout` ni `asyncUtilTimeout` la afectan, y queda pendiente: habría que hacerla determinista, por ejemplo con temporizadores falsos o un reloj inyectado, en lugar de ampliar sus márgenes.
+
+## Actualización del 25 de noviembre de 2026: timeout del sondeo público
+
+Se corrigió la causa concreta que quedó pendiente arriba. `waitForHttp` acepta ahora un reloj y una fábrica de señales de timeout inyectables; en producción mantiene `Date.now()` y `AbortSignal.timeout()`. La prueba de solicitudes detenidas usa el reloj falso para avanzar los 50 ms y controla las señales de cada petición. Comprueba exactamente cinco intentos, que todas sus señales terminaron abortadas y que el resultado identifica timeout. Así el resultado no depende de cuándo el event loop real despierte.
+
+Los recorridos React afectados esperan regiones o textos observables mediante `findBy*`/`waitFor`; no usan pausas fijas ni timers falsos. La configuración existente conserva `asyncUtilTimeout: 3000` y `testTimeout: 15_000`. Las cinco pruebas de App auditadas pasaron juntas (20/20), además de pasar dentro de las tres suites completas, sin cambios a aserciones o límites.
+
+`official-sources.e2e.test.ts` pasó aislada (24/24) y en las tres ejecuciones completas (23 archivos/223 pruebas por corrida). Su servidor de origen falso liga a puerto 0 y comunica el puerto asignado; no usa puerto fijo ni reloj real. La API comparte un replica set en memoria por corrida, pero las tres ejecuciones completas no reprodujeron contención que fallara en esta prueba. No se encontró evidencia para cambiar workers o serializar archivos.
+
+### Validación de esta actualización
+
+- `npm test -w @cancha/web -- scripts/dev-public.test.mjs`: 31/31.
+- `npm test -w @cancha/web -- app-checkpoints.test.tsx app-closure.test.tsx app-archive.test.tsx app-decisions.test.tsx app-lazy.test.tsx`: 20/20.
+- `npm test -w @cancha/api -- official-sources.e2e.test.ts`: 24/24.
+- Tres ejecuciones consecutivas de `npm test`, sin procesos solapados: cada una aprobó core 736/736, proxy 59/59, web 716/716 y API 223/223.
+- `npm run lint`: 0 errores; 14 warnings preexistentes de `react-hooks/exhaustive-deps`.
