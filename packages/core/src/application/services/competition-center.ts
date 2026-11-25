@@ -13,6 +13,7 @@ const catalog: Readonly<Record<string, readonly [string, string, string]>> = {
   "brasileirao-serie-a": ["Brasil", "Série A", "Primera"],
   "brasileirao-serie-b": ["Brasil", "Série B", "Segunda"],
   "afa-copa-argentina": ["Argentina", "Copa Argentina", "Copa nacional"],
+  "afa-trofeo-de-campeones": ["Argentina", "Trofeo de Campeones de la LPF", "Supercopa nacional"],
   "cbf-copa-do-brasil": ["Brasil", "Copa do Brasil", "Copa nacional"],
   "conmebol-libertadores": ["CONMEBOL", "Copa Libertadores", "Continental"],
   "conmebol-sudamericana": ["CONMEBOL", "Copa Sudamericana", "Continental"],

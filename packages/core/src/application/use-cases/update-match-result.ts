@@ -11,6 +11,7 @@ import { advanceTournamentProgress } from "./advance-tournament-progress";
 import { createActivityEvent, saveWithActivity } from "../services/activity-log";
 
 import { secondDivisionKind } from "../../domain/services/second-division-rules";
+import { synchronizeArgentinaChampionsTrophy } from "../services/argentina-champions-trophy";
 
 export function updateMatchResult(
   tournament: Tournament,
@@ -84,5 +85,6 @@ export function updateMatchResult(
     before: previousValue,
     after: nextValue,
   }));
+  synchronizeArgentinaChampionsTrophy(updatedTournament, repository);
   return updatedTournament;
 }

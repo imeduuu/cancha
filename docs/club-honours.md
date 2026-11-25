@@ -22,6 +22,8 @@ Una liga completa obtiene subcampeón y puestos tercero/cuarto de su tabla final
 
 La consulta es conservadora: una competición sin conclusión reconocida por los servicios actuales muestra el motivo y no recibe un campeón reconstruido por esta funcionalidad. La Primera argentina con torneos por fases no se convierte en una liga anual por sumar puntos. En Segunda se respeta el estado completo que informa el servicio existente; la fase regular completa no basta para fingir que acabaron los playoffs. No se inventa un subcampeón de playoff.
 
+El [Trofeo de Campeones de la LPF 2026](argentina-champions-trophy.md) usa la final única derivada de Apertura y Clausura y aparece en este mismo palmarés al concluirse.
+
 Cada distinción se etiqueta como escenario local/editado/simulado, proveedor sin certificación oficial o procedencia no acreditada según el servicio de procedencia y el historial de actividad. Un enlace de ESPN no certifica un título oficial. Los registros antiguos sin actividad suficiente conservan esa limitación de trazabilidad.
 
 El indicador previo de campeón en Estadísticas utiliza ahora esa misma condición de confirmación. Una prueba reprodujo que antes mostraba “Campeón: Alfa” pese a `importCoverage: "partial"`; se corrigió exclusivamente la presentación para que no contradiga el palmarés. El cálculo del servicio deportivo permanece intacto.

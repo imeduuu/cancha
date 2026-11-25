@@ -12,6 +12,7 @@ import {
   isOperationalStateSimulationBlocked,
 } from "../../domain/services/match-operational-status";
 import { createActivityEvent, saveWithActivity } from "../services/activity-log";
+import { synchronizeArgentinaChampionsTrophy } from "../services/argentina-champions-trophy";
 
 export type SimulationMode = "pendingOnly" | "overwrite";
 
@@ -113,6 +114,7 @@ export function simulateFixtures(
       .map((fixture) => [fixture.id, fixture.result ?? null])),
     after: Object.fromEntries(updatedResults),
   }));
+  synchronizeArgentinaChampionsTrophy(updatedTournament, repository);
   return { tournament: updatedTournament, simulatedCount };
 }
 
