@@ -1,6 +1,6 @@
 import { useLibraryWrite } from "../library-write-context";
 import { SourceIncidentsPanel } from "./source-incidents-panel";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type {
   OfficialLeagueId,
@@ -218,6 +218,9 @@ export function ImportOfficialTournament({
   const [choosingZoneFor, setChoosingZoneFor] = useState<OfficialLeagueId | null>(null);
   const [errors, setErrors] = useState<Partial<Record<OfficialLeagueId, string>>>({});
   const [importMessages, setImportMessages] = useState<Partial<Record<OfficialLeagueId, string>>>({});
+  const [progress, setProgress] = useState<Partial<Record<OfficialLeagueId, { current: number; total: number; label: string }>>>({});
+  const [cancelAvailable, setCancelAvailable] = useState(false);
+  const controller = useRef<AbortController | null>(null);
   const [pendingConflict, setPendingConflict] = useState<PendingImportConflict | null>(null);
   const visibleLeagues = officialLeagues.filter((league) =>
     countryLeagueIds[selectedCountry].includes(league.id),
@@ -236,8 +239,18 @@ export function ImportOfficialTournament({
     setImportMessages((current) => ({ ...current, [league.id]: undefined }));
     try {
       setLoadingLeague(league.id);
+      const canCancel = league.id === "copa-brasil" || league.id === "tercera-a" || league.id === "tercera-b";
+      const abortController = canCancel ? new AbortController() : null;
+      controller.current = abortController;
+      setCancelAvailable(Boolean(abortController));
+      setProgress((current) => ({ ...current, [league.id]: undefined }));
       const source = await loadOfficialLeagueSource(league.id);
-      const officialSeason = knownSeason ?? await source.fetchSeason(league.id, zone);
+      const officialSeason = knownSeason ?? await source.fetchSeason(league.id, zone, abortController ? {
+        signal: abortController.signal,
+        onProgress: (value) => setProgress((current) => ({ ...current, [league.id]: value })),
+      } : undefined);
+      controller.current = null;
+      setCancelAvailable(false);
       const existing = repository.findAll().find(({ id }) => id === officialSeason.id);
       if (existing && !conflictResolution) {
         setPendingConflict({ request: { league, zone }, season: officialSeason, existing });
@@ -262,6 +275,10 @@ export function ImportOfficialTournament({
             : "La fuente no informa si el calendario publicado cubre toda la temporada.",
       }));
     } catch (caught) {
+      if (controller.current?.signal.aborted) {
+        setImportMessages((current) => ({ ...current, [league.id]: "Importación cancelada. No se guardaron cambios." }));
+        return;
+      }
       setErrors((current) => ({
         ...current,
         [league.id]: caught instanceof Error
@@ -269,6 +286,8 @@ export function ImportOfficialTournament({
           : `No se pudo importar ${league.title}.`,
       }));
     } finally {
+      controller.current = null;
+      setCancelAvailable(false);
       setLoadingLeague(null);
       onActivityChanged?.();
     }
@@ -367,6 +386,15 @@ export function ImportOfficialTournament({
                 </button>
               ))}
             </div>
+          )}
+          {loadingLeague === league.id && progress[league.id] && (
+            <div className="official-import-progress" role="status" aria-live="polite" aria-atomic="true">
+              <span>{progress[league.id]!.label} · paso {progress[league.id]!.current} de {progress[league.id]!.total}</span>
+              <progress value={progress[league.id]!.current} max={progress[league.id]!.total} aria-label="Progreso de importación" />
+            </div>
+          )}
+          {loadingLeague === league.id && cancelAvailable && (
+            <button className="small-action" type="button" onClick={() => controller.current?.abort()}>Cancelar importación</button>
           )}
           {errors[league.id] && (
             <p className="field-error official-import-error" role="alert">{errors[league.id]}</p>

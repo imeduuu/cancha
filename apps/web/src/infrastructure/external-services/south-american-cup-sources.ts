@@ -3,6 +3,8 @@ import type {
   OfficialLeagueId,
   OfficialLeagueSeason,
   OfficialLeagueSource,
+  OfficialLeagueFetchOptions,
+  OfficialLeagueZone,
   OfficialMatch,
   OfficialMatchday,
 } from "@cancha/core/application/ports/official-league-source";
@@ -40,11 +42,12 @@ function parseScore(value: unknown, matchId: string, description: string): numbe
   return score;
 }
 
-async function fetchText(path: string, sourceName: string, headers?: HeadersInit): Promise<string> {
+async function fetchText(path: string, sourceName: string, headers?: HeadersInit, signal?: AbortSignal): Promise<string> {
   let response: Response;
   try {
-    response = await fetch(path, { headers });
+    response = await fetch(path, { headers, signal });
   } catch (error) {
+    if (signal?.aborted) throw error;
     const detail = error instanceof Error ? ` (${error.message})` : "";
     throw new Error(`No se pudo conectar con ${sourceName}.${detail}`);
   }
@@ -352,22 +355,27 @@ function parseCbfMatch(value: JsonRecord, phase: CbfPhase, namesById?: ReadonlyM
 }
 
 export class CopaDoBrasilOfficialSource implements OfficialLeagueSource {
-  async fetchSeason(league: OfficialLeagueId): Promise<OfficialLeagueSeason> {
+  async fetchSeason(league: OfficialLeagueId, _zone?: OfficialLeagueZone, options?: OfficialLeagueFetchOptions): Promise<OfficialLeagueSeason> {
     if (league !== "copa-brasil") {
       throw new Error("La fuente CBF solo admite la Copa do Brasil.");
     }
     const season = new Date().getFullYear();
     const seasonUrl = `${brazilCompetitionUrl}/${season}`;
     const route = `/brazil-cup-source/futebol-brasileiro/tabelas/copa-do-brasil/masculino/${season}`;
-    const phasesPayload = await fetchText(route, "la página oficial de Copa do Brasil", { RSC: "1" });
+    const phasesPayload = await fetchText(route, "la página oficial de Copa do Brasil", { RSC: "1" }, options?.signal);
     const phases = extractCbfPhases(phasesPayload);
     if (phases.length === 0) {
       throw new Error("La CBF no publicó las fases disponibles de la Copa do Brasil.");
     }
 
+    options?.onProgress?.({ current: 1, total: phases.length + 1, label: "Fases publicadas" });
+    let completedPhases = 0;
     const publishedPhases = await Promise.all(phases.map(async phase => {
-      const payload = await fetchText(`${route}/${phase.fase_id}`, "el fixture oficial de Copa do Brasil", { RSC: "1" });
-      return { phase, values: extractCbfMatches(payload, phase) };
+      const payload = await fetchText(`${route}/${phase.fase_id}`, "el fixture oficial de Copa do Brasil", { RSC: "1" }, options?.signal);
+      const result = { phase, values: extractCbfMatches(payload, phase) };
+      completedPhases += 1;
+      options?.onProgress?.({ current: completedPhases + 1, total: phases.length + 1, label: `Fase: ${phase.fase_nome}` });
+      return result;
     }));
     const originalNames = new Map<string, string>();
     const idsByName = new Map<string, Set<string>>();

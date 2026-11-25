@@ -72,7 +72,13 @@ export interface OfficialLeagueSource {
   fetchSeason(
     league: OfficialLeagueId,
     zone?: OfficialLeagueZone,
+    options?: OfficialLeagueFetchOptions,
   ): Promise<OfficialLeagueSeason>;
+}
+
+export interface OfficialLeagueFetchOptions {
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (progress: { readonly current: number; readonly total: number; readonly label: string }) => void;
 }
 
 export interface PublishedSeasonSource {

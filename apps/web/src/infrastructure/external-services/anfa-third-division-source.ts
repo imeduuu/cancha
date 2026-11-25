@@ -2,6 +2,7 @@ import type {
   OfficialLeagueId,
   OfficialLeagueSeason,
   OfficialLeagueSource,
+  OfficialLeagueFetchOptions,
   OfficialLeagueZone,
   OfficialMatch,
   OfficialMatchday,
@@ -180,6 +181,7 @@ async function mapConcurrent<T>(
   values: readonly number[],
   concurrency: number,
   map: (value: number) => Promise<T>,
+  onComplete?: (value: number) => void,
 ): Promise<T[]> {
   const results = new Array<T>(values.length);
   let nextIndex = 0;
@@ -188,6 +190,7 @@ async function mapConcurrent<T>(
     while (nextIndex < values.length) {
       const index = nextIndex++;
       results[index] = await map(values[index]);
+      onComplete?.(values[index]);
     }
   }
 
@@ -223,19 +226,26 @@ export class AnfaThirdDivisionSource implements OfficialLeagueSource {
   async fetchSeason(
     league: OfficialLeagueId,
     zone?: OfficialLeagueZone,
+    options?: OfficialLeagueFetchOptions,
   ): Promise<OfficialLeagueSeason> {
     const calendar = getCalendar(league, zone);
-    const initialHtml = await this.fetchCalendarPage(calendar);
+    const initialHtml = await this.fetchCalendarPage(calendar, undefined, options?.signal);
     const maxRound = parseRoundCount(initialHtml, calendar.roundQuery);
     const rounds = Array.from({ length: maxRound }, (_, index) => index + 1);
+    options?.onProgress?.({ current: 1, total: rounds.length + 1, label: "Calendario de jornadas" });
+    let completedRounds = 0;
     const matchdays = await mapConcurrent(
       rounds,
       maximumConcurrentRequests,
       async (roundNumber) => parseMatchday(
-        await this.fetchCalendarPage(calendar, roundNumber),
+        await this.fetchCalendarPage(calendar, roundNumber, options?.signal),
         calendar,
         roundNumber,
       ),
+      (roundNumber) => {
+        completedRounds += 1;
+        options?.onProgress?.({ current: completedRounds + 1, total: rounds.length + 1, label: `Jornada ${roundNumber}` });
+      },
     );
 
     return {
@@ -254,14 +264,17 @@ export class AnfaThirdDivisionSource implements OfficialLeagueSource {
   private async fetchCalendarPage(
     calendar: ThirdDivisionCalendar,
     roundNumber?: number,
+    signal?: AbortSignal,
   ): Promise<string> {
     const roundParam = roundNumber ? `?${calendar.roundQuery}=${roundNumber}` : "";
     let response: Response;
     try {
       response = await fetch(
         `/third-division-source/assets/php/${calendar.path}${roundParam}`,
+        { signal },
       );
     } catch (error) {
+      if (signal?.aborted) throw error;
       const detail = error instanceof Error ? ` (${error.message})` : "";
       throw new Error(
         `No se pudo conectar con ANFA Tercera División. Comprueba la conexión y el proxy del servidor.${detail}`,
