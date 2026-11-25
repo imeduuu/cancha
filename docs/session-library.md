@@ -72,6 +72,12 @@ npm run dev                               # web en http://127.0.0.1:5173; /graph
 - La biblioteca de la cuenta se carga completa al abrirla y el servidor la carga completa en cada escritura: O(biblioteca del usuario).
 - Agregar una biblioteca a la cuenta no duplica torneos con el mismo identificador: conserva los de la cuenta.
 
+## Enlaces públicos de torneos
+
+Desde el panel de cuenta se puede crear un enlace de solo lectura ingresando el ID del torneo y revocarlo mientras su token siga disponible en el panel. El enlace usa `/share/<token>` y muestra tabla, partidos y líder actual sin cargar la biblioteca en el navegador. El campeón se presenta como provisional porque la primera posición no certifica por sí sola un cierre oficial.
+
+La API genera 256 bits aleatorios y guarda únicamente el SHA-256 del token en `tournament_shares`. La lectura pública consulta solamente el dueño y torneo asociados a ese hash; no entrega actividad, universos, sesiones ni otros torneos. La consulta pública tiene un límite de 30 solicitudes por IP y minuto, independiente del límite de autenticación. La revocación está acotada al usuario autenticado y devuelve el mismo resultado genérico que un token ya revocado.
+
 ## Verificación
 
 - `npm test`: core (validación de envíos, reatribución, réplica en memoria), API (`library-changes.e2e`, `library-universes.e2e`, puntos de guardado, esquema publicado) y web (cliente y sesión, réplica, puntos, migración y recorridos de `App` contra un servidor en memoria que usa las validaciones reales de core).

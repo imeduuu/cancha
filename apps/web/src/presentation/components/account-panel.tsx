@@ -13,6 +13,8 @@ export function AccountPanel({ onClose }: { readonly onClose: () => void }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [shareTournamentId, setShareTournamentId] = useState("");
+  const [shareToken, setShareToken] = useState("");
   if (!account) return null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -60,6 +62,25 @@ export function AccountPanel({ onClose }: { readonly onClose: () => void }) {
     {account.status === "signed-in" && account.user && <>
       <p>Sesión iniciada como <strong>{account.user.email}</strong>.</p>
       <p className="account-panel-note">Tu biblioteca se guarda en tu cuenta. La de este navegador no se modifica y vuelve a aparecer al cerrar sesión.</p>
+      <section aria-label="Compartir torneo">
+        <h3>Enlace público de solo lectura</h3>
+        <label>ID del torneo<input value={shareTournamentId} onChange={event => setShareTournamentId(event.target.value)} /></label>
+        <button type="button" disabled={busy || !shareTournamentId.trim()} onClick={() => { void (async () => {
+          setBusy(true); setError("");
+          try { const session = await account.session(); const result = await session.request<{ createTournamentShare: string }>("mutation CreateTournamentShare($id: ID!) { createTournamentShare(tournamentId: $id) }", { id: shareTournamentId.trim() }); setShareToken(result.createTournamentShare); }
+          catch (caught) { setError(caught instanceof Error ? caught.message : "No se pudo crear el enlace."); }
+          finally { setBusy(false); }
+        })(); }}>{busy ? "Creando…" : "Crear enlace"}</button>
+        <button type="button" disabled={busy || !shareTournamentId.trim()} onClick={() => { void (async () => {
+          setBusy(true); setError("");
+          try { const session = await account.session(); await session.request("mutation RevokeTournamentShares($id: ID!) { revokeTournamentShares(tournamentId: $id) }", { id: shareTournamentId.trim() }); setShareToken(""); }
+          catch (caught) { setError(caught instanceof Error ? caught.message : "No se pudieron revocar los enlaces."); }
+          finally { setBusy(false); }
+        })(); }}>Revocar todos los enlaces de este torneo</button>
+        {shareToken && <div><label>URL pública<input readOnly value={window.location.origin + "/share/" + shareToken} onFocus={event => event.currentTarget.select()} /></label>
+          <button type="button" disabled={busy} onClick={() => { void (async () => { setBusy(true); try { const session = await account.session(); await session.request("mutation RevokeTournamentShare($token: String!) { revokeTournamentShare(token: $token) }", { token: shareToken }); setShareToken(""); } catch (caught) { setError(caught instanceof Error ? caught.message : "No se pudo revocar el enlace."); } finally { setBusy(false); } })(); }}>Revocar enlace</button></div>}
+        {error && <p role="alert">{error}</p>}
+      </section>
       <button type="button" disabled={busy} onClick={() => { void logout(); }}>{busy ? "Cerrando sesión…" : "Cerrar sesión"}</button>
     </>}
 

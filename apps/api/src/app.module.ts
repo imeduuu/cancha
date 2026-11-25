@@ -9,6 +9,7 @@ import { ApiGraphqlModule } from "./graphql/graphql.module.js";
 import { LibraryModule } from "./library/library.module.js";
 import { OfficialSourcesModule } from "./official-sources/official-sources.module.js";
 import { SaveCheckpointsModule } from "./save-checkpoints/save-checkpoints.module.js";
+import { TournamentSharesModule } from "./shares/tournament-shares.module.js";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { SaveCheckpointsModule } from "./save-checkpoints/save-checkpoints.modul
     LibraryModule,
     ApiGraphqlModule,
     SaveCheckpointsModule,
+    TournamentSharesModule,
     OfficialSourcesModule,
   ],
 })
