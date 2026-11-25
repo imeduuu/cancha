@@ -1,4 +1,3 @@
-import { normalizeTeamName } from "@cancha/core/domain/services/team-name";
 import type {
   OfficialLeagueId,
   OfficialLeagueSeason,

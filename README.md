@@ -4,6 +4,54 @@
 
 Aplicación web para configurar campeonatos de fútbol y generar sus calendarios. Esta primera versión permite definir equipos, ruedas y orden de desempate; los campeonatos creados se guardan en el navegador. Con una cuenta (opcional), la biblioteca se guarda en el servidor y se abre desde cualquier navegador: ver [Cuenta y biblioteca en el servidor](#cuenta-y-biblioteca-en-el-servidor).
 
+## Portafolio
+
+[Abrir la demo](https://cancha-eduardo-dominguez.vercel.app). La interfaz se sirve en Vercel y la API en Render; cuando la API lleva tiempo inactiva, su plan gratuito entra en reposo y la primera petición puede demorar aproximadamente un minuto en despertar. La interfaz puede abrir antes que las funciones que necesitan la API.
+
+### Diseño «Estadio nocturno»
+
+Capturas de la interfaz en tema oscuro, reproducibles con `npm run screenshots` desde `apps/web` (con Chromium de Playwright instalado):
+
+| Escritorio | Móvil |
+| --- | --- |
+| ![Cancha en escritorio, diseño Estadio nocturno](docs/screenshots/estadio-nocturno-desktop.png) | ![Cancha en móvil, diseño Estadio nocturno](docs/screenshots/estadio-nocturno-mobile.png) |
+
+### Arquitectura
+
+```mermaid
+flowchart LR
+  Browser["Navegador<br/>React 18 + Vite"] -->|"@cancha/core · source"| Core["packages/core<br/>Dominio y casos de uso"]
+  Browser -->|"/graphql · mismo origen"| Vercel["Vercel<br/>SPA y rewrites"]
+  Vercel -->|"/graphql"| API["Render<br/>NestJS + GraphQL"]
+  API -->|"@cancha/core · default"| Core
+  API --> Mongo[("MongoDB Atlas")]
+  Browser -->|"sin sesión"| Local["localStorage + IndexedDB"]
+  Browser -->|"fuentes oficiales"| Proxy["Proxy cerrado<br/>@cancha/official-source-proxy"]
+  Proxy --> Sources["ANFP · ANFA<br/>Copa Argentina · CBF"]
+  API --> Proxy
+```
+
+### Stack y versiones
+
+Versiones declaradas por los workspaces; Node se fija en `.node-version` y `package.json`.
+
+| Área | Tecnologías |
+| --- | --- |
+| Runtime | Node.js 22.x, npm workspaces |
+| Web | React 18.3.1, Vite ^8.3.4, TypeScript ~5.7.2 |
+| API | NestJS 12.5.1, Apollo Server 5.5.1, GraphQL 16.14.2 |
+| Datos | MongoDB Node.js Driver 7.9.0; MongoDB 8.0.38 para desarrollo y pruebas en memoria |
+| Calidad | Vitest ^5.0.4, Playwright ^1.64.1, ESLint ^10.14.0 |
+| Despliegue | Vercel (web), Render (API), MongoDB Atlas (base de datos) |
+
+### Problemas resueltos
+
+- **Rewrites con barra final y resolución `source` en Playwright.** Vercel enruta `/graphql` y `/graphql/` a la API; el resto de rutas sirve la SPA ([`apps/web/vercel.json`](apps/web/vercel.json), [`apps/web/scripts/vercel-config.test.mjs`](apps/web/scripts/vercel-config.test.mjs)). Los e2e de Node arrancan con `--conditions=source` para importar el core desde TypeScript, según sus exports ([`apps/web/package.json`](apps/web/package.json), [`packages/core/package.json`](packages/core/package.json)).
+- **Write skew entre cambios de biblioteca.** La versión por torneo no detecta una escritura que decidió leyendo otro torneo; el commit valida también `libraryVersion` y hace los cambios en una transacción ([`apps/api/src/library/library-unit-of-work.ts`](apps/api/src/library/library-unit-of-work.ts), [`apps/api/src/infrastructure/persistence/mongo-tournament-repository.ts`](apps/api/src/infrastructure/persistence/mongo-tournament-repository.ts)).
+- **Registro no determinista de jest-dom.** Importar su integración desde cada prueba no vuelve a registrar los matchers por worker; `setup-jest-dom.ts` los extiende con el `expect` de cada archivo ([`apps/web/src/test-utils/setup-jest-dom.ts`](apps/web/src/test-utils/setup-jest-dom.ts), [`apps/web/vitest.config.ts`](apps/web/vitest.config.ts)).
+- **Proxy cerrado e IP reenviada.** El proxy restringe destinos y cabeceras; Express confía solo en un número configurado de saltos para derivar `req.ip`, por lo que un `X-Forwarded-For` falsificado no determina por sí solo la IP ([`packages/official-source-proxy/src/index.ts`](packages/official-source-proxy/src/index.ts), [`apps/api/src/bootstrap.ts`](apps/api/src/bootstrap.ts)).
+- **Sesión bajo el mismo origen.** El rewrite de Vercel mantiene `/graphql` en el origen de la web, por lo que la cookie de refresh usa `SameSite=Lax`; la configuración de cookie y el rewrite están en [`apps/api/src/auth/refresh-cookie.ts`](apps/api/src/auth/refresh-cookie.ts) y [`apps/web/vercel.json`](apps/web/vercel.json).
+
 ## Empezar
 
 Cancha requiere Node.js 22. Con [fnm](https://github.com/Schniz/fnm), instala y activa esa versión desde la raíz del proyecto:

@@ -12,6 +12,7 @@
     "verify:live": "node --use-system-ca scripts/verify-live-importers.mjs",
     "test:flows": "vitest run src/presentation/app.test.tsx src/presentation/app-lazy.test.tsx src/presentation/app-journeys.test.tsx src/presentation/app-competitions.test.tsx src/presentation/components/deferred-panel.test.tsx src/presentation/app-checkpoints.test.tsx src/presentation/app-closure.test.tsx src/presentation/app-archive.test.tsx src/presentation/app-draws.test.tsx src/presentation/app-decisions.test.tsx",
     "dev:public": "node --use-system-ca scripts/dev-public.mjs",
+    "screenshots": "npm run build && node scripts/capture-screenshots.mjs",
     "test:e2e": "tsc -p tsconfig.e2e.json && node --conditions=source ../../node_modules/@playwright/test/cli.js test",
     "test:e2e:session": "tsc -p tsconfig.e2e.json && node --conditions=source ../../node_modules/@playwright/test/cli.js test -c playwright.session.config.mjs"
   },

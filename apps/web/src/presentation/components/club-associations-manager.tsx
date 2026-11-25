@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import type {Tournament} from "@cancha/core/domain/entities/tournament";
 import type {TournamentRepository} from "@cancha/core/application/ports/tournament-repository";
 import type {SportingAssociation,ClubAffiliationRecord} from "@cancha/core/domain/entities/club-affiliation";
