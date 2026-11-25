@@ -22,12 +22,12 @@ describe("generateSeasonCalendar", () => {
     expect(memory.state.tournaments[0]).toEqual(next);
   });
 
-  it("never replaces an existing calendar and only applies to planned Chilean seasons", () => {
+  it("never replaces an existing calendar and requires a supported planned competition", () => {
     const memory = closureMemory([planned()]);
     const withFixtures = generateSeasonCalendar("planned-2027", memory.repository);
     expect(canGenerateSeasonCalendar(withFixtures)).toBe(false);
     expect(() => generateSeasonCalendar("planned-2027", memory.repository)).toThrow();
-    expect(canGenerateSeasonCalendar(planned("brasileirao-serie-a"))).toBe(false);
+    expect(canGenerateSeasonCalendar(planned("brasileirao-serie-a"))).toBe(true);
     expect(canGenerateSeasonCalendar({...planned(), seasonPreparation: undefined})).toBe(false);
   });
 
@@ -38,5 +38,29 @@ describe("generateSeasonCalendar", () => {
       placementRules: {championPlaces: 1, playoffPlaces: {from: 2, to: 8}}};
     expect(regularRounds(source)).toBe(3);
     expect(regularRounds(undefined)).toBe(2);
+  });
+
+  it("generates two local round-robin legs inside registered Argentine zones", () => {
+    const zoned = planned("arg-primera-nacional");
+    const tournament: Tournament = { ...zoned, teams: teams.slice(0, 8).map((team, i) => ({...team, groupName: i < 4 ? "Zona A" : "Zona B"})) };
+    const memory = closureMemory([tournament]);
+    expect(canGenerateSeasonCalendar(tournament)).toBe(true);
+    const next = generateSeasonCalendar(tournament.id, memory.repository, (() => { let i = 0; return () => `zone-fixture-${i++}`; })());
+    expect(next.matchdays).toHaveLength(8);
+    expect(next.matchdays.flatMap(day => day.fixtures)).toHaveLength(32);
+    const crossZone = next.matchdays.flatMap(day => day.fixtures).filter(fixture =>
+      next.teams.find(team => team.id === fixture.homeTeamId)?.groupName !== next.teams.find(team => team.id === fixture.awayTeamId)?.groupName);
+    expect(crossZone).toHaveLength(8);
+    expect(next.matchdays.filter(day => day.leg === 2)).toHaveLength(4);
+    expect(next.calendarProvenance).toBe("local-generated");
+  });
+
+  it("generates a double round-robin for a planned Brazilian league", () => {
+    const tournament = planned("brasileirao-serie-a");
+    const memory = closureMemory([tournament]);
+    expect(canGenerateSeasonCalendar(tournament)).toBe(true);
+    const next = generateSeasonCalendar(tournament.id, memory.repository, (() => { let i = 0; return () => `br-fixture-${i++}`; })());
+    expect(next.matchdays).toHaveLength(30);
+    expect(next.matchdays.flatMap(day => day.fixtures)).toHaveLength(240);
   });
 });

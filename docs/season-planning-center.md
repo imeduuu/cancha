@@ -62,6 +62,8 @@ La revisión en memoria conserva una copia de la entrada y un snapshot canónico
 
 Las proyecciones se reconstruyen al recibir los torneos actualizados. Las revisiones continentales persistidas conservan todo su historial y muestran la vigencia de sus dependencias calculada por `continentalPlanState`. No se actualiza una copa ya creada silenciosamente. Los snapshots de divisiones conservan las referencias que guarda el caso existente, pero no adquieren un nuevo historial documental de dependencias ni una invalidación automática adicional.
 
+Las temporadas planificadas de LPF, Primera Nacional y Série A/B pueden recibir un calendario local con **Generar calendario** cuando aún no tienen partidos. Brasil usa dos ruedas todos contra todos. Las competiciones argentinas requieren exactamente dos zonas registradas y del mismo tamaño; se generan dos ruedas intrazonales y una jornada interzonal por rueda, con parejas por orden de participantes y localía invertida. Si las zonas no quedaron asignadas al crear la temporada, deben configurarse expresamente antes de generar. La operación registra procedencia `local-generated`, no asigna fechas ni afirma que los emparejamientos sean oficiales. Los nuevos cruces quedan disponibles para simulación inmediata.
+
 ## Navegación y borradores
 
 Los accesos aparecen sobre los registros disponibles: origen, calendario, tabla/reglamento/pendientes, destino, preparación existente de las divisiones reconocidas y clasificación internacional. Se presentan fuentes de reglamento, resoluciones oficiales, motivos de invalidación, revisiones sucesoras, revisiones continentales y discrepancias de calendarios guardadas.

@@ -663,7 +663,7 @@ function Application({ libraryBackend }: AppProps) {
       const next = generateSeasonCalendar(tournament.id, scopedRepository);
       setTournament(next);
       setSavedTournaments(repository.findAll());
-      setFeedback(`Se generó un calendario local todos contra todos: ${next.matchdays.length} jornadas, sin fechas. No es un fixture oficial.`);
+      setFeedback(`Se generó un calendario local: ${next.matchdays.length} jornadas, sin fechas. No es un fixture oficial.`);
       setPersistenceStatus("saved");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "No se pudo generar el calendario.");
