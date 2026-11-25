@@ -1,3 +1,4 @@
+import { DomainError } from "../domain-error.js";
 import type { ContinentalCup, ContinentalPlan } from "../entities/continental-plan";
 import type { Tournament } from "../entities/tournament";
 export function continentalDestination(destination: string): ContinentalCup | undefined {
@@ -56,7 +57,7 @@ export function mergeContinentalPlanHistory(previous: readonly ContinentalPlan[]
   const merged=[...previous];
   for (const record of incoming ?? []) {
     const old=merged.find(p => p.id === record.id);
-    if (old && canonical(old) !== canonical(record)) throw new Error("Una revisión continental existente no puede sobrescribirse; registra una nueva revisión.");
+    if (old && canonical(old) !== canonical(record)) throw new DomainError("Una revisión continental existente no puede sobrescribirse; registra una nueva revisión.");
     if (!old) merged.push(record);
   }
   return merged;

@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import { isOfficialResolution } from "../../domain/services/official-resolution-validation";
 import type {
   CompetitionRulesConfiguration,
@@ -361,17 +362,17 @@ function isTournamentShape(value: unknown): value is Tournament {
 function validateTournament(value: unknown, index?: number): Tournament {
   const position = index === undefined ? "" : `El torneo ${index + 1}: `;
   if (!isTournamentShape(value)) {
-    throw new Error(`${position}la estructura del torneo no es válida.`);
+    throw new DomainError(`${position}la estructura del torneo no es válida.`);
   }
   const integrityIssues = validateTournamentIntegrity(value);
   if (integrityIssues.length > 0) {
-    throw new Error(`${position}${integrityIssues[0]}`);
+    throw new DomainError(`${position}${integrityIssues[0]}`);
   }
   const playerIssue = validateTournamentPlayerData(value);
-  if (playerIssue) throw new Error(`${position}${playerIssue}`);
+  if (playerIssue) throw new DomainError(`${position}${playerIssue}`);
   for (const fixture of value.matchdays.flatMap(({ fixtures }) => fixtures)) {
     const detailIssue = validateFixtureDetails(value, fixture);
-    if (detailIssue) throw new Error(`${position}${detailIssue}`);
+    if (detailIssue) throw new DomainError(`${position}${detailIssue}`);
   }
   return tournamentSnapshot(value);
 }
@@ -665,21 +666,21 @@ function parseJson(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error("El archivo no contiene JSON válido.");
+    throw new DomainError("El archivo no contiene JSON válido.");
   }
 }
 
 function readEnvelopeVersion(value: Record<string, unknown>, expectedFormat: string): number {
   if (value.format !== expectedFormat && value.format !== undefined) {
-    throw new Error("El archivo corresponde a otro tipo de documento.");
+    throw new DomainError("El archivo corresponde a otro tipo de documento.");
   }
   if (value.version === undefined) return 0;
   if (!Number.isSafeInteger(value.version) || Number(value.version) < 0) {
-    throw new Error("La versión del archivo no es válida.");
+    throw new DomainError("La versión del archivo no es válida.");
   }
   const version = Number(value.version);
   if (version > currentVersion) {
-    throw new Error(`La versión ${version} del archivo no es compatible con esta aplicación.`);
+    throw new DomainError(`La versión ${version} del archivo no es compatible con esta aplicación.`);
   }
   return version;
 }
@@ -687,7 +688,7 @@ function readEnvelopeVersion(value: Record<string, unknown>, expectedFormat: str
 function validateExportTimestamp(value: Record<string, unknown>, version: number): void {
   if (version === currentVersion
     && (typeof value.exportedAt !== "string" || !Number.isFinite(Date.parse(value.exportedAt)))) {
-    throw new Error("El archivo no contiene una fecha de exportación válida.");
+    throw new DomainError("El archivo no contiene una fecha de exportación válida.");
   }
 }
 
@@ -695,7 +696,7 @@ function validateUniqueTournamentIds(tournaments: readonly Tournament[]): void {
   const ids = new Set<string>();
   for (const tournament of tournaments) {
     if (ids.has(tournament.id)) {
-      throw new Error(`El archivo repite el identificador de torneo "${tournament.id}".`);
+      throw new DomainError(`El archivo repite el identificador de torneo "${tournament.id}".`);
     }
     ids.add(tournament.id);
   }
@@ -717,16 +718,16 @@ export function createTournamentArchive(
 export function parseTournamentArchive(text: string): Tournament {
   const value = parseJson(text);
   if (!isRecord(value)) {
-    throw new Error("El archivo no tiene la estructura de un torneo exportado.");
+    throw new DomainError("El archivo no tiene la estructura de un torneo exportado.");
   }
   const version = readEnvelopeVersion(value, tournamentFormat);
   const tournament = value.tournament ?? (value.format === undefined ? value : undefined);
   validateExportTimestamp(value, version);
   if (version >= 1 && value.format !== tournamentFormat) {
-    throw new Error("El archivo no tiene el formato de torneo esperado.");
+    throw new DomainError("El archivo no tiene el formato de torneo esperado.");
   }
   if (version === 0 && value.format !== undefined && value.format !== tournamentFormat) {
-    throw new Error("No se puede migrar con seguridad este archivo antiguo.");
+    throw new DomainError("No se puede migrar con seguridad este archivo antiguo.");
   }
   return validateTournament(tournament);
 }
@@ -740,7 +741,7 @@ export function createTournamentBackup(
   const validated = tournaments.map((tournament, index) => validateTournament(tournament, index));
   validateUniqueTournamentIds(validated);
   if (!activity.every(isActivityEvent)) {
-    throw new Error("El historial del respaldo contiene eventos inválidos.");
+    throw new DomainError("El historial del respaldo contiene eventos inválidos.");
   }
   const validatedUniverses = universes
     ? validateSportsUniverseRelations(universes, validated, activity)
@@ -762,18 +763,18 @@ export function parseTournamentBackup(text: string): Tournament[] {
 export function parseTournamentBackupWithActivity(text: string): ParsedTournamentBackup {
   const value = parseJson(text);
   if (!isRecord(value)) {
-    throw new Error("El archivo no tiene la estructura de un respaldo.");
+    throw new DomainError("El archivo no tiene la estructura de un respaldo.");
   }
   const version = readEnvelopeVersion(value, backupFormat);
   validateExportTimestamp(value, version);
   if (version >= 1 && value.format !== backupFormat) {
-    throw new Error("El archivo no tiene el formato de respaldo esperado.");
+    throw new DomainError("El archivo no tiene el formato de respaldo esperado.");
   }
   if (version === 0 && value.format !== undefined && value.format !== backupFormat) {
-    throw new Error("No se puede migrar con seguridad este respaldo antiguo.");
+    throw new DomainError("No se puede migrar con seguridad este respaldo antiguo.");
   }
   if (!Array.isArray(value.tournaments)) {
-    throw new Error("El respaldo no contiene una lista de torneos válida.");
+    throw new DomainError("El respaldo no contiene una lista de torneos válida.");
   }
   const tournaments = value.tournaments.map((tournament, index) => validateTournament(tournament, index));
   validateUniqueTournamentIds(tournaments);
@@ -781,10 +782,10 @@ export function parseTournamentBackupWithActivity(text: string): ParsedTournamen
     ? value.activity
     : [];
   if (!Array.isArray(activity) || !activity.every(isActivityEvent)) {
-    throw new Error("El historial del respaldo contiene eventos inválidos.");
+    throw new DomainError("El historial del respaldo contiene eventos inválidos.");
   }
   if (value.extensions !== undefined && !isRecord(value.extensions)) {
-    throw new Error("Las extensiones del respaldo tienen un formato inválido.");
+    throw new DomainError("Las extensiones del respaldo tienen un formato inválido.");
   }
   const rawUniverses = isRecord(value.extensions)
     ? value.extensions.sportsUniverses

@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type {TournamentRepository} from "../ports/tournament-repository";
 import type {StageDrawRecord} from "../../domain/entities/stage-draw";
 import type {DrawConfiguration} from "../../domain/entities/draw-configuration";
@@ -52,7 +53,7 @@ export async function generateLocalGroups(input:LocalGroupInput,repository:Tourn
 }
 export function reviewGeneratedLocalGroups(proposal:LocalGroupProposal,repository:TournamentRepository,universeId:string|null){
   const token=proposals.get(proposal);
-  if(!token || token.content!==JSON.stringify(proposal) || token.snapshot!==snapshot(repository) || universeId!==proposal.universeId)throw new Error("La propuesta generada está alterada, obsoleta o pertenece a otro universo. Genera y revisa nuevamente.");
+  if(!token || token.content!==JSON.stringify(proposal) || token.snapshot!==snapshot(repository) || universeId!==proposal.universeId)throw new DomainError("La propuesta generada está alterada, obsoleta o pertenece a otro universo. Genera y revisa nuevamente.");
   return reviewStageDraw({tournamentId:proposal.tournamentId,universeId:proposal.universeId,stage:proposal.stage,mode:"generated",configurationRevision:proposal.configurationRevision,
     groups:proposal.groups,generation:{method:proposal.method,seed:proposal.seed}},repository);
 }

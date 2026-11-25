@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { TournamentRepository } from "../ports/tournament-repository";
 import { createActivityEvent, saveWithActivity } from "../services/activity-log";
@@ -21,8 +22,8 @@ export function renameTournament(
   repository: TournamentRepository,
 ): Tournament {
   const name = requestedName.trim();
-  if (!name) throw new Error("Escribe el nombre del campeonato.");
-  if (name.length > 80) throw new Error("El nombre del campeonato no puede superar los 80 caracteres.");
+  if (!name) throw new DomainError("Escribe el nombre del campeonato.");
+  if (name.length > 80) throw new DomainError("El nombre del campeonato no puede superar los 80 caracteres.");
 
   const renamed = { ...tournament, name };
   if (name === tournament.name) return tournament;
@@ -43,7 +44,7 @@ export function duplicateTournament(
   now: () => Date = () => new Date(),
 ): Tournament {
   if (mode !== "copy" && mode !== "reset") {
-    throw new Error("Elige si la copia conserva o reinicia los resultados.");
+    throw new DomainError("Elige si la copia conserva o reinicia los resultados.");
   }
   const timestamp = now().toISOString();
   const id = createUniqueId(repository, `copy-${tournament.id}-${Date.parse(timestamp)}`);

@@ -1,7 +1,7 @@
 import { unwrapResolverError } from "@apollo/server/errors";
 import { Logger } from "@nestjs/common";
 import { ThrottlerException } from "@nestjs/throttler";
-import { CheckpointValidationError } from "@cancha/core/application/services/save-checkpoints";
+import { DomainError } from "@cancha/core/domain/domain-error";
 import { AuthenticationError, ForbiddenOriginError } from "../auth/auth.errors.js";
 import { SaveCheckpointVersionConflictError } from "../save-checkpoints/mongo-save-checkpoint-store.js";
 import { GraphQLError, type GraphQLFormattedError } from "graphql";
@@ -38,7 +38,7 @@ function withoutStacktrace(extensions: GraphQLFormattedError["extensions"]): Rec
  * - NotFoundError ⇒ NOT_FOUND;
  * - sin sesión válida ⇒ UNAUTHENTICATED; origen no permitido ⇒ FORBIDDEN;
  * - rate limit superado ⇒ TOO_MANY_REQUESTS;
- * - `Error` simple (errores de dominio y casos de uso de core, en español) ⇒ VALIDATION;
+ * - `DomainError` (regla esperada de core) ⇒ VALIDATION;
  * - errores de GraphQL/Apollo (consulta o argumentos inválidos) ⇒ se conservan;
  * - cualquier otro (TypeError, fallo de Mongo…) ⇒ INTERNAL_SERVER_ERROR genérico y se registra.
  * Fuera de desarrollo nunca se devuelve `stacktrace`.
@@ -73,15 +73,12 @@ export function createFormatError(development: boolean) {
         currentVersion: original.actualVersion,
       });
     }
-    if (original instanceof CheckpointValidationError) return as(apiErrorCodes.validation, original.message);
+    if (original instanceof DomainError) return as(apiErrorCodes.validation, original.message);
     if (original instanceof NotFoundError) return as(apiErrorCodes.notFound, original.message);
     if (original instanceof AuthenticationError) return as(apiErrorCodes.unauthenticated, original.message);
     if (original instanceof ForbiddenOriginError) return as(apiErrorCodes.forbidden, original.message);
     if (original instanceof ThrottlerException) return as(apiErrorCodes.tooManyRequests, original.message);
     if (original instanceof GraphQLError) return { ...formatted, extensions: base };
-    if (original instanceof Error && original.constructor === Error) {
-      return as(apiErrorCodes.validation, original.message);
-    }
     logger.error(
       original instanceof Error ? original.message : String(original),
       original instanceof Error ? original.stack : undefined,

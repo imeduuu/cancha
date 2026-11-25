@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { CalendarProvenance, Matchday, Tournament } from "../../domain/entities/tournament";
 import { validateTournamentIntegrity } from "../../domain/services/tournament-integrity";
 import { generateRoundRobinSchedule } from "../../domain/services/round-robin-scheduler";
@@ -73,15 +74,15 @@ export function previewGeneratedCalendar(
   availableTournaments?: readonly Tournament[],
 ): CalendarProgrammingProposal {
   const blockers = getCalendarProgrammingBlockers(tournament, availableTournaments);
-  if (blockers.length) throw new Error(blockers.join(" "));
+  if (blockers.length) throw new DomainError(blockers.join(" "));
   if (!Number.isSafeInteger(legs) || legs < 1 || legs > MAX_TOURNAMENT_LEGS) {
-    throw new Error(`El número de ruedas debe ser un entero entre 1 y ${MAX_TOURNAMENT_LEGS}.`);
+    throw new DomainError(`El número de ruedas debe ser un entero entre 1 y ${MAX_TOURNAMENT_LEGS}.`);
   }
   if (tournament.competitionType === "cup") {
-    throw new Error("Las copas requieren reglas de admisión y etapas específicas; el generador de todos contra todos no es compatible.");
+    throw new DomainError("Las copas requieren reglas de admisión y etapas específicas; el generador de todos contra todos no es compatible.");
   }
   if (tournament.teams.some((team) => team.groupName)) {
-    throw new Error("El generador general de todos contra todos no conserva grupos. Este formato requiere un generador específico.");
+    throw new DomainError("El generador general de todos contra todos no conserva grupos. Este formato requiere un generador específico.");
   }
   const existingFixtures = tournament.matchdays.flatMap((day) => day.fixtures);
   if (existingFixtures.length > 0) {
@@ -91,9 +92,9 @@ export function previewGeneratedCalendar(
       || fixture.lineups
       || fixture.substitutions?.length
       || fixture.operationalState && fixture.operationalState.status !== "unscheduled")) {
-      throw new Error("El calendario existente contiene resultados o actividad deportiva. No se permite reemplazarlo.");
+      throw new DomainError("El calendario existente contiene resultados o actividad deportiva. No se permite reemplazarlo.");
     }
-    throw new Error("Ya existe un calendario. Usa la programación manual para agregar partidos sin reemplazarlo.");
+    throw new DomainError("Ya existe un calendario. Usa la programación manual para agregar partidos sin reemplazarlo.");
   }
   const days = generateRoundRobinSchedule(tournament.teams, legs)
     .map((day) => ({
@@ -127,18 +128,18 @@ export function previewManualCalendar(
   reuseEmptyStageDays = false,
 ): CalendarProgrammingProposal {
   const blockers = getCalendarProgrammingBlockers(tournament, availableTournaments);
-  if (blockers.length) throw new Error(blockers.join(" "));
+  if (blockers.length) throw new DomainError(blockers.join(" "));
   if (tournament.format !== "round-robin" && tournament.format !== "staged") {
-    throw new Error("Formato no reconocido. Registra el formato deportivo antes de programar partidos.");
+    throw new DomainError("Formato no reconocido. Registra el formato deportivo antes de programar partidos.");
   }
   if (tournament.format === "staged" && !tournament.knockoutStages?.length) {
-    throw new Error("El formato por etapas no tiene etapas registradas para validar los cruces.");
+    throw new DomainError("El formato por etapas no tiene etapas registradas para validar los cruces.");
   }
   if (!matchdays.length || matchdays.some((day) =>
     !Number.isSafeInteger(day.number) || day.number < 1
       || !Number.isSafeInteger(day.leg) || day.leg < 1 || day.leg > tournament.legs
       || !day.fixtures.length)) {
-    throw new Error("Cada jornada manual debe tener número, rueda/fase y al menos un encuentro.");
+    throw new DomainError("Cada jornada manual debe tener número, rueda/fase y al menos un encuentro.");
   }
   const additions: Matchday[] = matchdays.map((day) => ({
     ...day,
@@ -175,22 +176,22 @@ export function confirmCalendarProgramming(
   currentUniverseId: string | null,
 ): Tournament {
   if (proposals.get(proposal) !== JSON.stringify(proposal)) {
-    throw new Error("La propuesta fue modificada. Genera una nueva vista previa.");
+    throw new DomainError("La propuesta fue modificada. Genera una nueva vista previa.");
   }
   if (proposal.universeId !== currentUniverseId) {
-    throw new Error("El universo activo cambió. Revisa nuevamente la propuesta.");
+    throw new DomainError("El universo activo cambió. Revisa nuevamente la propuesta.");
   }
   const current = repository.findAll().find((item) => item.id === proposal.tournamentId);
   if (proposal.tournamentId !== tournament.id
     || proposal.before !== JSON.stringify(tournament)
     || proposal.before !== JSON.stringify(current)) {
-    throw new Error("La temporada o sus dependencias cambiaron. Revisa nuevamente la propuesta.");
+    throw new DomainError("La temporada o sus dependencias cambiaron. Revisa nuevamente la propuesta.");
   }
   if (getCalendarProgrammingBlockers(tournament, repository.findAll()).length) {
-    throw new Error("El reglamento o los participantes ya no cumplen las condiciones de programación.");
+    throw new DomainError("El reglamento o los participantes ya no cumplen las condiciones de programación.");
   }
   if (proposal.dependencies !== dependencySnapshot(tournament, repository.findAll())) {
-    throw new Error("Las dependencias de la temporada cambiaron. Revisa nuevamente la propuesta.");
+    throw new DomainError("Las dependencias de la temporada cambiaron. Revisa nuevamente la propuesta.");
   }
   validateProposal(proposal.proposed);
   const hasExistingFixtures = tournament.matchdays.some((day) => day.fixtures.length > 0);
@@ -253,5 +254,5 @@ function dependencySnapshot(
 
 function validateProposal(tournament: Tournament): void {
   const issues = validateTournamentIntegrity(tournament);
-  if (issues.length) throw new Error(issues[0]);
+  if (issues.length) throw new DomainError(issues[0]);
 }

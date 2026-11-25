@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { Tournament } from "../../domain/entities/tournament";
 import {
   simulateExtraTimeResult,
@@ -27,24 +28,24 @@ export function simulateFixtures(
   random: () => number = Math.random,
 ): SimulateFixturesResult {
   if (mode !== "pendingOnly" && mode !== "overwrite") {
-    throw new Error("Elige si se simulan solo pendientes o se sobrescriben los resultados.");
+    throw new DomainError("Elige si se simulan solo pendientes o se sobrescriben los resultados.");
   }
 
   if (new Set(fixtureIds).size !== fixtureIds.length) {
-    throw new Error("La selección contiene partidos duplicados.");
+    throw new DomainError("La selección contiene partidos duplicados.");
   }
 
   const selectedIds = new Set(fixtureIds);
   const knownFixtures = tournament.matchdays.flatMap((matchday) => matchday.fixtures);
   const knownFixtureIds = new Set(knownFixtures.map((fixture) => fixture.id));
   if (fixtureIds.some((fixtureId) => !knownFixtureIds.has(fixtureId))) {
-    throw new Error("La selección contiene un partido que no pertenece al campeonato.");
+    throw new DomainError("La selección contiene un partido que no pertenece al campeonato.");
   }
   const blockedFixture = knownFixtures.find((fixture) =>
     selectedIds.has(fixture.id)
     && isOperationalStateSimulationBlocked(fixture));
   if (blockedFixture) {
-    throw new Error(`No se puede simular el partido "${blockedFixture.id}" mientras está ${getOperationalMatchStatus(blockedFixture)}.`);
+    throw new DomainError(`No se puede simular el partido "${blockedFixture.id}" mientras está ${getOperationalMatchStatus(blockedFixture)}.`);
   }
 
   let simulatedCount = 0;
@@ -132,7 +133,7 @@ function simulatePenaltyShootout(random: () => number) {
 function penaltyIsScored(random: () => number): boolean {
   const value = random();
   if (!Number.isFinite(value) || value < 0 || value >= 1) {
-    throw new Error("La fuente aleatoria debe entregar valores entre 0 y 1.");
+    throw new DomainError("La fuente aleatoria debe entregar valores entre 0 y 1.");
   }
   return value < 0.75;
 }

@@ -1,3 +1,4 @@
+import { DomainError } from "../domain-error.js";
 import type { Fixture, MatchResult } from "../entities/tournament";
 
 const maximumGoals = 99;
@@ -14,7 +15,7 @@ function samplePoisson(lambda: number, random: () => number): number {
   do {
     const value = random();
     if (!Number.isFinite(value) || value < 0 || value >= 1) {
-      throw new Error("La fuente aleatoria debe entregar valores entre 0 y 1.");
+      throw new DomainError("La fuente aleatoria debe entregar valores entre 0 y 1.");
     }
     product *= value;
     goals += 1;

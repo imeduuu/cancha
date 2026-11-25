@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import { mergeContinentalPlanHistory } from "../../domain/services/continental-plan";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { TournamentRepository } from "../ports/tournament-repository";
@@ -33,16 +34,16 @@ export function importTournamentArchive(
     const savedTournaments = repository.findAll();
     const existing = savedTournaments.some(({ id }) => id === tournament.id);
     if (decision === "add" && existing) {
-      throw new Error("Ya existe un torneo con ese identificador. Elige crear una copia o actualizarlo.");
+      throw new DomainError("Ya existe un torneo con ese identificador. Elige crear una copia o actualizarlo.");
     }
     if (decision === "update" && !existing) {
-      throw new Error("No se encontró el torneo que se solicitó actualizar.");
+      throw new DomainError("No se encontró el torneo que se solicitó actualizar.");
     }
 
     if (decision !== "copy") {
       const conflict = findCompetitionSeasonConflict(tournament, savedTournaments);
       if (conflict) {
-        throw new Error(
+        throw new DomainError(
           `Ya existe "${conflict.name}" (ID: ${conflict.id}) para la competiciÃ³n "${tournament.competitionId}" en la temporada ${tournament.season}. Elige actualizar ese torneo o importar como copia independiente.`,
         );
       }
@@ -54,7 +55,7 @@ export function importTournamentArchive(
       : {...tournament,...(continentalPlans ? {continentalPlans}: {})};
     const imported = secondDivisionKind(candidate) ? advanceTournamentProgress(candidate) : candidate;
     if (decision === "copy" && savedTournaments.some(({ id }) => id === imported.id)) {
-      throw new Error("El identificador de la copia ya está en uso. Intenta importar el archivo nuevamente.");
+      throw new DomainError("El identificador de la copia ya está en uso. Intenta importar el archivo nuevamente.");
     }
     saveWithActivity(repository, imported, createActivityEvent(imported, {
       action: "tournament-imported",
@@ -69,7 +70,7 @@ export function importTournamentArchive(
       recordRejectedImport(repository, reason, tournament);
     } catch (auditError) {
       const auditReason = auditError instanceof Error ? auditError.message : "error de almacenamiento";
-      throw new Error(`${reason} Además, no se pudo registrar el rechazo: ${auditReason}`);
+      throw new DomainError(`${reason} Además, no se pudo registrar el rechazo: ${auditReason}`);
     }
     throw error;
   }

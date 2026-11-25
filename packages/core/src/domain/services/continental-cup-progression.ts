@@ -1,3 +1,4 @@
+import { DomainError } from "../domain-error.js";
 import { normalizeTeamName } from "./team-name";
 import type { Fixture, Matchday, Tournament } from "../entities/tournament";
 import { calculateStandings, type TeamStanding } from "./standings";
@@ -282,7 +283,7 @@ export function advanceContinentalCupProgression(
       if (!source) continue;
       const sameId = teams.find(team => team.id === source.id);
       if (sameId && normalizeTeamName(sameId.name) !== normalizeTeamName(source.name)) {
-        throw new Error("Las copas contienen identidades de clubes incompatibles; revisa los participantes antes de generar el playoff.");
+        throw new DomainError("Las copas contienen identidades de clubes incompatibles; revisa los participantes antes de generar el playoff.");
       }
       const existing = sameId ?? teams.find(team => normalizeTeamName(team.name) === normalizeTeamName(source.name));
       incomingIds.set(source.id, existing?.id ?? source.id);

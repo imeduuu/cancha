@@ -8,6 +8,7 @@ import {
   TournamentVersionConflictError,
 } from "../infrastructure/persistence/mongo-tournament-repository.js";
 import { NotFoundError } from "../library/library-unit-of-work.js";
+import { DomainError } from "@cancha/core/domain/domain-error";
 import { createFormatError } from "./graphql-errors.js";
 import { createGraphqlOptions } from "./graphql.module.js";
 
@@ -31,13 +32,21 @@ describe("createFormatError", () => {
     expect(formatted.extensions).toEqual({ code: "CONFLICT", expectedLibraryVersion: 4, currentLibraryVersion: 6 });
   });
 
-  it("NotFoundError ⇒ NOT_FOUND y Error de dominio ⇒ VALIDATION, sin stacktrace", () => {
+  it("NotFoundError ⇒ NOT_FOUND y DomainError ⇒ VALIDATION, sin stacktrace", () => {
     expect(production(...fromResolver(new NotFoundError("No está."))).extensions).toEqual({ code: "NOT_FOUND" });
-    expect(production(...fromResolver(new Error("Escribe el nombre del campeonato.")))).toEqual({
+    expect(production(...fromResolver(new DomainError("Escribe el nombre del campeonato.")))).toEqual({
       message: "Escribe el nombre del campeonato.",
       path: ["campo"],
       extensions: { code: "VALIDATION" },
     });
+  });
+
+  it("un Error plano se trata como interno y su mensaje no se expone", () => {
+    const log = vi.spyOn(Logger.prototype, "error").mockImplementation(() => {});
+    const formatted = production(...fromResolver(new Error("fallo interno")));
+    expect(formatted).toMatchObject({ message: "Error interno del servidor.", extensions: { code: "INTERNAL_SERVER_ERROR" } });
+    expect(JSON.stringify(formatted)).not.toContain("fallo interno");
+    log.mockRestore();
   });
 
   it("sesión inválida ⇒ UNAUTHENTICATED, origen ⇒ FORBIDDEN, rate limit ⇒ TOO_MANY_REQUESTS", () => {
@@ -63,7 +72,7 @@ describe("createFormatError", () => {
     const validation = new GraphQLError("Unknown argument", { extensions: { code: "GRAPHQL_VALIDATION_FAILED" } });
     const formatted = { message: "Unknown argument", extensions: { code: "GRAPHQL_VALIDATION_FAILED", stacktrace: ["at y"] } };
     expect(production(formatted, validation).extensions).toEqual({ code: "GRAPHQL_VALIDATION_FAILED" });
-    expect(createFormatError(true)(...fromResolver(new Error("Dominio."))).extensions)
+    expect(createFormatError(true)(...fromResolver(new DomainError("Dominio."))).extensions)
       .toEqual({ code: "VALIDATION", stacktrace: ["at x"] });
   });
 });

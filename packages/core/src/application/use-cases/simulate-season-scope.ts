@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { TournamentRepository } from "../ports/tournament-repository";
 import { simulateFixtures } from "./simulate-fixtures";
@@ -35,7 +36,7 @@ export function previewSeasonSimulation(
 ): SeasonSimulationPreview {
   const tournaments = repository.findAll();
   const t = tournaments.find(item => item.id === tournamentId);
-  if (!t) throw new Error("La temporada no está disponible en el universo activo.");
+  if (!t) throw new DomainError("La temporada no está disponible en el universo activo.");
   const blockers = validateTournamentIntegrity(t);
   if (t.archived) blockers.push("La temporada está archivada.");
   if (!t.format && !t.competitionType) blockers.push("Registra el formato de la competición antes de simular.");
@@ -95,16 +96,16 @@ export function confirmSeasonSimulation(
   preview: SeasonSimulationPreview, universeId: string | null, repository: TournamentRepository,
   confirmed: boolean, random: () => number = Math.random,
 ) {
-  if (!confirmed) throw new Error("Se requiere confirmación explícita.");
-  if (preview.universeId !== universeId) throw new Error("El universo activo cambió. Revisa nuevamente la simulación.");
+  if (!confirmed) throw new DomainError("Se requiere confirmación explícita.");
+  if (preview.universeId !== universeId) throw new DomainError("El universo activo cambió. Revisa nuevamente la simulación.");
   const tournaments = repository.findAll();
   if (reviews.get(preview) !== JSON.stringify([preview, snapshot(tournaments, repository)]))
-    throw new Error("La confirmación está obsoleta. Genera una nueva vista previa.");
+    throw new DomainError("La confirmación está obsoleta. Genera una nueva vista previa.");
   const current = previewSeasonSimulation(preview.tournamentId, preview.scope, universeId, repository);
-  if (current.blockers.length) throw new Error(current.blockers.join(" "));
-  if (!current.fixtureIds.length) throw new Error("No hay partidos pendientes en este alcance.");
+  if (current.blockers.length) throw new DomainError(current.blockers.join(" "));
+  if (!current.fixtureIds.length) throw new DomainError("No hay partidos pendientes en este alcance.");
   const tournament = tournaments.find(t => t.id === preview.tournamentId)!;
-  if (!repository.saveWithActivity) throw new Error("El repositorio no garantiza el guardado con actividad.");
+  if (!repository.saveWithActivity) throw new DomainError("El repositorio no garantiza el guardado con actividad.");
   // Stage the existing use cases in memory so cross-cup updates are validated and committed together.
   const staged = new Map(tournaments.map(t => [t.id, t]));
   const events: ActivityEvent[] = [];
@@ -117,24 +118,24 @@ export function confirmSeasonSimulation(
   const advanced = advanceTournamentProgress(result.tournament, stagingRepository);
   stagingRepository.save(advanced);
   if (staged.size !== tournaments.length || [...staged.keys()].some(id => !tournaments.some(t => t.id === id)))
-    throw new Error("La simulación no puede crear nuevas temporadas.");
+    throw new DomainError("La simulación no puede crear nuevas temporadas.");
   const changed = tournaments.flatMap(original => {
     const updated = staged.get(original.id)!;
     if (JSON.stringify(original) === JSON.stringify(updated)) return [];
     const fixtures = new Map(updated.matchdays.flatMap(d => d.fixtures).map(f => [f.id, f]));
     if (original.matchdays.flatMap(d => d.fixtures).some(f => f.result
       && JSON.stringify(fixtures.get(f.id)) !== JSON.stringify(f)))
-      throw new Error("La progresión afectaría partidos con resultados existentes. Revisa las dependencias antes de simular.");
+      throw new DomainError("La progresión afectaría partidos con resultados existentes. Revisa las dependencias antes de simular.");
     const issues = validateTournamentIntegrity(updated);
-    if (issues.length) throw new Error(issues.join(" "));
+    if (issues.length) throw new DomainError(issues.join(" "));
     return [updated];
   });
   if (reviews.get(preview) !== JSON.stringify([preview, snapshot(repository.findAll(), repository)]))
-    throw new Error("La confirmación está obsoleta. Genera una nueva vista previa.");
+    throw new DomainError("La confirmación está obsoleta. Genera una nueva vista previa.");
   const simulationEvent = events[0];
-  if (!simulationEvent || !changed.length) throw new Error("No se pudo preparar el registro de actividad.");
+  if (!simulationEvent || !changed.length) throw new DomainError("No se pudo preparar el registro de actividad.");
   if (changed.length > 1) {
-    if (!repository.saveManyWithActivity) throw new Error("La progresión requiere guardado conjunto con actividad.");
+    if (!repository.saveManyWithActivity) throw new DomainError("La progresión requiere guardado conjunto con actividad.");
     repository.saveManyWithActivity(changed, {...simulationEvent,
       note: `Progresión deportiva coordinada: ${changed.map(t => t.name).join(", ")}.`,
     });

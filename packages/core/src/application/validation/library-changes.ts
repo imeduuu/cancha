@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import { isActivityEvent, type ActivityAction, type ActivityEvent } from "../../domain/entities/activity-event";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { SportsUniverseLibrary } from "../../domain/entities/sports-universe";
@@ -36,7 +37,7 @@ export interface LoadedLibrary {
 const allowedKeys = new Set(["saved", "deleted", "events", "activeTournament", "universes"]);
 
 function fail(reason: string): never {
-  throw new Error(`No se guardaron los cambios: ${reason}`);
+  throw new DomainError(`No se guardaron los cambios: ${reason}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

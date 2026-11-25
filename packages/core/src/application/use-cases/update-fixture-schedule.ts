@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { MatchSchedule, Tournament } from "../../domain/entities/tournament";
 import { validateMatchSchedule } from "../../domain/services/match-scheduling";
 import type { TournamentRepository } from "../ports/tournament-repository";
@@ -11,12 +12,12 @@ export function updateFixtureSchedule(
 ): Tournament {
   const target = tournament.matchdays.flatMap(({ fixtures }) => fixtures)
     .find(({ id }) => id === fixtureId);
-  if (!target) throw new Error("No se encontró el partido que quieres programar.");
+  if (!target) throw new DomainError("No se encontró el partido que quieres programar.");
   if (JSON.stringify(target.schedule ?? null) === JSON.stringify(schedule)) return tournament;
   if (schedule !== null) {
     schedule = { ...schedule, provenance: "manual" };
     const issue = validateMatchSchedule(schedule);
-    if (issue) throw new Error(issue);
+    if (issue) throw new DomainError(issue);
   }
 
   const matchdays = tournament.matchdays.map((matchday) => ({

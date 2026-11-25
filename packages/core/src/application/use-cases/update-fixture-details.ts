@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { Fixture, GoalScorer, Tournament } from "../../domain/entities/tournament";
 import type { TournamentRepository } from "../ports/tournament-repository";
 import { validateFixtureDetails, type FixtureDetailsUpdate } from "../../domain/services/match-details";
@@ -15,7 +16,7 @@ export function updateFixtureDetails(
 ): Tournament {
   const target = tournament.matchdays.flatMap(({ fixtures }) => fixtures)
     .find(({ id }) => id === fixtureId);
-  if (!target) throw new Error("No se encontró el partido que quieres actualizar.");
+  if (!target) throw new DomainError("No se encontró el partido que quieres actualizar.");
   const updatedFixture: Fixture = {
     ...target,
     ...(update.lineups !== undefined ? { lineups: update.lineups } : {}),
@@ -64,9 +65,9 @@ export function updateFixtureDetails(
   };
   if (JSON.stringify(before) === JSON.stringify(after)) return tournament;
   const issue = validateFixtureDetails(tournament, fixtureWithScorers);
-  if (issue) throw new Error(issue);
+  if (issue) throw new DomainError(issue);
   const scorerIssue = validateGoalScorers(fixtureWithScorers.goalScorers ?? [], fixtureWithScorers);
-  if (scorerIssue) throw new Error(scorerIssue);
+  if (scorerIssue) throw new DomainError(scorerIssue);
   const matchdays = tournament.matchdays.map((matchday) => ({
     ...matchday,
     fixtures: matchday.fixtures.map((fixture) =>
@@ -74,7 +75,7 @@ export function updateFixtureDetails(
   }));
   const updatedTournament = advanceTournamentProgress({ ...tournament, matchdays });
   const playerIssue = validateTournamentPlayerData(updatedTournament);
-  if (playerIssue) throw new Error(playerIssue);
+  if (playerIssue) throw new DomainError(playerIssue);
   saveWithActivity(repository, updatedTournament, createActivityEvent(tournament, {
     action: "match-details-updated",
     entityId: fixtureId,

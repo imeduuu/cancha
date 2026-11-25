@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { TournamentRepository } from "../ports/tournament-repository";
 import { generateRoundRobinSchedule } from "../../domain/services/round-robin-scheduler";
@@ -26,13 +27,13 @@ export function regularRounds(source: Tournament | undefined): number {
  * It is never an official fixture: provenance is "local-generated", as in the calendar programming center.
  */
 export function withGeneratedCalendar(t: Tournament, rounds: number, createId: () => string): Tournament {
-  if (t.matchdays.some(day => day.fixtures.length)) throw new Error("La temporada ya tiene partidos; no se reemplaza su calendario.");
+  if (t.matchdays.some(day => day.fixtures.length)) throw new DomainError("La temporada ya tiene partidos; no se reemplaza su calendario.");
   const matchdays = generateRoundRobinSchedule(t.teams, rounds).map(day => ({...day,
     fixtures: day.fixtures.map(fixture => ({...fixture, id: createId(), calendarProvenance: "local-generated" as const}))}));
   const next: Tournament = {...t, format: "round-robin", legs: rounds, matchdays,
     calendarProvenance: "local-generated", sourceName: "Calendario local generado por usuario"};
   const issues = validateTournamentIntegrity(next);
-  if (issues.length) throw new Error(issues[0]);
+  if (issues.length) throw new DomainError(issues[0]);
   return next;
 }
 
@@ -53,13 +54,13 @@ export function plannedSeasonRounds(t: Tournament, tournaments: readonly Tournam
 export function generateSeasonCalendar(id: string, repository: TournamentRepository,
   createId: () => string = () => crypto.randomUUID(), now: () => Date = () => new Date()): Tournament {
   const tournaments = repository.findAll(), current = tournaments.find(t => t.id === id);
-  if (!current) throw new Error("La temporada no está disponible.");
+  if (!current) throw new DomainError("La temporada no está disponible.");
   if (!canGenerateSeasonCalendar(current))
-    throw new Error("Solo se genera el calendario de una temporada planificada de Primera o Ascenso de Chile que aún no tiene partidos.");
+    throw new DomainError("Solo se genera el calendario de una temporada planificada de Primera o Ascenso de Chile que aún no tiene partidos.");
   const rounds = plannedSeasonRounds(current, tournaments);
   const used = new Set(tournaments.flatMap(t => t.matchdays.flatMap(day => day.fixtures.map(f => f.id))));
   const uniqueId = () => { for (let i = 0; i < 100; i++) { const value = createId(); if (value.trim() && !used.has(value)) { used.add(value); return value; } }
-    throw new Error("No se pudo crear un identificador único."); };
+    throw new DomainError("No se pudo crear un identificador único."); };
   const next = withGeneratedCalendar(current, rounds, uniqueId);
   saveWithActivity(repository, next, createActivityEvent(current, {
     action: "calendar-programmed", entityType: "season",

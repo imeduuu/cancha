@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import {isAssociationRecord,isClubAffiliationRecord} from "../../domain/entities/club-affiliation";
 import type { ActivityEvent } from "../../domain/entities/activity-event";
 import type { SportsUniverseLibrary } from "../../domain/entities/sports-universe";
@@ -51,7 +52,7 @@ export function validateSportsUniverseLibrary(
   tournamentIds?: ReadonlySet<string>,
 ): SportsUniverseLibrary {
   if (!isSportsUniverseLibrary(value, tournamentIds)) {
-    throw new Error("Los datos de universos deportivos no son válidos.");
+    throw new DomainError("Los datos de universos deportivos no son válidos.");
   }
   return value;
 }
@@ -95,7 +96,7 @@ export function createScopedTournamentRepository(
   function assertCurrentScope(): SportsUniverseLibrary {
     const library = getLibrary();
     if (library.activeUniverseId !== universeId) {
-      throw new Error("El universo activo cambió. Revisa nuevamente antes de guardar.");
+      throw new DomainError("El universo activo cambió. Revisa nuevamente antes de guardar.");
     }
     return library;
   }
@@ -104,7 +105,7 @@ export function createScopedTournamentRepository(
     const library = assertCurrentScope();
     const existing = repository.findAll().find(({ id }) => id === tournamentId);
     if (existing && (library.assignments[tournamentId] ?? null) !== universeId) {
-      throw new Error("El torneo ya no pertenece al universo activo. Revisa nuevamente antes de guardar.");
+      throw new DomainError("El torneo ya no pertenece al universo activo. Revisa nuevamente antes de guardar.");
     }
   }
 
@@ -112,12 +113,12 @@ export function createScopedTournamentRepository(
     const library = assertCurrentScope();
     assertWritableTournament(event.tournamentId);
     if (event.universeId !== undefined && event.universeId !== universeId) {
-      throw new Error("El evento pertenece a otro universo. Revisa nuevamente antes de guardar.");
+      throw new DomainError("El evento pertenece a otro universo. Revisa nuevamente antes de guardar.");
     }
     const exists = repository.findAll().some(({ id }) => id === event.tournamentId);
     const assignedUniverse = library.assignments[event.tournamentId] ?? null;
     if (exists && assignedUniverse !== universeId) {
-      throw new Error("El evento ya no pertenece al universo activo. Revisa nuevamente antes de guardar.");
+      throw new DomainError("El evento ya no pertenece al universo activo. Revisa nuevamente antes de guardar.");
     }
   }
 
@@ -173,15 +174,15 @@ export function createSportsUniverse(
   const cleanName = name.trim();
   const cleanDescription = description.trim();
   if (!cleanName || cleanName.length > 80 || cleanDescription.length > 500) {
-    throw new Error("Ingresa un nombre de hasta 80 caracteres y una descripción de hasta 500.");
+    throw new DomainError("Ingresa un nombre de hasta 80 caracteres y una descripción de hasta 500.");
   }
   if (library.universes.some(({ name: existing }) =>
     existing.trim().toLocaleLowerCase("es") === cleanName.toLocaleLowerCase("es"))) {
-    throw new Error(`Ya existe un universo llamado "${cleanName}".`);
+    throw new DomainError(`Ya existe un universo llamado "${cleanName}".`);
   }
   const id = createId();
   if (!id.trim() || library.universes.some((universe) => universe.id === id)) {
-    throw new Error("No se pudo generar un identificador único para el universo.");
+    throw new DomainError("No se pudo generar un identificador único para el universo.");
   }
   return {
     ...library,
@@ -203,14 +204,14 @@ export function renameSportsUniverse(
   const cleanName = name.trim();
   const cleanDescription = description.trim();
   if (!cleanName || cleanName.length > 80 || cleanDescription.length > 500) {
-    throw new Error("Ingresa un nombre de hasta 80 caracteres y una descripción de hasta 500.");
+    throw new DomainError("Ingresa un nombre de hasta 80 caracteres y una descripción de hasta 500.");
   }
   if (!library.universes.some(({ id }) => id === universeId)) {
-    throw new Error("No se encontró el universo que quieres editar.");
+    throw new DomainError("No se encontró el universo que quieres editar.");
   }
   if (library.universes.some((universe) => universe.id !== universeId
     && universe.name.trim().toLocaleLowerCase("es") === cleanName.toLocaleLowerCase("es"))) {
-    throw new Error(`Ya existe un universo llamado "${cleanName}".`);
+    throw new DomainError(`Ya existe un universo llamado "${cleanName}".`);
   }
   return {
     ...library,
@@ -231,7 +232,7 @@ export function deleteSportsUniverse(
   universeId: string,
 ): SportsUniverseLibrary {
   if (!library.universes.some(({ id }) => id === universeId)) {
-    throw new Error("No se encontró el universo que quieres eliminar.");
+    throw new DomainError("No se encontró el universo que quieres eliminar.");
   }
   const assignments = Object.fromEntries(
     Object.entries(library.assignments).filter(([, assignedId]) => assignedId !== universeId),
@@ -282,7 +283,7 @@ export function validateSportsUniverseRelations(
       if (!referenced) continue;
       const referencedUniverse = validated.assignments[referencedId] ?? null;
       if (targetUniverse !== referencedUniverse) {
-        throw new Error(
+        throw new DomainError(
           `No se reorganizaron los torneos: "${tournament.name}" mantiene una relación con "${referenced.name}". Incorpora o retira juntas las temporadas relacionadas.`,
         );
       }
@@ -300,14 +301,14 @@ export function setTournamentUniverseAssignments(
 ): SportsUniverseLibrary {
   const ids = [...new Set(tournamentIds)];
   if (ids.length !== tournamentIds.length || ids.length === 0) {
-    throw new Error("Selecciona al menos un torneo sin repetirlo.");
+    throw new DomainError("Selecciona al menos un torneo sin repetirlo.");
   }
   if (universeId !== null && !library.universes.some(({ id }) => id === universeId)) {
-    throw new Error("No se encontró el universo seleccionado.");
+    throw new DomainError("No se encontró el universo seleccionado.");
   }
   const tournamentById = new Map(tournaments.map((tournament) => [tournament.id, tournament]));
   if (ids.some((id) => !tournamentById.has(id))) {
-    throw new Error("No se reorganizaron los torneos porque alguno ya no está en la biblioteca.");
+    throw new DomainError("No se reorganizaron los torneos porque alguno ya no está en la biblioteca.");
   }
 
   const assignments = { ...library.assignments };
@@ -331,12 +332,12 @@ export function mergeSportsUniverseLibraries(
   for (const universe of incoming.universes) {
     const existing = byId.get(universe.id);
     if (existing && JSON.stringify(existing) !== JSON.stringify(universe)) {
-      throw new Error(`El universo "${universe.name}" ya existe con otros metadatos.`);
+      throw new DomainError(`El universo "${universe.name}" ya existe con otros metadatos.`);
     }
     if (!existing) {
       if (universes.some(({ name }) => name.trim().toLocaleLowerCase("es")
         === universe.name.trim().toLocaleLowerCase("es"))) {
-        throw new Error(`Ya existe un universo llamado "${universe.name}".`);
+        throw new DomainError(`Ya existe un universo llamado "${universe.name}".`);
       }
       universes.push(universe);
       byId.set(universe.id, universe);
@@ -383,7 +384,7 @@ export function reattributeActivityToUniverses(
   if (changedTournamentIds.size === 0 && removedUniverseIds.size === 0) return [...events];
   if (events.some((event) => (event.action === "association-recorded" || event.action === "club-affiliation-recorded")
     && isRecord(event.after) && typeof event.after.universeId === "string" && removedUniverseIds.has(event.after.universeId))) {
-    throw new Error("No se eliminó el universo: conserva asociaciones o afiliaciones históricas. No se trasladan automáticamente a otra partida.");
+    throw new DomainError("No se eliminó el universo: conserva asociaciones o afiliaciones históricas. No se trasladan automáticamente a otra partida.");
   }
   return events.map((event) => {
     // Metadata retains its declared universe even when a tournament is moved.

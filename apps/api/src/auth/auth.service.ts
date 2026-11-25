@@ -136,7 +136,7 @@ export class AuthService {
       await this.users.insertOne(user);
     } catch (error) {
       if (error instanceof MongoServerError && error.code === duplicateKeyCode) {
-        throw new Error("Ya existe una cuenta con ese email.");
+        throw new DomainError("Ya existe una cuenta con ese email.");
       }
       throw error;
     }
@@ -298,3 +298,4 @@ export class AuthService {
     }));
   }
 }
+import { DomainError } from "@cancha/core/domain/domain-error";

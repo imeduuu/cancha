@@ -1,3 +1,4 @@
+import { DomainError } from "../domain-error.js";
 import type { Fixture, Matchday, Tournament } from "../entities/tournament";
 import { calculateStandings } from "./standings";
 import { isValidFixtureResult } from "./match-result-validation";
@@ -53,11 +54,11 @@ function findFixtureForPair(
 
 function getWinner(fixture: Fixture): string {
   if (!fixture.result) {
-    throw new Error(`El partido ${fixture.id} aún no tiene resultado.`);
+    throw new DomainError(`El partido ${fixture.id} aún no tiene resultado.`);
   }
   const winner = getCompletedFixtureWinner(fixture);
   if (!winner) {
-    throw new Error(`El partido ${fixture.id} está empatado y no tiene una definición válida.`);
+    throw new DomainError(`El partido ${fixture.id} está empatado y no tiene una definición válida.`);
   }
   return winner;
 }
@@ -214,7 +215,7 @@ function getCompletedWinners(
   return pairs.map((pair) => {
     const fixture = findFixtureForPair(fixtures, pair);
     if (!fixture) {
-      throw new Error("Los partidos del cuadro del Clausura no coinciden con sus cruces.");
+      throw new DomainError("Los partidos del cuadro del Clausura no coinciden con sus cruces.");
     }
     return getWinner(fixture);
   });

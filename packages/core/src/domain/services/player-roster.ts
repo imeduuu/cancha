@@ -1,3 +1,4 @@
+import { DomainError } from "../domain-error.js";
 import type {
   Player,
   PlayerRegistration,
@@ -93,16 +94,16 @@ export function saveTournamentPlayer(
   const players = [...(tournament.players ?? [])];
   const existingIndex = players.findIndex(({ id }) => id === player.id);
   if (input.id !== undefined && existingIndex < 0) {
-    throw new Error("No se encontró el jugador que quieres editar.");
+    throw new DomainError("No se encontró el jugador que quieres editar.");
   }
   if (input.id === undefined && existingIndex >= 0) {
-    throw new Error("Ya existe un jugador con ese identificador.");
+    throw new DomainError("Ya existe un jugador con ese identificador.");
   }
   if (existingIndex >= 0) players[existingIndex] = player;
   else players.push(player);
   const updated = { ...tournament, players };
   const error = validateTournamentPlayerData(updated);
-  if (error) throw new Error(error);
+  if (error) throw new DomainError(error);
   return updated;
 }
 
@@ -113,14 +114,14 @@ export function registerTournamentPlayer(
   shirtNumber?: number,
 ): Tournament {
   if (!(tournament.players ?? []).some(({ id }) => id === playerId)) {
-    throw new Error("No se puede agregar un jugador que no está registrado en esta temporada.");
+    throw new DomainError("No se puede agregar un jugador que no está registrado en esta temporada.");
   }
   if (!tournament.teams.some(({ id }) => id === teamId)) {
-    throw new Error("No se puede asociar el jugador a un equipo inexistente.");
+    throw new DomainError("No se puede asociar el jugador a un equipo inexistente.");
   }
   if (shirtNumber !== undefined
     && (!Number.isSafeInteger(shirtNumber) || shirtNumber < 1 || shirtNumber > 99)) {
-    throw new Error("El número de camiseta debe ser un entero entre 1 y 99.");
+    throw new DomainError("El número de camiseta debe ser un entero entre 1 y 99.");
   }
   const registrations = [...(tournament.playerRegistrations ?? [])];
   const index = registrations.findIndex(({ playerId: id, teamId: existingTeamId }) =>
@@ -128,7 +129,7 @@ export function registerTournamentPlayer(
   const activeRegistration = registrations.find(({ playerId: id, status }) =>
     id === playerId && status !== "released");
   if (activeRegistration && activeRegistration.teamId !== teamId) {
-    throw new Error("El jugador ya tiene una pertenencia en esta temporada; usa la acción explícita de transferencia.");
+    throw new DomainError("El jugador ya tiene una pertenencia en esta temporada; usa la acción explícita de transferencia.");
   }
   const registration: PlayerRegistration = {
     playerId,
@@ -140,7 +141,7 @@ export function registerTournamentPlayer(
   else registrations.push(registration);
   const updated = { ...tournament, playerRegistrations: registrations };
   const error = validateTournamentPlayerData(updated);
-  if (error) throw new Error(error);
+  if (error) throw new DomainError(error);
   return updated;
 }
 
@@ -155,7 +156,7 @@ export function transferTournamentPlayer(
       registeredId === playerId && status !== "released");
   if (!current) return registerTournamentPlayer(tournament, playerId, teamId, shirtNumber);
   if (!tournament.teams.some(({ id }) => id === teamId)) {
-    throw new Error("No se puede asociar el jugador a un equipo inexistente.");
+    throw new DomainError("No se puede asociar el jugador a un equipo inexistente.");
   }
   if (current.teamId === teamId) {
     return registerTournamentPlayer(tournament, playerId, teamId, shirtNumber);
@@ -176,7 +177,7 @@ export function transferTournamentPlayer(
   else registrations.push(destination);
   const updated = { ...tournament, playerRegistrations: registrations };
   const error = validateTournamentPlayerData(updated);
-  if (error) throw new Error(error);
+  if (error) throw new DomainError(error);
   return updated;
 }
 
@@ -187,7 +188,7 @@ export function releaseTournamentPlayer(
   const registrations = [...(tournament.playerRegistrations ?? [])];
   const index = registrations.findIndex(({ playerId: id, status }) =>
     id === playerId && status !== "released");
-  if (index < 0) throw new Error("El jugador no pertenece a la plantilla de esta temporada.");
+  if (index < 0) throw new DomainError("El jugador no pertenece a la plantilla de esta temporada.");
   registrations[index] = { ...registrations[index], status: "released" };
   return { ...tournament, playerRegistrations: registrations };
 }
@@ -197,11 +198,11 @@ export function copyTournamentSquad(
   target: Tournament,
 ): Tournament {
   if (target.players?.length || target.playerRegistrations?.length) {
-    throw new Error("La plantilla de destino ya tiene datos; no se sobrescribió.");
+    throw new DomainError("La plantilla de destino ya tiene datos; no se sobrescribió.");
   }
   const targetTeams = new Set(target.teams.map(({ id }) => id));
   if ((source.playerRegistrations ?? []).some(({ teamId }) => !targetTeams.has(teamId))) {
-    throw new Error("Los equipos no coinciden entre temporadas; no se copió la plantilla.");
+    throw new DomainError("Los equipos no coinciden entre temporadas; no se copió la plantilla.");
   }
   const copied: Tournament = {
     ...target,
@@ -211,7 +212,7 @@ export function copyTournamentSquad(
       : {}),
   };
   const error = validateTournamentPlayerData(copied);
-  if (error) throw new Error(error);
+  if (error) throw new DomainError(error);
   return copied;
 }
 

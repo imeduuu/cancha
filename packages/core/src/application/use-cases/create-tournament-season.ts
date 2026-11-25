@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import {projectNationalCup,type NationalCupSelection} from "../services/national-cup-planning";
 import type {NationalCupReview} from "../../domain/entities/national-cup-planning";
 import type { Tournament } from "../../domain/entities/tournament";
@@ -19,24 +20,24 @@ export function createTournamentSeason(
   nationalCup?: NationalCupSelection,
 ): Tournament {
   const cup = nationalCup ? projectNationalCup(source,season,nationalCup,repository.findAll(),repository.findActivity?.() ?? []) : undefined;
-  if (cup && (!planningOnly || !cup.canPrepare || !cup.regulation)) throw new Error(cup.blockers.join(" ") || "Revisa la planificación documental de copa.");
-  if (cup && JSON.stringify(repository.findAll().find(t=>t.id===source.id))!==JSON.stringify(source)) throw new Error("La copa cambió; revisa sus dependencias.");
+  if (cup && (!planningOnly || !cup.canPrepare || !cup.regulation)) throw new DomainError(cup.blockers.join(" ") || "Revisa la planificación documental de copa.");
+  if (cup && JSON.stringify(repository.findAll().find(t=>t.id===source.id))!==JSON.stringify(source)) throw new DomainError("La copa cambió; revisa sus dependencias.");
   if (!cup && !canStartNewSeason(source)) {
-    throw new Error(
+    throw new DomainError(
       "Esta competición usa fases, grupos o un formato que requiere revisar la configuración antes de iniciar otra temporada.",
     );
   }
   if (!Number.isSafeInteger(season) || season < 1) {
-    throw new Error("Ingresa un año de temporada entero y válido.");
+    throw new DomainError("Ingresa un año de temporada entero y válido.");
   }
   if (!cup && season === source.season) {
-    throw new Error("La nueva temporada debe ser distinta de la temporada de origen.");
+    throw new DomainError("La nueva temporada debe ser distinta de la temporada de origen.");
   }
 
   const existingTournaments = repository.findAll();
   if (!cup && existingTournaments.some((tournament) =>
     tournament.competitionId === source.competitionId && tournament.season === season)) {
-    throw new Error(`Ya existe una temporada ${season} guardada para esta competición.`);
+    throw new DomainError(`Ya existe una temporada ${season} guardada para esta competición.`);
   }
   const existingIds = new Set(existingTournaments.map(({ id }) => id));
   const id = createUniqueId(createId, existingIds);
@@ -101,7 +102,7 @@ export function createTournamentSeason(
   const next = includeSquad && !cup ? copyTournamentSquad(source, prepared) : prepared;
   const issues = validateTournamentIntegrity(next);
   if (issues.length > 0) {
-    throw new Error(`No se pudo crear la temporada ${season}: ${issues[0]}`);
+    throw new DomainError(`No se pudo crear la temporada ${season}: ${issues[0]}`);
   }
   saveWithActivity(repository, next, createActivityEvent(next, {
     action: cup?.target ? "regulations-updated" : "season-created",
@@ -121,5 +122,5 @@ function createUniqueId(createId: () => string, usedIds: Set<string>): string {
       return id;
     }
   }
-  throw new Error("No se pudo generar un identificador único para la nueva temporada.");
+  throw new DomainError("No se pudo generar un identificador único para la nueva temporada.");
 }

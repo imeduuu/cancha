@@ -1,3 +1,4 @@
+import { DomainError } from "../domain-error.js";
 import type { Fixture, Matchday } from "../entities/tournament";
 import type { Team } from "../entities/team";
 import { MAX_TOURNAMENT_LEGS } from "../value-objects/tournament-limits";
@@ -7,24 +8,24 @@ export function generateRoundRobinSchedule(
   legs: number,
 ): Matchday[] {
   if (teams.length < 2) {
-    throw new Error("El campeonato necesita al menos 2 equipos.");
+    throw new DomainError("El campeonato necesita al menos 2 equipos.");
   }
 
   if (!Number.isSafeInteger(legs) || legs < 1 || legs > MAX_TOURNAMENT_LEGS) {
-    throw new Error(`El número de ruedas debe ser un entero entre 1 y ${MAX_TOURNAMENT_LEGS}.`);
+    throw new DomainError(`El número de ruedas debe ser un entero entre 1 y ${MAX_TOURNAMENT_LEGS}.`);
   }
 
   if (teams.some((team) => !team.id.trim() || !team.name.trim())) {
-    throw new Error("Cada equipo debe tener un identificador y un nombre.");
+    throw new DomainError("Cada equipo debe tener un identificador y un nombre.");
   }
 
   if (new Set(teams.map((team) => team.id)).size !== teams.length) {
-    throw new Error("Los identificadores de los equipos deben ser únicos.");
+    throw new DomainError("Los identificadores de los equipos deben ser únicos.");
   }
 
   const normalizedNames = teams.map((team) => team.name.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("es"));
   if (new Set(normalizedNames).size !== teams.length) {
-    throw new Error("Los nombres de los equipos deben ser únicos.");
+    throw new DomainError("Los nombres de los equipos deben ser únicos.");
   }
 
   const rotation: Array<Team | null> = [...teams];
@@ -65,7 +66,7 @@ export function generateRoundRobinSchedule(
 
       const last = rotation.pop();
       if (last === undefined) {
-        throw new Error("No se pudo generar la rotación del calendario.");
+        throw new DomainError("No se pudo generar la rotación del calendario.");
       }
       rotation.splice(1, 0, last);
     }

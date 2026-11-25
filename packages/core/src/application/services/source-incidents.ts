@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import { canonicalSourceValue, isSourceIncident, isSourceCorrection,
   type SourceIncident, type SourceCorrection, type SourceMatchSnapshot } from "../../domain/entities/source-incident";
 import { normalizeTeamName } from "../../domain/services/team-name";
@@ -12,13 +13,13 @@ export function listSourceIncidents(repository: TournamentRepository): SourceInc
     const old = latest.get(event.after.id);
     if (!old || old.revision < event.after.revision) latest.set(event.after.id, event.after);
     else if (old.revision === event.after.revision && canonicalSourceValue(old) !== canonicalSourceValue(event.after)) {
-      throw new Error("El historial contiene revisiones contradictorias de una incidencia.");
+      throw new DomainError("El historial contiene revisiones contradictorias de una incidencia.");
     }
   }
   return [...latest.values()];
 }
 function append(repository: TournamentRepository, incident: SourceIncident): SourceIncident {
-  if (!isSourceIncident(incident)) throw new Error("La incidencia o su documentación no es válida.");
+  if (!isSourceIncident(incident)) throw new DomainError("La incidencia o su documentación no es válida.");
   recordActivity(repository, createActivityEvent({ id: incident.competitionId,
     name: incident.competitionName, season: incident.season }, {
     action: "source-incident-reviewed", entityId: incident.id, entityType: "tournament",
@@ -63,19 +64,19 @@ export function recordSourceRejection(repository: TournamentRepository, season: 
 export function reviewSourceIncident(repository: TournamentRepository, id: string, revision: number,
   corrections: readonly SourceCorrection[], verified: boolean, confirmed: boolean, note: string): SourceIncident {
   const old = listSourceIncidents(repository).find(item => item.id === id);
-  if (!old || old.revision !== revision) throw new Error("La incidencia cambió. Revisa la versión actual.");
+  if (!old || old.revision !== revision) throw new DomainError("La incidencia cambió. Revisa la versión actual.");
   if (!confirmed || !note.trim() || !corrections.length || !corrections.every(isSourceCorrection)) {
-    throw new Error("Se requiere confirmación explícita, motivo y documentación HTTPS para cada corrección.");
+    throw new DomainError("Se requiere confirmación explícita, motivo y documentación HTTPS para cada corrección.");
   }
   if (old.status === "stale" || old.status === "provider-corrected") {
-    throw new Error("La fuente cambió: vuelve a consultar e importa su registro actual antes de corregirlo.");
+    throw new DomainError("La fuente cambió: vuelve a consultar e importa su registro actual antes de corregirlo.");
   }
   return append(repository, { ...old, revision: old.revision + 1, corrections: structuredClone(corrections),
     status: verified ? "verified" : "provisional", origin: "manual", reviewNote: note.trim() });
 }
 export function revokeSourceIncident(repository: TournamentRepository, id: string, revision: number, note: string): void {
   const old = listSourceIncidents(repository).find(item => item.id === id);
-  if (!old || old.revision !== revision || !note.trim()) throw new Error("Revisa la incidencia e indica el motivo de revocación.");
+  if (!old || old.revision !== revision || !note.trim()) throw new DomainError("Revisa la incidencia e indica el motivo de revocación.");
   append(repository, { ...old, revision: old.revision + 1, status: "revoked", origin: "manual", reviewNote: note.trim() });
 }
 function corrected(match: OfficialMatch, correction: SourceCorrection): OfficialMatch {
@@ -110,7 +111,7 @@ export function applySourceCorrections(repository: TournamentRepository, origina
     for (const c of incident.corrections) {
       const prior = applicable.find(p => p.original.matchId === c.original.matchId);
       if (prior && canonicalSourceValue(prior.replacement) !== canonicalSourceValue(c.replacement)) {
-        throw new Error("Hay correcciones verificadas contradictorias para el mismo encuentro. Revoca una antes de importar.");
+        throw new DomainError("Hay correcciones verificadas contradictorias para el mismo encuentro. Revoca una antes de importar.");
       }
       if (!prior) applicable.push(c);
     }

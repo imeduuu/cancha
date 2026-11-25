@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { Matchday, Tournament } from "../../domain/entities/tournament";
 import { advanceArgentinaPlayoffs } from "../../domain/services/argentina-clausura-playoffs";
 import type { TournamentRepository } from "../ports/tournament-repository";
@@ -38,7 +39,7 @@ export function simulateArgentinaHalf(
   random: () => number = Math.random,
 ): SimulateArgentinaHalfResult {
   if (tournament.id !== "arg-liga-profesional-2026") {
-    throw new Error("La simulación por Apertura y Clausura solo está disponible para Argentina.");
+    throw new DomainError("La simulación por Apertura y Clausura solo está disponible para Argentina.");
   }
 
   const halfMatchdays = getHalfMatchdays(tournament, half);
@@ -46,7 +47,7 @@ export function simulateArgentinaHalf(
     matchday.phaseName?.endsWith("Fase regular"),
   );
   if (leagueMatchdays.length === 0) {
-    throw new Error(`No se encontró la fase de liga del Torneo ${half}.`);
+    throw new DomainError(`No se encontró la fase de liga del Torneo ${half}.`);
   }
 
   const leagueFixtureIds = leagueMatchdays.flatMap((matchday) =>

@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { TournamentLibraryRepository } from "../ports/tournament-repository";
 import { recordRejectedImport } from "../services/activity-log";
 import type { LibraryRestoreMode, LibraryRestoreResult } from "../services/library-restore";
@@ -16,10 +17,10 @@ export function restoreTournamentBackup(
   mode: LibraryRestoreMode,
   repository: TournamentLibraryRepository,
 ): LibraryRestoreResult {
-  if (mode !== "merge" && mode !== "replace") throw new Error("Elige si el respaldo se agrega o reemplaza la biblioteca.");
+  if (mode !== "merge" && mode !== "replace") throw new DomainError("Elige si el respaldo se agrega o reemplaza la biblioteca.");
   const backup = parseTournamentBackupWithActivity(text);
   if (!repository.importTournaments) {
-    throw new Error("No se restauró el respaldo: este almacenamiento no permite restaurar respaldos.");
+    throw new DomainError("No se restauró el respaldo: este almacenamiento no permite restaurar respaldos.");
   }
   try {
     return repository.importTournaments(backup.tournaments, mode, backup.activity, false, backup.universes);

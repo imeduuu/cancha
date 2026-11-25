@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { LibraryWriteLease } from "../ports/library-write-lease";
 import type { SaveCheckpoint, CheckpointStatus } from "../../domain/entities/save-checkpoint";
 import type { SaveCheckpointStore } from "../ports/save-checkpoint-store";
@@ -37,12 +38,12 @@ export interface CheckpointRestoreReview {
   readonly libraryToken: string;
   readonly comparison: CheckpointComparison;
 }
-export class CheckpointValidationError extends Error {
+export class CheckpointValidationError extends DomainError {
   constructor(message: string, readonly status: CheckpointStatus = "Inválido", readonly record?: unknown) { super(message); }
 }
 
 export async function checkpointDigest(content: string): Promise<string> {
-  if (!globalThis.crypto?.subtle) throw new Error("Web Crypto no está disponible: no se puede verificar la huella del punto. Usa el respaldo JSON.");
+  if (!globalThis.crypto?.subtle) throw new DomainError("Web Crypto no está disponible: no se puede verificar la huella del punto. Usa el respaldo JSON.");
   const bytes = new TextEncoder().encode(content);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
@@ -209,26 +210,26 @@ export class SaveCheckpoints {
     const normalizedName = text(name, "Nombre", 120, true), normalizedDescription = text(description, "Descripción", 1000);
     const captured = this.capture(createdAt);
     const digest = await this.digest(captured.content);
-    if (this.capture(createdAt).token !== captured.token) throw new Error("La biblioteca cambió durante la revisión. Revisa nuevamente el punto.");
+    if (this.capture(createdAt).token !== captured.token) throw new DomainError("La biblioteca cambió durante la revisión. Revisa nuevamente el punto.");
     const checkpoint = checkpointRecord({library: captured.state, content: captured.content, digest, id: this.createId(),
       name: normalizedName, description: normalizedDescription, createdAt});
     const review = {checkpoint, libraryToken: captured.token};
     this.creations.set(review, JSON.stringify(review));return review;
   }
   async confirmCreation(review: CheckpointCreationReview, confirmed: boolean): Promise<SaveCheckpoint> {
-    if (!confirmed) throw new Error("Se requiere confirmar la creación del punto.");
-    if (this.pending.has(review)) throw new Error("La creación de este punto ya está en curso.");
+    if (!confirmed) throw new DomainError("Se requiere confirmar la creación del punto.");
+    if (this.pending.has(review)) throw new DomainError("La creación de este punto ya está en curso.");
     this.pending.add(review);
     try {
       return await this.store.exclusive(async () => {
         if (this.creations.get(review) !== JSON.stringify(review) || this.capture(review.checkpoint.createdAt).token !== review.libraryToken)
-          throw new Error("La revisión del punto está obsoleta. La biblioteca o sus universos cambiaron; revisa nuevamente.");
+          throw new DomainError("La revisión del punto está obsoleta. La biblioteca o sus universos cambiaron; revisa nuevamente.");
         await this.verifyRecord(review.checkpoint);
-        if (this.capture(review.checkpoint.createdAt).token !== review.libraryToken) throw new Error("La biblioteca cambió. Revisa nuevamente antes de guardar.");
+        if (this.capture(review.checkpoint.createdAt).token !== review.libraryToken) throw new DomainError("La biblioteca cambió. Revisa nuevamente antes de guardar.");
         await this.store.add(review.checkpoint);
         this.creations.delete(review);
         const retrieved = await this.verify(review.checkpoint.id);
-        if (JSON.stringify(retrieved) !== JSON.stringify(review.checkpoint)) throw new Error("El registro recuperado no coincide con el punto creado. No se confirmó su protección.");
+        if (JSON.stringify(retrieved) !== JSON.stringify(review.checkpoint)) throw new DomainError("El registro recuperado no coincide con el punto creado. No se confirmó su protección.");
         return retrieved;
       });
     } finally { this.pending.delete(review); }
@@ -240,20 +241,20 @@ export class SaveCheckpoints {
   async edit(id: string, expected: unknown, name: string, description: string): Promise<SaveCheckpoint> {
     return this.store.exclusive(async () => {
       const current = await this.verify(id);
-      if (JSON.stringify(current) !== JSON.stringify(expected)) throw new Error("El punto cambió. Actualiza la lista antes de editar.");
+      if (JSON.stringify(current) !== JSON.stringify(expected)) throw new DomainError("El punto cambió. Actualiza la lista antes de editar.");
       const next: SaveCheckpoint = {...current, name: text(name, "Nombre", 120, true), description: text(description, "Descripción", 1000),
         updatedAt: this.now().toISOString(), revision: current.revision + 1};
       await this.store.replace(id, current, next);
       const retrieved = await this.verify(id);
-      if (JSON.stringify(retrieved) !== JSON.stringify(next)) throw new Error("No se pudo verificar la edición del punto.");
+      if (JSON.stringify(retrieved) !== JSON.stringify(next)) throw new DomainError("No se pudo verificar la edición del punto.");
       return retrieved;
     });
   }
   async delete(id: string, expected: unknown, confirmed: boolean): Promise<void> {
-    if (!confirmed) throw new Error("Se requiere confirmar la eliminación del punto.");
+    if (!confirmed) throw new DomainError("Se requiere confirmar la eliminación del punto.");
     await this.store.exclusive(async () => {
       await this.store.delete(id, expected);
-      if (await this.store.get(id) !== undefined) throw new Error("No se pudo confirmar la eliminación del punto.");
+      if (await this.store.get(id) !== undefined) throw new DomainError("No se pudo confirmar la eliminación del punto.");
     });
   }
   async reviewRestoration(id: string): Promise<CheckpointRestoreReview> {
@@ -264,20 +265,20 @@ export class SaveCheckpoints {
     this.restores.set(review, JSON.stringify(review));return review;
   }
   async confirmRestoration(review: CheckpointRestoreReview, confirmed: boolean): Promise<{added: number; skipped: number}> {
-    if (!confirmed) throw new Error("Se requiere confirmación explícita para reemplazar la biblioteca.");
-    if (this.pending.has(review)) throw new Error("La restauración ya está en curso.");
+    if (!confirmed) throw new DomainError("Se requiere confirmación explícita para reemplazar la biblioteca.");
+    if (this.pending.has(review)) throw new DomainError("La restauración ya está en curso.");
     this.pending.add(review);
     try {
       return await this.store.exclusive(async lease => {
-        if (this.restores.get(review) !== JSON.stringify(review)) throw new Error("La revisión de restauración está obsoleta o ya fue utilizada.");
+        if (this.restores.get(review) !== JSON.stringify(review)) throw new DomainError("La revisión de restauración está obsoleta o ya fue utilizada.");
         const current = await this.verify(review.checkpoint.id);
-        if (JSON.stringify(current) !== JSON.stringify(review.checkpoint)) throw new Error("El punto cambió o fue eliminado. Revisa nuevamente la restauración.");
+        if (JSON.stringify(current) !== JSON.stringify(review.checkpoint)) throw new DomainError("El punto cambió o fue eliminado. Revisa nuevamente la restauración.");
         const parsed = parseTournamentBackupWithActivity(current.content);
         if (this.capture(this.now().toISOString()).token !== review.libraryToken)
-          throw new Error("La biblioteca o el universo activo cambiaron. Revisa nuevamente la restauración.");
+          throw new DomainError("La biblioteca o el universo activo cambiaron. Revisa nuevamente la restauración.");
         const result = this.restoreLibrary(parsed, lease);
         if (!result || result.added !== parsed.tournaments.length || result.skipped !== 0)
-          throw new Error("El repositorio no confirmó la restauración completa.");
+          throw new DomainError("El repositorio no confirmó la restauración completa.");
         this.restores.delete(review);return result;
       }, true);
     } finally { this.pending.delete(review); }

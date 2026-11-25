@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { Tournament, RulesVerificationStatus } from "../../domain/entities/tournament";
 import type { OfficialProgramme, OfficialReference, OfficialResolutionContext } from "../../domain/entities/official-resolution";
 import type { TournamentRepository } from "../ports/tournament-repository";
@@ -20,15 +21,15 @@ export function recordOfficialResolution(tournament: Tournament, input: RecordOf
   repository: TournamentRepository, now: () => Date = () => new Date(), createId: () => string = () => crypto.randomUUID(),
   options: {readonly advanceProgression?: boolean} = {}): Tournament {
   const stored = repository.findAll().find(item => item.id === tournament.id);
-  if (!stored || JSON.stringify(stored) !== JSON.stringify(tournament)) throw new Error("El torneo cambió; vuelve a consultar los desempates antes de guardar.");
+  if (!stored || JSON.stringify(stored) !== JSON.stringify(tournament)) throw new DomainError("El torneo cambió; vuelve a consultar los desempates antes de guardar.");
   const context = getOfficialResolutionContexts(tournament).find(context => context.scope === input.context.scope
     && context.key === input.context.key && context.dependencySnapshot === input.context.dependencySnapshot
     && sameParticipants(context.participantIds, input.context.participantIds));
-  if (!context) throw new Error("El desempate ya no corresponde a los participantes o criterios actuales.");
+  if (!context) throw new DomainError("El desempate ya no corresponde a los participantes o criterios actuales.");
   if (input.verification === "verified" && !input.verifiedByUser)
-    throw new Error("Confirma que contrastaste los datos con la fuente oficial antes de verificarlos.");
+    throw new DomainError("Confirma que contrastaste los datos con la fuente oficial antes de verificarlos.");
   const id = createId();
-  if (!id.trim() || tournament.officialResolutions?.some(record => record.id === id)) throw new Error("El identificador de resolución no es único.");
+  if (!id.trim() || tournament.officialResolutions?.some(record => record.id === id)) throw new DomainError("El identificador de resolución no es único.");
   const resolution = {
     schemaVersion: 1 as const, id, scope: context.scope, key: context.key, participantIds: [...context.participantIds],
     participantNames: context.participantIds.map(teamId => ({ teamId, name: tournament.teams.find(team => team.id === teamId)!.name })),
@@ -36,17 +37,17 @@ export function recordOfficialResolution(tournament: Tournament, input: RecordOf
     ...(input.orderedTeamIds ? { orderedTeamIds: [...input.orderedTeamIds] } : {}),
     ...(input.programme ? { programme: JSON.parse(JSON.stringify(input.programme)) as OfficialProgramme } : {}),
   };
-  if (!isOfficialResolution(resolution)) throw new Error("Revisa los participantes, el orden, la fuente oficial y los partidos del desempate.");
+  if (!isOfficialResolution(resolution)) throw new DomainError("Revisa los participantes, el orden, la fuente oficial y los partidos del desempate.");
   if (resolution.programme) {
     const issue = programmeConclusionIssue(tournament, context, resolution.programme);
-    if (issue) throw new Error(issue);
+    if (issue) throw new DomainError(issue);
   }
   const previous = currentResolution(tournament, context);
   const records = (tournament.officialResolutions ?? []).map(record => record.id === previous?.id ? { ...record, supersededBy: id } : record);
   const registered = { ...tournament, officialResolutions: [...records, resolution] };
   const next = options.advanceProgression === false ? registered : advanceSecondDivision(registered);
   const issues = validateTournamentIntegrity(next);
-  if (issues.length) throw new Error(issues[0]);
+  if (issues.length) throw new DomainError(issues[0]);
   saveWithActivity(repository, next, createActivityEvent(tournament, {
     action: "official-resolution-recorded", entityType: "tournament", entityId: id,
     summary: `Se registró ${context.title} (${input.verification === "verified" ? "verificado por el usuario" : input.verification === "provisional" ? "provisional" : "pendiente"}).`,
@@ -57,10 +58,10 @@ export function recordOfficialResolution(tournament: Tournament, input: RecordOf
 export function revokeOfficialResolution(tournament: Tournament, resolutionId: string, reason: string,
   repository: TournamentRepository, now: () => Date = () => new Date()): Tournament {
   const stored = repository.findAll().find(item => item.id === tournament.id);
-  if (!stored || JSON.stringify(stored) !== JSON.stringify(tournament)) throw new Error("El torneo cambió; vuelve a consultar sus resoluciones.");
+  if (!stored || JSON.stringify(stored) !== JSON.stringify(tournament)) throw new DomainError("El torneo cambió; vuelve a consultar sus resoluciones.");
   const record = tournament.officialResolutions?.find(item => item.id === resolutionId);
-  if (!record || record.invalidation || record.supersededBy) throw new Error("Selecciona una resolución vigente.");
-  if (!reason.trim()) throw new Error("Indica por qué se revoca la resolución.");
+  if (!record || record.invalidation || record.supersededBy) throw new DomainError("Selecciona una resolución vigente.");
+  if (!reason.trim()) throw new DomainError("Indica por qué se revoca la resolución.");
   const next = advanceSecondDivision({ ...tournament, officialResolutions: tournament.officialResolutions!.map(item =>
     item.id === resolutionId ? { ...item, invalidation: { at: now().toISOString(), reason: reason.trim() } } : item) });
   saveWithActivity(repository, next, createActivityEvent(tournament, { action: "official-resolution-revoked", entityType: "tournament",

@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import {projectTournamentAffiliations} from "./club-associations";
 import type {Tournament,Matchday} from "../../domain/entities/tournament";
 import type {ActivityEvent} from "../../domain/entities/activity-event";
@@ -26,10 +27,10 @@ export function existingStageProposal(t:Tournament,tournaments:readonly Tourname
   const adapter={findAll:()=>[...staged.values()],save:(s:Tournament)=>{staged.set(s.id,s);}};
   const advanced=advanceTournamentProgress(t,adapter);
   const fixtures=new Map(advanced.matchdays.flatMap(d=>d.fixtures).map(f=>[f.id,f]));
-  if(t.matchdays.flatMap(d=>d.fixtures).some(f=>canonical(fixtures.get(f.id))!==canonical(f)))throw new Error("La progresión alteraría encuentros existentes. Revisa sus dependencias en el flujo deportivo antes de preparar esta fase.");
-  if(canonical(advanced.teams)!==canonical(t.teams))throw new Error("La progresión requiere incorporar participantes. Continúa en el flujo deportivo existente antes de preparar este cruce.");
+  if(t.matchdays.flatMap(d=>d.fixtures).some(f=>canonical(fixtures.get(f.id))!==canonical(f)))throw new DomainError("La progresión alteraría encuentros existentes. Revisa sus dependencias en el flujo deportivo antes de preparar esta fase.");
+  if(canonical(advanced.teams)!==canonical(t.teams))throw new DomainError("La progresión requiere incorporar participantes. Continúa en el flujo deportivo existente antes de preparar este cruce.");
   const proposed=stageDays(advanced,stage);
-  if(!proposed.some(d=>d.fixtures.length))throw new Error("El servicio existente no acredita emparejamientos para esta fase; no se inventa un sorteo ni un orden de clasificación.");
+  if(!proposed.some(d=>d.fixtures.length))throw new DomainError("El servicio existente no acredita emparejamientos para esta fase; no se inventa un sorteo ni un orden de clasificación.");
   return proposed;
 }
 export function inspectDrawPreparation(t:Tournament,tournaments:readonly Tournament[],activity:readonly ActivityEvent[],universeId:string|null) {

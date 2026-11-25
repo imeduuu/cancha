@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type {
   KnockoutResolution,
   Tournament,
@@ -22,13 +23,13 @@ export function updateMatchResult(
     .flatMap((matchday) => matchday.fixtures)
     .find((fixture) => fixture.id === fixtureId);
   if (!targetFixture) {
-    throw new Error("No se encontró el partido que quieres actualizar.");
+    throw new DomainError("No se encontró el partido que quieres actualizar.");
   }
   const fixtureResolution = knockoutResolution === undefined
     ? targetFixture.knockoutResolution
     : knockoutResolution ?? undefined;
   if (secondDivisionKind(tournament) && fixtureResolution !== targetFixture.knockoutResolution)
-    throw new Error("La regla de desempate de esta competición está fijada por su reglamento 2026.");
+    throw new DomainError("La regla de desempate de esta competición está fijada por su reglamento 2026.");
   const previousValue = {
     result: targetFixture.result ?? null,
     knockoutResolution: targetFixture.knockoutResolution ?? null,
@@ -45,10 +46,10 @@ export function updateMatchResult(
     ? getAggregateScoreBeforeFixture(tournament.matchdays, targetMatchday, targetFixture)
     : undefined;
   if (fixtureResolution === "aggregate-then-penalties" && !aggregateScore) {
-    throw new Error("Guarda primero el resultado de ida para validar el global de la vuelta.");
+    throw new DomainError("Guarda primero el resultado de ida para validar el global de la vuelta.");
   }
   if (!isValidKnockoutResult(result, fixtureResolution, aggregateScore)) {
-    throw new Error("Cada resultado debe ser un entero entre 0 y 99.");
+    throw new DomainError("Cada resultado debe ser un entero entre 0 y 99.");
   }
 
   let found = false;
@@ -71,7 +72,7 @@ export function updateMatchResult(
   }));
 
   if (!found) {
-    throw new Error("No se encontró el partido que quieres actualizar.");
+    throw new DomainError("No se encontró el partido que quieres actualizar.");
   }
 
   const updatedTournament = advanceTournamentProgress({ ...tournament, matchdays });

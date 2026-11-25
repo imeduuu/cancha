@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import { isActivityEvent, type ActivityEvent } from "../../domain/entities/activity-event";
 import type { Tournament } from "../../domain/entities/tournament";
 import { getTournamentStorageIssue } from "../validation/tournament-storage";
@@ -23,17 +24,17 @@ export function validateLibraryRestore(
   const incomingIds = new Set<string>();
   for (const tournament of tournaments) {
     if (!isTournament(tournament)) {
-      throw new Error("No se importó el respaldo: la estructura de uno de los torneos no es válida.");
+      throw new DomainError("No se importó el respaldo: la estructura de uno de los torneos no es válida.");
     }
     const issue = getTournamentStorageIssue(tournament);
-    if (issue) throw new Error(`No se importó "${tournament.name || tournament.id}": ${issue}`);
+    if (issue) throw new DomainError(`No se importó "${tournament.name || tournament.id}": ${issue}`);
     if (incomingIds.has(tournament.id)) {
-      throw new Error(`No se importó el respaldo: el identificador "${tournament.id}" está duplicado.`);
+      throw new DomainError(`No se importó el respaldo: el identificador "${tournament.id}" está duplicado.`);
     }
     incomingIds.add(tournament.id);
   }
   if (!activity.every(isActivityEvent)) {
-    throw new Error("No se importó el respaldo: el historial contiene eventos inválidos.");
+    throw new DomainError("No se importó el respaldo: el historial contiene eventos inválidos.");
   }
 }
 

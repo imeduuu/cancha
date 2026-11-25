@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import { mergeContinentalPlanHistory } from "../../domain/services/continental-plan";
 import { applySourceCorrections, recordSourceRejection, listSourceIncidents } from "../services/source-incidents";
 import type {
@@ -34,24 +35,24 @@ export type ImportConflictResolution = "copy" | "update-preserving-results" | "r
 
 function validateOfficialSeason(season: OfficialLeagueSeason): void {
   if (!season || typeof season !== "object") {
-    throw new Error("La fuente oficial no devolvió una temporada válida.");
+    throw new DomainError("La fuente oficial no devolvió una temporada válida.");
   }
   if (typeof season.id !== "string" || typeof season.name !== "string") {
-    throw new Error("La fuente oficial no publicó el identificador y nombre del torneo.");
+    throw new DomainError("La fuente oficial no publicó el identificador y nombre del torneo.");
   }
-  if (!season.id.trim()) throw new Error("La fuente oficial no publicó un identificador de torneo.");
-  if (!season.name.trim()) throw new Error("La fuente oficial no publicó el nombre del torneo.");
+  if (!season.id.trim()) throw new DomainError("La fuente oficial no publicó un identificador de torneo.");
+  if (!season.name.trim()) throw new DomainError("La fuente oficial no publicó el nombre del torneo.");
   if (!Number.isSafeInteger(season.season) || season.season < 1) {
-    throw new Error("La fuente oficial publicó una temporada inválida.");
+    throw new DomainError("La fuente oficial publicó una temporada inválida.");
   }
   const idSeason = /-(19|20)\d{2}$/.exec(season.id)?.[0].slice(1);
   if (idSeason && Number(idSeason) !== season.season) {
-    throw new Error(
+    throw new DomainError(
       `La temporada del identificador (${idSeason}) no coincide con la temporada publicada (${season.season}).`,
     );
   }
   if (typeof season.sourceUrl !== "string" || !season.sourceUrl.trim()) {
-    throw new Error("La fuente oficial no publicó la dirección de origen.");
+    throw new DomainError("La fuente oficial no publicó la dirección de origen.");
   }
   if (
     season.coverage !== undefined
@@ -59,45 +60,45 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
     && season.coverage !== "partial"
     && season.coverage !== "unknown"
   ) {
-    throw new Error("La fuente oficial publicó un estado de cobertura inválido.");
+    throw new DomainError("La fuente oficial publicó un estado de cobertura inválido.");
   }
   if (season.teams !== undefined && !Array.isArray(season.teams)) {
-    throw new Error("La fuente oficial publicó una lista de equipos inválida.");
+    throw new DomainError("La fuente oficial publicó una lista de equipos inválida.");
   }
   if (!Array.isArray(season.matchdays) || season.matchdays.length === 0) {
-    throw new Error(`La temporada oficial "${season.name}" no contiene fechas para importar.`);
+    throw new DomainError(`La temporada oficial "${season.name}" no contiene fechas para importar.`);
   }
 
   const officialTeamNames = new Set<string>();
   const competitionNumbers = new Set<number>();
   for (const [index, team] of (season.teams ?? []).entries()) {
     if (!team || typeof team.name !== "string" || !team.name.trim()) {
-      throw new Error(`Equipo oficial ${index + 1}: el nombre no es válido.`);
+      throw new DomainError(`Equipo oficial ${index + 1}: el nombre no es válido.`);
     }
     const normalizedName = officialTeamKey(team.name, team.externalId);
     if (officialTeamNames.has(normalizedName)) {
-      throw new Error(`La fuente oficial repitió el equipo "${team.name}".`);
+      throw new DomainError(`La fuente oficial repitió el equipo "${team.name}".`);
     }
     officialTeamNames.add(normalizedName);
     if (team.competitionNumber !== undefined) {
       if (!Number.isSafeInteger(team.competitionNumber) || team.competitionNumber < 1) {
-        throw new Error(`Equipo oficial ${team.name}: la numeración de competición no es válida.`);
+        throw new DomainError(`Equipo oficial ${team.name}: la numeración de competición no es válida.`);
       }
       if (competitionNumbers.has(team.competitionNumber)) {
-        throw new Error(`La fuente oficial repitió la numeración ${team.competitionNumber}.`);
+        throw new DomainError(`La fuente oficial repitió la numeración ${team.competitionNumber}.`);
       }
       competitionNumbers.add(team.competitionNumber);
     }
     if (team.groupName !== undefined
       && (typeof team.groupName !== "string" || !team.groupName.trim())) {
-      throw new Error(`Equipo oficial ${team.name}: el grupo no es válido.`);
+      throw new DomainError(`Equipo oficial ${team.name}: el grupo no es válido.`);
     }
   }
   if (season.id === "anfp-copa-de-la-liga-2026") {
     if ((season.teams ?? []).length !== 16
       || competitionNumbers.size !== 16
       || [...competitionNumbers].some((number) => number > 16)) {
-      throw new Error(
+      throw new DomainError(
         "La Copa de la Liga 2026 debe conservar los números oficiales únicos del 1 al 16.",
       );
     }
@@ -107,63 +108,63 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
   const matchdayKeys = new Set<string>();
   for (const [matchdayIndex, matchday] of season.matchdays.entries()) {
     if (!matchday || !Array.isArray(matchday.matches)) {
-      throw new Error(`Fecha ${matchdayIndex + 1}: el formato publicado no es válido.`);
+      throw new DomainError(`Fecha ${matchdayIndex + 1}: el formato publicado no es válido.`);
     }
     const path = `Fecha ${matchday.number || matchdayIndex + 1}`;
     if (!Number.isSafeInteger(matchday.number) || matchday.number < 1) {
-      throw new Error(`${path}: la fuente oficial publicó un número de fecha inválido.`);
+      throw new DomainError(`${path}: la fuente oficial publicó un número de fecha inválido.`);
     }
     if (matchday.phaseName !== undefined && !matchday.phaseName.trim()) {
-      throw new Error(`${path}: la fuente oficial publicó un nombre de fase vacío.`);
+      throw new DomainError(`${path}: la fuente oficial publicó un nombre de fase vacío.`);
     }
     if (matchday.matches.length === 0) {
-      throw new Error(`${path}: la fuente oficial no publicó partidos.`);
+      throw new DomainError(`${path}: la fuente oficial no publicó partidos.`);
     }
     const matchdayKey = `${matchday.phaseName ?? ""}|${matchday.number}`;
     if (matchdayKeys.has(matchdayKey)) {
-      throw new Error(`${path}: la jornada/ronda está duplicada en la misma fase.`);
+      throw new DomainError(`${path}: la jornada/ronda está duplicada en la misma fase.`);
     }
     matchdayKeys.add(matchdayKey);
     const scheduledTeams = new Set<string>();
     const matchPairs = new Set<string>();
     for (const match of matchday.matches) {
       if (!match || typeof match.id !== "string" || !match.id.trim()) {
-        throw new Error(`${path}: la fuente oficial publicó un partido sin identificador.`);
+        throw new DomainError(`${path}: la fuente oficial publicó un partido sin identificador.`);
       }
       if (matchIds.has(match.id)) {
-        throw new Error(`${path}: la fuente oficial repitió el identificador del partido ${match.id}.`);
+        throw new DomainError(`${path}: la fuente oficial repitió el identificador del partido ${match.id}.`);
       }
       matchIds.add(match.id);
 
       if (typeof match.homeTeamName !== "string" || typeof match.awayTeamName !== "string") {
-        throw new Error(`El partido oficial ${match.id} no publicó ambos equipos.`);
+        throw new DomainError(`El partido oficial ${match.id} no publicó ambos equipos.`);
       }
       const homeName = officialTeamKey(match.homeTeamName, match.homeTeamExternalId);
       const awayName = officialTeamKey(match.awayTeamName, match.awayTeamExternalId);
-      if (!homeName) throw new Error(`El partido oficial ${match.id} no tiene equipo local.`);
-      if (!awayName) throw new Error(`El partido oficial ${match.id} no tiene equipo visitante.`);
+      if (!homeName) throw new DomainError(`El partido oficial ${match.id} no tiene equipo local.`);
+      if (!awayName) throw new DomainError(`El partido oficial ${match.id} no tiene equipo visitante.`);
       if (homeName === awayName) {
-        throw new Error(`El partido oficial ${match.id} enfrenta a un equipo consigo mismo.`);
+        throw new DomainError(`El partido oficial ${match.id} enfrenta a un equipo consigo mismo.`);
       }
       if (scheduledTeams.has(homeName) || scheduledTeams.has(awayName)) {
-        throw new Error(`${path}: un equipo aparece en más de un partido.`);
+        throw new DomainError(`${path}: un equipo aparece en más de un partido.`);
       }
       scheduledTeams.add(homeName);
       scheduledTeams.add(awayName);
       const pair = [homeName, awayName].sort().join("|");
       if (matchPairs.has(pair)) {
-        throw new Error(`${path}: el cruce entre ${match.homeTeamName} y ${match.awayTeamName} está duplicado.`);
+        throw new DomainError(`${path}: el cruce entre ${match.homeTeamName} y ${match.awayTeamName} está duplicado.`);
       }
       matchPairs.add(pair);
 
       if ((match.homeGoals === undefined) !== (match.awayGoals === undefined)) {
-        throw new Error(`El marcador oficial del partido ${match.id} está incompleto.`);
+        throw new DomainError(`El marcador oficial del partido ${match.id} está incompleto.`);
       }
       if (
         match.homeGoals === undefined
         && (match.extraTime !== undefined || match.penalties !== undefined)
       ) {
-        throw new Error(`El partido oficial ${match.id} contiene definición sin marcador principal.`);
+        throw new DomainError(`El partido oficial ${match.id} contiene definición sin marcador principal.`);
       }
       if (match.homeGoals !== undefined && match.awayGoals !== undefined) {
         const result = {
@@ -173,7 +174,7 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
           ...(match.penalties ? { penalties: match.penalties } : {}),
         };
         if (!isValidMatchResult(result)) {
-          throw new Error(`El partido oficial ${match.id} contiene un marcador fuera del rango permitido (0 a 99).`);
+          throw new DomainError(`El partido oficial ${match.id} contiene un marcador fuera del rango permitido (0 a 99).`);
         }
       }
       if (
@@ -182,13 +183,13 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
         && match.knockoutResolution !== "extra-time-then-penalties"
         && match.knockoutResolution !== "aggregate-then-penalties"
       ) {
-        throw new Error(`El partido oficial ${match.id} contiene una regla de desempate desconocida.`);
+        throw new DomainError(`El partido oficial ${match.id} contiene una regla de desempate desconocida.`);
       }
       if (
         (match.homeGroupName !== undefined && !match.homeGroupName.trim())
         || (match.awayGroupName !== undefined && !match.awayGroupName.trim())
       ) {
-        throw new Error(`El partido oficial ${match.id} contiene un grupo vacío.`);
+        throw new DomainError(`El partido oficial ${match.id} contiene un grupo vacío.`);
       }
     }
   }
@@ -230,7 +231,7 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
     singleMeetingPhaseNames: regularArgentinaPhases,
   });
   if (pairingIssues.length > 0) {
-    throw new Error(`La fuente oficial publicó un calendario inválido: ${pairingIssues[0]}`);
+    throw new DomainError(`La fuente oficial publicó un calendario inválido: ${pairingIssues[0]}`);
   }
 }
 
@@ -239,7 +240,7 @@ function createTeamId(teamName: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   if (!slug) {
-    throw new Error("No se pudo generar un identificador para un equipo oficial.");
+    throw new DomainError("No se pudo generar un identificador para un equipo oficial.");
   }
   return `official-${slug}`;
 }
@@ -281,7 +282,7 @@ export function importOfficialSeason(
   }
   const existing = repository.findAll().find(({ id }) => id === season.id);
   if (existing && !options.conflictResolution) {
-    throw new Error(
+    throw new DomainError(
       `La temporada ${season.season} ya existe. Elige crear una copia, actualizar conservando resultados existentes o reemplazar los datos.`,
     );
   }
@@ -292,9 +293,9 @@ export function importOfficialSeason(
 
   for (const team of season.teams ?? []) {
     const normalizedName = officialTeamKey(team.name, team.externalId);
-    if (!normalizedName) throw new Error("La fuente oficial contiene un equipo sin nombre.");
+    if (!normalizedName) throw new DomainError("La fuente oficial contiene un equipo sin nombre.");
     if (teamNames.has(normalizedName)) {
-      throw new Error(`La fuente oficial repitió el equipo "${team.name}".`);
+      throw new DomainError(`La fuente oficial repitió el equipo "${team.name}".`);
     }
     teamNames.set(normalizedName, team.name.trim());
     if (team.externalId) externalIdsByKey.set(normalizedName, team.externalId);
@@ -303,7 +304,7 @@ export function importOfficialSeason(
     }
     if (team.groupName !== undefined) {
       if (!team.groupName.trim()) {
-        throw new Error(`La fuente oficial asignó un grupo vacío a ${team.name}.`);
+        throw new DomainError(`La fuente oficial asignó un grupo vacío a ${team.name}.`);
       }
       teamGroups.set(normalizedName, team.groupName.trim());
     }
@@ -312,17 +313,17 @@ export function importOfficialSeason(
   for (const matchday of season.matchdays) {
     for (const match of matchday.matches) {
       if (officialTeamKey(match.homeTeamName, match.homeTeamExternalId) === officialTeamKey(match.awayTeamName, match.awayTeamExternalId)) {
-        throw new Error(`El partido oficial ${match.id} enfrenta a un equipo consigo mismo.`);
+        throw new DomainError(`El partido oficial ${match.id} enfrenta a un equipo consigo mismo.`);
       }
 
       for (const [teamName, externalId] of [[match.homeTeamName, match.homeTeamExternalId], [match.awayTeamName, match.awayTeamExternalId]] as const) {
         const normalizedName = officialTeamKey(teamName, externalId);
         if (!normalizedName) {
-          throw new Error("La fuente oficial contiene un equipo sin nombre.");
+          throw new DomainError("La fuente oficial contiene un equipo sin nombre.");
         }
         if (!teamNames.has(normalizedName)) {
           if (season.teams) {
-            throw new Error(
+            throw new DomainError(
               `El partido oficial ${match.id} referencia al equipo "${teamName}", que no pertenece a la lista de equipos de la temporada.`,
             );
           }
@@ -338,7 +339,7 @@ export function importOfficialSeason(
         const normalizedName = officialTeamKey(teamName, externalId);
         const previousGroup = teamGroups.get(normalizedName);
         if (previousGroup && previousGroup !== groupName) {
-          throw new Error(`La fuente oficial asigna a ${teamName} a más de una zona.`);
+          throw new DomainError(`La fuente oficial asigna a ${teamName} a más de una zona.`);
         }
         teamGroups.set(normalizedName, groupName);
       }
@@ -346,7 +347,7 @@ export function importOfficialSeason(
   }
 
   if (teamNames.size < 2) {
-    throw new Error("La temporada oficial no contiene suficientes equipos para importar.");
+    throw new DomainError("La temporada oficial no contiene suficientes equipos para importar.");
   }
 
   const teams = [...teamNames.entries()].map(([key, name]) => ({
@@ -387,7 +388,7 @@ export function importOfficialSeason(
       && phaseName.toLocaleLowerCase("es") === stage.name.toLocaleLowerCase("es")
     ) {
       if (matchday.number !== 1 && matchday.number !== 2) {
-        throw new Error(`La fase oficial ${phaseName} tiene una ida o vuelta inválida.`);
+        throw new DomainError(`La fase oficial ${phaseName} tiene una ida o vuelta inválida.`);
       }
       return {
         ...matchday,
@@ -411,10 +412,10 @@ export function importOfficialSeason(
       const homeTeam = teamsByIdentity.get(officialTeamKey(match.homeTeamName, match.homeTeamExternalId));
       const awayTeam = teamsByIdentity.get(officialTeamKey(match.awayTeamName, match.awayTeamExternalId));
       if (!homeTeam || !awayTeam) {
-        throw new Error(`No se pudieron asociar los equipos del partido oficial ${match.id}.`);
+        throw new DomainError(`No se pudieron asociar los equipos del partido oficial ${match.id}.`);
       }
       if (homeTeam.id === awayTeam.id) {
-        throw new Error(`El partido oficial ${match.id} enfrenta a un equipo consigo mismo.`);
+        throw new DomainError(`El partido oficial ${match.id} enfrenta a un equipo consigo mismo.`);
       }
       const stage = season.knockoutStages?.find((candidate) =>
         matchday.phaseName?.toLocaleLowerCase("es")
@@ -426,7 +427,7 @@ export function importOfficialSeason(
       const hasHomeGoals = match.homeGoals !== undefined;
       const hasAwayGoals = match.awayGoals !== undefined;
       if (hasHomeGoals !== hasAwayGoals) {
-        throw new Error(`El marcador oficial del partido ${match.id} está incompleto.`);
+        throw new DomainError(`El marcador oficial del partido ${match.id} está incompleto.`);
       }
 
       let result: MatchResult | undefined;
@@ -487,10 +488,10 @@ export function importOfficialSeason(
       const hasLocalData = previous.result || previous.lineups || previous.substitutions || previous.goalScorers
         || previous.events || previous.eventsCoverage || previous.operationalState || previous.schedule;
       if (hasLocalData && (!candidate || candidate.homeTeamId !== previous.homeTeamId || candidate.awayTeamId !== previous.awayTeamId))
-        throw new Error("La fuente omitió o cambió un partido con datos locales. No se actualizó para conservarlos; revisa la fuente o elige un reemplazo explícito.");
+        throw new DomainError("La fuente omitió o cambió un partido con datos locales. No se actualizó para conservarlos; revisa la fuente o elige un reemplazo explícito.");
     }
     if (preserving.playerRegistrations?.some(registration => !teams.some(team => team.id === registration.teamId)))
-      throw new Error("La fuente excluye clubes con inscripciones locales. No se actualizó para conservarlas.");
+      throw new DomainError("La fuente excluye clubes con inscripciones locales. No se actualizó para conservarlas.");
   }
   const importedMatchdays = matchdays.map((matchday) => ({
     ...matchday,
@@ -575,7 +576,7 @@ export function importOfficialSeason(
   };
 
   if (tournament.competitionRules && tournament.competitionRules.season !== season.season) {
-    throw new Error(
+    throw new DomainError(
       `No se pudo importar "${tournament.name}": las reglas configuradas para ${tournament.competitionRules.season} no corresponden a la temporada ${season.season}.`,
     );
   }
@@ -583,7 +584,7 @@ export function importOfficialSeason(
   if (integrityIssues.length > 0) {
     const reason = `No se pudo importar "${tournament.name}": ${integrityIssues[0]}`;
     recordSourceRejection(repository, publishedSeason, reason);
-    throw new Error(reason);
+    throw new DomainError(reason);
   }
   const retainedPlayoffs = existing && options.conflictResolution === "update-preserving-results"
     && secondDivisionKind(tournament)
@@ -595,7 +596,7 @@ export function importOfficialSeason(
   if (progressedIssues.length > 0) {
     const reason = `No se pudo importar "${tournament.name}": ${progressedIssues[0]}`;
     recordSourceRejection(repository, publishedSeason, reason);
-    throw new Error(reason);
+    throw new DomainError(reason);
   }
   saveWithActivity(repository, importedTournament, createActivityEvent(importedTournament, {
     action: "tournament-imported",

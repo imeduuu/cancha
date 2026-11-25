@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import { isActivityEvent, type ActivityEvent } from "../../domain/entities/activity-event";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { TournamentLibraryRepository } from "../ports/tournament-repository";
@@ -144,10 +145,10 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
 
   saveManyWithActivity(tournaments: readonly Tournament[], event: ActivityEvent): void {
     if (tournaments.length === 0) {
-      throw new Error("No se guardaron los cambios: no hay torneos para actualizar.");
+      throw new DomainError("No se guardaron los cambios: no hay torneos para actualizar.");
     }
     if (new Set(tournaments.map(({ id }) => id)).size !== tournaments.length) {
-      throw new Error("No se guardaron los cambios: la selección contiene torneos duplicados.");
+      throw new DomainError("No se guardaron los cambios: la selección contiene torneos duplicados.");
     }
     tournaments.forEach(tournament => this.assertStorable(tournament));
     this.assertActivityEvent(event);
@@ -166,7 +167,7 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
 
   deleteById(id: string): void {
     const tournament = this.state.tournaments.find(item => item.id === id);
-    if (!tournament) throw new Error("No se encontró el campeonato que quieres eliminar.");
+    if (!tournament) throw new DomainError("No se encontró el campeonato que quieres eliminar.");
     // Igual que localStorage: el evento conserva el universo y la asignación se retira.
     const library = this.getSportsUniverseLibrary();
     const universeId = library.assignments[id];
@@ -303,10 +304,10 @@ export class InMemoryTournamentRepository implements TournamentLibraryRepository
 
   private assertStorable(tournament: Tournament): void {
     const issue = storageIssue(tournament);
-    if (issue) throw new Error(`No se guardó "${tournament.name || tournament.id}": ${issue}`);
+    if (issue) throw new DomainError(`No se guardó "${tournament.name || tournament.id}": ${issue}`);
   }
 
   private assertActivityEvent(event: ActivityEvent): void {
-    if (!isActivityEvent(event)) throw new Error("No se pudo guardar un evento de actividad inválido.");
+    if (!isActivityEvent(event)) throw new DomainError("No se pudo guardar un evento de actividad inválido.");
   }
 }

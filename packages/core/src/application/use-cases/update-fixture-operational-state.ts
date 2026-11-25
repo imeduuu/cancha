@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type {
   MatchOperationalState,
   OperationalMatchStatus,
@@ -24,9 +25,9 @@ export function updateFixtureOperationalState(
   const matchday = tournament.matchdays.find(({ fixtures }) =>
     fixtures.some(({ id }) => id === fixtureId));
   const fixture = matchday?.fixtures.find(({ id }) => id === fixtureId);
-  if (!matchday || !fixture) throw new Error("No se encontró el partido que quieres actualizar.");
+  if (!matchday || !fixture) throw new DomainError("No se encontró el partido que quieres actualizar.");
   if (note.trim().length > 500) {
-    throw new Error("La observación operativa no puede superar los 500 caracteres.");
+    throw new DomainError("La observación operativa no puede superar los 500 caracteres.");
   }
   const issue = validateOperationalTransition(
     tournament,
@@ -35,12 +36,12 @@ export function updateFixtureOperationalState(
     status,
     confirmedAmbiguousResult,
   );
-  if (issue) throw new Error(issue);
+  if (issue) throw new DomainError(issue);
   if (fixture.operationalState?.status === status
     && (fixture.operationalState.note ?? "") === note.trim()) return tournament;
   const updatedAt = now().toISOString();
   if (!Number.isFinite(Date.parse(updatedAt))) {
-    throw new Error("La fecha de modificación del estado no es válida.");
+    throw new DomainError("La fecha de modificación del estado no es válida.");
   }
   const operationalState: MatchOperationalState = {
     status,
@@ -87,7 +88,7 @@ export function updateFixtureOperationalState(
   }, now);
   if (changedTournaments.length > 1) {
     if (!repository.saveManyWithActivity) {
-      throw new Error(
+      throw new DomainError(
         "No se guardaron los cambios: el repositorio no garantiza una escritura coordinada para los torneos relacionados.",
       );
     }

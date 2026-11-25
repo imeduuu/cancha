@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { ActivityAction, ActivityEvent } from "../../domain/entities/activity-event";
 import type { Tournament } from "../../domain/entities/tournament";
 import type { TournamentRepository } from "../ports/tournament-repository";
@@ -19,7 +20,7 @@ export function createActivityEvent(
 ): ActivityEvent {
   const occurredAt = now().toISOString();
   if (!Number.isFinite(Date.parse(occurredAt))) {
-    throw new Error("No se pudo registrar la actividad: la fecha no es válida.");
+    throw new DomainError("No se pudo registrar la actividad: la fecha no es válida.");
   }
   return {
     id: crypto.randomUUID(),
@@ -44,7 +45,7 @@ export function saveWithActivity(
   event: ActivityEvent,
 ): void {
   if (!repository.saveWithActivity) {
-    throw new Error(
+    throw new DomainError(
       "No se guardaron los cambios: el repositorio no garantiza la escritura coordinada con el historial.",
     );
   }
@@ -64,7 +65,7 @@ export function recordActivity(
   event: ActivityEvent,
 ): void {
   if (!repository.recordActivity) {
-    throw new Error("No se pudo registrar la actividad: el repositorio no admite historial.");
+    throw new DomainError("No se pudo registrar la actividad: el repositorio no admite historial.");
   }
   repository.recordActivity(event);
 }

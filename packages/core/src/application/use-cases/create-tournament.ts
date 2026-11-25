@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { PointsSystem, Tournament } from "../../domain/entities/tournament";
 import type { TieBreaker } from "../../domain/value-objects/tie-breaker";
 import { generateRoundRobinSchedule } from "../../domain/services/round-robin-scheduler";
@@ -24,7 +25,7 @@ export function createTournament(
 ): Tournament {
   const validationError = getFirstTournamentInputError(validateTournamentInput(input));
   if (validationError) {
-    throw new Error(validationError);
+    throw new DomainError(validationError);
   }
 
   const name = input.name.trim();

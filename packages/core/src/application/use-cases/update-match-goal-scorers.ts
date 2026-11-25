@@ -1,3 +1,4 @@
+import { DomainError } from "../../domain/domain-error.js";
 import type { GoalScorer, Tournament } from "../../domain/entities/tournament";
 import { validateGoalScorers } from "../../domain/services/goal-scorers";
 import { validateTournamentPlayerData } from "../../domain/services/player-roster";
@@ -14,10 +15,10 @@ export function updateMatchGoalScorers(
     .flatMap(({ fixtures }) => fixtures)
     .find(({ id }) => id === fixtureId);
   if (!targetFixture) {
-    throw new Error("No se encontró el partido al que quieres asignar autores de goles.");
+    throw new DomainError("No se encontró el partido al que quieres asignar autores de goles.");
   }
   const validationError = validateGoalScorers(goalScorers, targetFixture);
-  if (validationError) throw new Error(validationError);
+  if (validationError) throw new DomainError(validationError);
   if (JSON.stringify(targetFixture.goalScorers ?? []) === JSON.stringify(goalScorers)) return tournament;
 
   const matchdays = tournament.matchdays.map((matchday) => ({
@@ -28,7 +29,7 @@ export function updateMatchGoalScorers(
   }));
   const updatedTournament = { ...tournament, matchdays };
   const playerIssue = validateTournamentPlayerData(updatedTournament);
-  if (playerIssue) throw new Error(playerIssue);
+  if (playerIssue) throw new DomainError(playerIssue);
   saveWithActivity(repository, updatedTournament, createActivityEvent(tournament, {
     action: "match-goal-scorers-updated",
     entityId: fixtureId,

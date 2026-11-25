@@ -35,10 +35,11 @@ export function passwordIssue(password: string): string | undefined {
   return undefined;
 }
 
-/** Valida un registro; lanza `Error` (VALIDATION) con el primer problema. Devuelve el email normalizado. */
+/** Valida un registro; lanza `DomainError` (VALIDATION) con el primer problema. Devuelve el email normalizado. */
 export function validateRegistration(email: string, password: string): string {
   const normalized = normalizeEmail(email);
   const issue = emailIssue(normalized) ?? passwordIssue(password);
-  if (issue) throw new Error(issue);
+  if (issue) throw new DomainError(issue);
   return normalized;
 }
+import { DomainError } from "@cancha/core/domain/domain-error";
