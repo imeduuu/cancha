@@ -21,8 +21,8 @@ export function SeasonHonours({tournament,activity=[],teamId}:{tournament:Tourna
   {visible.map(a=><p key={`${a.teamId}-${a.label}`}>{a.label}: {tournament.teams.find(t=>t.id===a.teamId)?.name}{a.tier && a.tier!=="verified"?` · ${championTierLabels[a.tier]}`:""}</p>)}
   {!visible.length && <p>Sin distinción determinada para este alcance.</p>}
   {honours.reasons.map(reason=><p key={reason}>{reason}</p>)}
-  <p>Marcas del tiempo reglamentario, separadas por fase. Las cifras parciales no son récords definitivos; no incluyen goles de prórroga ni tandas.</p>
-  <ul>{highlights.map((h,i)=><li key={i}>{recordMetrics[h.metric]}: {h.value} · {h.leaders.map(r=>r.team.name).join(" · ")} · {h.phase}{h.group?` · ${h.group}`:""} · {h.complete?"Marca de fase completa, calculada":"Marca parcial, no definitiva"}</li>)}</ul>
+  <p>Las marcas se calculan por fase y grupo; no suman fases distintas. Las cifras parciales no son récords definitivos; no incluyen goles de prórroga ni tandas.</p>
+  <ul>{highlights.map((h,i)=><li key={i}>{recordMetrics[h.metric]} (fase: {h.phase}{h.group?` · grupo: ${h.group}`:""}): {h.value} · {h.leaders.map(r=>r.team.name).join(" · ")} · {h.complete?"Marca de fase completa, calculada":"Marca parcial, no definitiva"}</li>)}</ul>
   {records.map(r=><details key={r.scope.key}><summary>{r.team.name} · {r.scope.phase}{r.scope.group ? ` · ${r.scope.group}`:""} · {r.complete?"Cobertura completa de esta fase":"Marca parcial o cobertura no acreditada"}</summary>
    <p>{r.scope.positionStatus} · {r.scope.metrics.wins} victorias · {r.scope.metrics.goalsFor} GF · {r.scope.metrics.goalsAgainst} GC · {r.scope.metrics.goalDifference} DG{r.scope.kind==="league"?` · ${r.scope.metrics.points} puntos de liga`:""}</p>
    {r.streaks.reason?<p>{r.streaks.reason}</p>:<p>Racha máxima: {r.streaks.wins} victorias · {r.streaks.unbeaten} invicto. Orden por fecha, hora y zona de todos los encuentros de la fase.</p>}

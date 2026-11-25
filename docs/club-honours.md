@@ -28,7 +28,7 @@ El indicador previo de campeón en Estadísticas utiliza ahora esa misma condici
 
 ## Marcas y comparabilidad
 
-Las métricas son las tablas existentes: victorias, puntos de liga, GF, GC y DG del tiempo reglamentario. Prórrogas y tandas no se suman. Se separan fases y grupos; una marca de fase no se anuncia como récord global de toda una copa. Se conservan todos los líderes empatados.
+Las métricas son las tablas existentes: victorias, puntos de liga, GF, GC y DG del tiempo reglamentario. Prórrogas y tandas no se suman. Se separan fases y grupos; una marca de fase no se anuncia como récord global de toda una copa. En Estadísticas, el encabezado de cada marca identifica expresamente su fase y grupo, y la explicación aclara que no suma fases distintas. Se conservan todos los líderes empatados.
 
 Los rankings requieren selección explícita, año registrado y una sola versión por año. Se rechazan mezclas de competición, formato, cantidad de equipos, etapas, sistema de puntos, criterios, estados de verificación y procedencia. Las copias no entran automáticamente. Si desaparece una fuente seleccionada, se pide revisar la selección.
 

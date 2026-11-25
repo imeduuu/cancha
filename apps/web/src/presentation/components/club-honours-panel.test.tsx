@@ -37,3 +37,9 @@ it("labels incomplete season marks and explains missing streak chronology",()=>{
  fireEvent.click(screen.getAllByRole("group").find(group=>group.querySelector("summary")?.textContent?.includes("Alfa"))!.querySelector("summary")!);
  expect(screen.getAllByText(/Rachas no disponibles/)[0]).toBeVisible();
 });
+it("labels season record highlights with their phase instead of implying a whole-competition total",()=>{
+ render(<SeasonHonours tournament={t}/>);
+ fireEvent.click(screen.getByText("Datos no oficiales").closest("summary")!);
+ expect(screen.getByText(/Las marcas se calculan por fase y grupo; no suman fases distintas/)).toBeVisible();
+ expect(screen.getByText(/Más victorias en una temporada \(fase: Sin fase registrada\)/)).toBeVisible();
+});
