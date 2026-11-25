@@ -22,7 +22,7 @@ import { localLibraryNeedsMigration } from "../infrastructure/persistence/local-
 import { DeferredPanel } from "./components/deferred-panel";
 import { publishedSeasonSource } from "../infrastructure/external-services/load-official-league-source";
 import { groupCompetitions } from "@cancha/core/application/services/competition-center";
-import { lazy, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { GoalScorer, Matchday, MatchSchedule, Tournament } from "@cancha/core/domain/entities/tournament";
 import type { ActivityEvent } from "@cancha/core/domain/entities/activity-event";
 import type { SportsUniverseLibrary } from "@cancha/core/domain/entities/sports-universe";
@@ -219,7 +219,7 @@ function Application({ libraryBackend }: AppProps) {
   const acknowledgedLibrary = useRef(initialSnapshot);
   const writing = useRef(false);
   const [externalChange, setExternalChange] = useState(false);
-  async function runWrite<T>(action: () => T): Promise<T> {
+  const runWrite = useCallback(async function runWrite<T>(action: () => T): Promise<T> {
     if (writing.current) { setFeedback("Ya hay una escritura en curso. Espera a que termine."); throw new Error("Ya hay una escritura en curso. Espera a que termine."); }
     writing.current = true;
     const expected = acknowledgedLibrary.current;
@@ -239,7 +239,7 @@ function Application({ libraryBackend }: AppProps) {
       catch { setExternalChange(true); }
       throw error;
     } finally { writing.current = false; }
-  }
+  }, [repository]);
   useEffect(() => repository.subscribeExternalChanges?.(() => {
     try { setExternalChange(repository.snapshot() !== acknowledgedLibrary.current); }
     catch { setExternalChange(true); }
@@ -292,8 +292,12 @@ function Application({ libraryBackend }: AppProps) {
   const [saveRecoveryRequest, setSaveRecoveryRequest] = useState<SaveRecoveryRequest | null>(null);
   const saveRequestCounter = useRef(0);
   const [saveOrigin, setSaveOrigin] = useState<{screen: typeof screen; universeId: string | null; trigger: HTMLElement | null} | null>(null);
+  const showCurrentLibraryRef = useRef(showCurrentLibrary);
+  showCurrentLibraryRef.current = showCurrentLibrary;
+  const handleRestoreBackupRef = useRef(handleRestoreBackup);
+  handleRestoreBackupRef.current = handleRestoreBackup;
   const checkpointService = useMemo<CheckpointService>(() => repository.createCheckpointService?.(() => {
-      showCurrentLibrary();
+      showCurrentLibraryRef.current();
       setFeedback("Biblioteca restaurada desde el punto de guardado de tu cuenta.");
     })
     ?? new SaveCheckpoints(new IndexedDbSaveCheckpointStore(), () => {
@@ -302,7 +306,7 @@ function Application({ libraryBackend }: AppProps) {
     return {tournaments: report.tournaments, activity: repository.findActivity(), universes: repository.getSportsUniverseLibrary()};
   }, (parsed, lease) => {
     const committed = repository.commitUnderLibraryLock(repository.snapshot(), () => {
-      const result = handleRestoreBackup(parsed.tournaments, "replace", parsed.activity, parsed.universes);
+      const result = handleRestoreBackupRef.current(parsed.tournaments, "replace", parsed.activity, parsed.universes);
       return {result, snapshot: repository.snapshot()};
     }, lease);
     acknowledgedLibrary.current = committed.snapshot;
@@ -413,14 +417,14 @@ function Application({ libraryBackend }: AppProps) {
   const [recoverySnapshotAvailable, setRecoverySnapshotAvailable] = useState(false);
   const [persistenceStatus, setPersistenceStatus] = useState<"ready" | "saved" | "error">("ready");
   const isCreatingTournament = screen === "setup";
-  const phases = tournament?.format === "staged"
+  const phases = useMemo(() => tournament?.format === "staged"
     ? getTournamentPhases(tournament.matchdays)
-    : [];
+    : [], [tournament?.format, tournament?.matchdays]);
   const activeLeg = tournament ? Math.min(selectedLeg, tournament.legs) : 1;
   const activePhase = phases.find((phase) => phase.leg === activeLeg);
-  const visibleMatchdays = tournament && activePhase
+  const visibleMatchdays = useMemo(() => tournament && activePhase
     ? tournament.matchdays.filter((matchday) => matchday.phaseName === activePhase.name)
-    : tournament?.matchdays ?? [];
+    : tournament?.matchdays ?? [], [activePhase, tournament]);
   const secondKind = tournament ? secondDivisionKind(tournament) : undefined;
   const isSecondDivisionPlayoffPhase = Boolean(secondKind && activePhase && activePhase.name !== "Fase regular");
   const isArgentinaTournament = tournament?.id === "arg-liga-profesional-2026";
@@ -553,7 +557,7 @@ function Application({ libraryBackend }: AppProps) {
       setLibraryLoading(false);
     } }
     void load();
-  }, [repository]);
+  }, [repository, runWrite]);
 
   useEffect(() => {
     if (libraryLoading) return;

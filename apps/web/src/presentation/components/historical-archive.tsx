@@ -20,11 +20,11 @@ interface Props {
 const edition = (year?: number) => year === undefined ? "Sin año registrado" : String(year);
 
 export function HistoricalArchive(props: Props) {
-  const snapshot = props.read(), fingerprint = JSON.stringify(snapshot);
+  const snapshot = props.read();
   const [filters, setFilters] = useState<ArchiveFilters>({}), [scope, setScope] = useState(snapshot.library.activeUniverseId);
   const [clubFocus,setClubFocus]=useState<string>();
   const [, refresh] = useState(0), heading = useRef<HTMLHeadingElement>(null);
-  const currentFilters = scope === snapshot.library.activeUniverseId ? filters : {};
+  const currentFilters = useMemo(() => scope === snapshot.library.activeUniverseId ? filters : {}, [filters, scope, snapshot.library.activeUniverseId]);
   const currentClubFocus = scope === snapshot.library.activeUniverseId ? clubFocus : undefined;
   useEffect(()=>{setScope(snapshot.library.activeUniverseId);setFilters({});setClubFocus(undefined);},[snapshot.library.activeUniverseId]);
   useEffect(()=>{heading.current?.focus();},[]);
@@ -34,7 +34,7 @@ export function HistoricalArchive(props: Props) {
     window.addEventListener("storage",storage);window.addEventListener("focus",focus);
     return ()=>{window.removeEventListener("storage",storage);window.removeEventListener("focus",focus);};
   },[]);
-  const archive=useMemo(()=>projectHistoricalArchive(snapshot.tournaments,snapshot.activity,snapshot.library,currentFilters),[fingerprint,currentFilters]);
+  const archive=useMemo(()=>projectHistoricalArchive(snapshot.tournaments,snapshot.activity,snapshot.library,currentFilters),[snapshot.activity,snapshot.library,snapshot.tournaments,currentFilters]);
   const set=(key:keyof ArchiveFilters,value:string)=>setFilters(previous=>({...previous,[key]:value}));
   const distinct=(key:"country"|"confederation"|"category"|"type"|"provenance")=>[...new Set(archive.rows.map(row=>row[key]))].sort();
   const scopedTournaments=archive.rows.map(row=>row.tournament);

@@ -73,7 +73,7 @@ export function MatchCalendar({
     setDateFrom("");
     setDateTo("");
   }, [tournament.id]);
-  const teamGroups = new Map(teams.map(({ id, groupName: group }) => [id, group]));
+  const teamGroups = useMemo(() => new Map(teams.map(({ id, groupName: group }) => [id, group])), [teams]);
   const groupNames = [...new Set(teams
     .map(({ groupName: group }) => group)
     .filter((group): group is string => Boolean(group)))].sort((a, b) => a.localeCompare(b, "es"));

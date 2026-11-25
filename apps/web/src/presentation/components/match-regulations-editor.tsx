@@ -65,7 +65,7 @@ export function MatchRegulationsEditor({ tournament, onSave }: MatchRegulationsE
   useEffect(() => {
     setForm(regulationForm(tournament));
     setError("");
-  }, [tournament.id, tournament.matchRegulations]);
+  }, [tournament]);
 
   function update<Key extends keyof RegulationForm>(key: Key, value: RegulationForm[Key]) {
     setForm((current) => ({ ...current, [key]: value }));

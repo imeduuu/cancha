@@ -20,10 +20,9 @@ export function ClubAssociationsManager(props:Props){
   const [affiliation,setAffiliation]=useState<Documentation & {status:ClubAffiliationRecord["status"];associationId:string}|null>(null),[affiliationRevision,setAffiliationRevision]=useState(1),[checked,setChecked]=useState(false);
   const [review,setReview]=useState<ClubAssociationReview|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
   const pending=useRef(false),heading=useRef<HTMLHeadingElement>(null),preview=useRef<HTMLHeadingElement>(null);
-  const libraryKey=JSON.stringify([all,activity,props.universeId]);
-  const linked=useMemo(()=>all.flatMap(season=>projectTournamentAffiliations(season,all,activity,props.universeId).rows.map(row=>({...row,tournament:season}))),[libraryKey]);
+  const linked=all.flatMap(season=>projectTournamentAffiliations(season,all,activity,props.universeId).rows.map(row=>({...row,tournament:season})));
   useEffect(()=>{heading.current?.focus();},[]);
-  useEffect(()=>{setTeamId(props.initialTeamId ?? t.teams[0]?.id ?? "");setAssociation(null);setAffiliation(null);setReview(null);setMessage("");},[t.id,props.initialTeamId]);
+  useEffect(()=>{setTeamId(props.initialTeamId ?? t.teams[0]?.id ?? "");setAssociation(null);setAffiliation(null);setReview(null);setMessage("");},[t.id,t.teams,props.initialTeamId]);
   function inspect(){try{
     const input:ClubAssociationInput=association?{kind:"association",universeId:props.universeId,tournamentId:t.id,operation,revision:associationRevision,association}
       :affiliation?{kind:"affiliation",universeId:props.universeId,tournamentId:t.id,teamId,revision:affiliationRevision,...affiliation}:(()=>{throw new Error("Abre un registro antes de revisar.");})();

@@ -56,7 +56,7 @@ export function PlayerRosterPanel({ tournament, onSave }: PlayerRosterPanelProps
     setRegistrationPlayerId("");
     setQuery("");
     resetForm();
-  }, [tournament.id]);
+  }, [tournament.id, tournament.teams]);
 
   function resetForm() {
     setEditingId(undefined);

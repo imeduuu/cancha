@@ -30,8 +30,8 @@ export function SeasonPlanningCenter({tournaments,activity,onOpen,onCalendar,onA
  const [club,setClub]=useSessionDraft(`${contextKey}:club`,"");
  const [createdIds,setCreatedIds]=useSessionDraft(`${contextKey}:created`,[] as string[]);
  function change(patch:Partial<typeof form>){setForm(old=>({...old,...patch}));setReview(null);setError("");setMessage("");}
- const input:SeasonPlanningInput={mode:form.mode,regulationId:form.regulationId,sourceId:form.sourceId,targetSeason:Number(form.destination),qualifyingSeason:Number(form.qualifying),partnerId:form.partnerId,cup:form.cup,sourceIds:form.sourceIds,selectedKeys:form.selectedKeys,targetId:form.targetId || undefined,incoming:form.incoming.split("\n").map(s=>s.trim()).filter(Boolean).map((name,i)=>({id:`incoming-${i}`,name})),sourceUrl:form.sourceUrl,note:form.note,carryRoster:form.carryRoster,universeId};
- const preview=useMemo(()=>projectSeasonPlanning(input,tournaments,activity),[JSON.stringify(input),tournaments,activity]);
+  const input=useMemo<SeasonPlanningInput>(()=>({mode:form.mode,regulationId:form.regulationId,sourceId:form.sourceId,targetSeason:Number(form.destination),qualifyingSeason:Number(form.qualifying),partnerId:form.partnerId,cup:form.cup,sourceIds:form.sourceIds,selectedKeys:form.selectedKeys,targetId:form.targetId || undefined,incoming:form.incoming.split("\n").map(s=>s.trim()).filter(Boolean).map((name,i)=>({id:`incoming-${i}`,name})),sourceUrl:form.sourceUrl,note:form.note,carryRoster:form.carryRoster,universeId}),[form,universeId]);
+  const preview=useMemo(()=>projectSeasonPlanning(input,tournaments,activity),[input,tournaments,activity]);
  const stale=!!review && review.preview.snapshot!==planningLibrarySnapshot(tournaments,activity);
  const visibleGroups=groups.filter(g=>(!form.territory || g.territory===form.territory) && (!form.type || g.seasons.some(t=>(t.competitionType ?? "league")===form.type)));
  const origins=tournaments.filter(t=>competitionIdentity(t)===form.competition && (!form.type || (t.competitionType ?? "league")===form.type));

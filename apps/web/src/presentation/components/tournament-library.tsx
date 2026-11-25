@@ -7,7 +7,7 @@ import type {SeasonPlanningActions} from "@cancha/core/application/use-cases/pla
 import type { ContinentalPreparationInput, ContinentalReview } from "@cancha/core/application/use-cases/prepare-continental-edition";
 import { CompetitionCenter } from "./competition-center";
 import { useSessionDraft } from "../session-drafts";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Tournament } from "@cancha/core/domain/entities/tournament";
 import type { DuplicateResultsMode } from "@cancha/core/application/use-cases/manage-tournaments";
 import type { CalendarProgrammingProposal } from "@cancha/core/application/use-cases/program-season-calendar";
@@ -242,14 +242,14 @@ export function TournamentLibrary({
   useEffect(() => {
     if (!externalSaveRequest) return;
     setSaveRecoveryOpen(true);setCheckpointRequest(externalSaveRequest);checkpointNavigation?.acknowledge();
-  }, [externalSaveRequest]);
+  }, [checkpointNavigation, externalSaveRequest]);
   const [centerRequest, setCenterRequest] = useState<{
     kind: "planning" | "qualification" | "programming";
     tournamentId?: string;
     request: number;
   }>();
   const centerRequestCounter = useRef(0);
-  function requestCenterFlow(kind: "planning" | "qualification" | "programming", tournament?: Tournament) {
+  const requestCenterFlow = useCallback((kind: "planning" | "qualification" | "programming", tournament?: Tournament) => {
     centerRequestCounter.current += 1;
     setCenterRequest({
       kind,
@@ -257,14 +257,14 @@ export function TournamentLibrary({
       request: centerRequestCounter.current,
     });
     setCenterOpen(true);
-  }
+  }, [setCenterOpen]);
   useEffect(() => {
     if (planningNavigationRequest) {
       if (planningNavigationRequest.kind === "competitions") setCenterOpen(true);
       else requestCenterFlow(planningNavigationRequest.kind ?? "planning", tournaments.find(t => t.id === planningNavigationRequest.tournamentId));
       onPlanningNavigationHandled?.();
     }
-  }, [planningNavigationRequest]);
+  }, [onPlanningNavigationHandled, planningNavigationRequest, requestCenterFlow, setCenterOpen, tournaments]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [duplicateMode, setDuplicateMode] = useState<DuplicateResultsMode>("reset");

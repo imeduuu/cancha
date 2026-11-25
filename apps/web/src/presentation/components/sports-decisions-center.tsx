@@ -1,6 +1,6 @@
 import {useContext} from "react";
 import {ClubAssociationsNavigation} from "./club-associations-access";
-import {useEffect,useMemo,useRef,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import type {Tournament} from "@cancha/core/domain/entities/tournament";
 import type {TournamentRepository} from "@cancha/core/application/ports/tournament-repository";
 import {projectSportsDecisions,type SportsDecisionAction} from "@cancha/core/application/services/sports-decisions";
@@ -22,10 +22,7 @@ export function SportsDecisionsCenter(props:Props){
  const [id,setId]=useState(props.initialTournamentId ?? tournaments[0]?.id ?? ""),[filter,setFilter]=useState(""),[review,setReview]=useState<SportsResolutionReview|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const [,refresh]=useState(0),pending=useRef(false),heading=useRef<HTMLHeadingElement>(null),reviewHeading=useRef<HTMLHeadingElement>(null);
  const scopeChanged=props.getUniverseId()!==props.universeId,t=tournaments.find(t=>t.id===id),activity=props.repository.findActivity?.() ?? [];
- // Repository reads return fresh objects. Key the pure projection by their full
- // content so local preview/busy/filter updates do not recalculate the season.
- const projectionKey=JSON.stringify([id,props.universeId,tournaments,activity]);
- const view=useMemo(()=>t?projectSportsDecisions(t,tournaments,activity,props.universeId):undefined,[projectionKey]);
+ const view=t?projectSportsDecisions(t,tournaments,activity,props.universeId):undefined;
  useEffect(()=>{heading.current?.focus();},[]);
  useEffect(()=>{if(review)reviewHeading.current?.focus();},[review]);
  useEffect(()=>{const storage=(e:StorageEvent)=>{if(e.key===null || sportingStorageKeys.some(key=>key===e.key))refresh(n=>n+1);};const focus=()=>refresh(n=>n+1);window.addEventListener("storage",storage);window.addEventListener("focus",focus);return()=>{window.removeEventListener("storage",storage);window.removeEventListener("focus",focus);};},[]);
