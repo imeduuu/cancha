@@ -6,6 +6,15 @@ Aplicación web para configurar campeonatos de fútbol y generar sus calendarios
 
 ## Empezar
 
+Cancha requiere Node.js 22. Con [fnm](https://github.com/Schniz/fnm), instala y activa esa versión desde la raíz del proyecto:
+
+```powershell
+fnm install 22
+fnm use 22
+```
+
+`fnm use` selecciona Node 22 para esta terminal; en otras carpetas puedes ejecutar `fnm use <versión>` para elegir la versión que necesite cada proyecto. Si fnm está configurado con `--use-on-cd`, cambiar a la carpeta de Cancha activa automáticamente la versión indicada en `.node-version`.
+
 ```bash
 npm install
 npm run dev
