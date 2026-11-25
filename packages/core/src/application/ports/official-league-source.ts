@@ -12,6 +12,9 @@ export interface OfficialMatch {
   readonly id: string;
   readonly homeTeamName: string;
   readonly awayTeamName: string;
+  /** Stable provider identity when display names are not unique or may change. */
+  readonly homeTeamExternalId?: string;
+  readonly awayTeamExternalId?: string;
   readonly homeGoals?: number;
   readonly awayGoals?: number;
   readonly homeGroupName?: string;
@@ -56,6 +59,7 @@ export interface OfficialLeagueSeason {
   readonly sourceName?: string;
   readonly teams?: readonly {
     readonly name: string;
+    readonly externalId?: string;
     readonly groupName?: string;
     readonly competitionNumber?: number;
   }[];

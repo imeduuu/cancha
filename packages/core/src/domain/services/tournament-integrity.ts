@@ -18,7 +18,6 @@ export function validateTournamentIntegrity(tournament: Tournament): string[] {
   const issues: string[] = [...validateOfficialResolutions(tournament), ...validateContinentalPlans(tournament), ...validateNationalCupPlanning(tournament)];
   if (tournament.seasonPreparation !== undefined && !isSeasonPreparation(tournament.seasonPreparation)) issues.push("Preparación de temporada inválida.");
   const teamIds = new Set<string>();
-  const teamNames = new Set<string>();
   const competitionNumbers = new Set<number>();
 
   if (!tournament.id.trim()) issues.push("Identificador del torneo: no puede estar vacío.");
@@ -82,8 +81,6 @@ export function validateTournamentIntegrity(tournament: Tournament): string[] {
     else if (team.name.trim().length > 40) {
       issues.push(`${path}, nombre: no puede superar los 40 caracteres.`);
     }
-    else if (teamNames.has(normalizedName)) issues.push(`${path}, nombre: "${team.name}" está duplicado.`);
-    teamNames.add(normalizedName);
 
     if (team.afaAffiliation !== undefined && team.afaAffiliation !== "direct" && team.afaAffiliation !== "indirect")
       issues.push(`${path}, afiliación AFA no válida.`);

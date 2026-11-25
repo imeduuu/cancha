@@ -245,10 +245,14 @@ export function ImportOfficialTournament({
       setCancelAvailable(Boolean(abortController));
       setProgress((current) => ({ ...current, [league.id]: undefined }));
       const source = await loadOfficialLeagueSource(league.id);
-      const officialSeason = knownSeason ?? await source.fetchSeason(league.id, zone, abortController ? {
+      const fetchOptions = abortController ? {
         signal: abortController.signal,
-        onProgress: (value) => setProgress((current) => ({ ...current, [league.id]: value })),
-      } : undefined);
+        onProgress: (value: { readonly current: number; readonly total: number; readonly label: string }) =>
+          setProgress((current) => ({ ...current, [league.id]: value })),
+      } : undefined;
+      const officialSeason = knownSeason ?? await (fetchOptions
+        ? source.fetchSeason(league.id, zone, fetchOptions)
+        : source.fetchSeason(league.id, zone));
       controller.current = null;
       setCancelAvailable(false);
       const existing = repository.findAll().find(({ id }) => id === officialSeason.id);

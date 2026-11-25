@@ -81,6 +81,12 @@ export function FixtureList({
   otherTournaments,
 }: FixtureListProps) {
   const teamsById = new Map(teams.map((team) => [team.id, team.name]));
+  const teamNameCounts = new Map<string, number>();
+  for (const team of teams) teamNameCounts.set(team.name.normalize("NFKD").toLocaleLowerCase(), (teamNameCounts.get(team.name.normalize("NFKD").toLocaleLowerCase()) ?? 0) + 1);
+  const cbfIdByTeamId = new Map(teams.flatMap(team => {
+    const match = /(?:^official-cbf-|.*-cbf-)(.+)$/.exec(team.id);
+    return match ? [[team.id, match[1]] as const] : [];
+  }));
 
   return (
     <div className="fixture-list">
@@ -156,6 +162,10 @@ export function FixtureList({
                   )}
                   homeTeam={homeTeam}
                   awayTeam={awayTeam}
+                  homeProviderId={cbfIdByTeamId.get(fixture.homeTeamId)}
+                  awayProviderId={cbfIdByTeamId.get(fixture.awayTeamId)}
+                  homeNameAmbiguous={(teamNameCounts.get(homeTeam.normalize("NFKD").toLocaleLowerCase()) ?? 0) > 1}
+                  awayNameAmbiguous={(teamNameCounts.get(awayTeam.normalize("NFKD").toLocaleLowerCase()) ?? 0) > 1}
                   onSimulate={() => onSimulateFixture(fixture.id)}
                   simulationBlocked={simulationBlocked}
                   onSave={onSaveResult}
@@ -193,6 +203,10 @@ interface FixtureRowProps {
   aggregateScore?: { readonly homeGoals: number; readonly awayGoals: number };
   homeTeam: string;
   awayTeam: string;
+  homeProviderId?: string;
+  awayProviderId?: string;
+  homeNameAmbiguous: boolean;
+  awayNameAmbiguous: boolean;
   onSimulate: () => void;
   simulationBlocked: boolean;
   onSave: (
@@ -233,6 +247,10 @@ function FixtureRow({
   aggregateScore,
   homeTeam,
   awayTeam,
+  homeProviderId,
+  awayProviderId,
+  homeNameAmbiguous,
+  awayNameAmbiguous,
   onSimulate,
   simulationBlocked,
   onSave,
@@ -554,11 +572,13 @@ function FixtureRow({
         Encuentro: {fixtureProvenanceLabel(fixture.calendarProvenance, tournament.calendarProvenance, tournament.sourceUrl)}
       </span>
       <div className="fixture">
-        <span>{homeTeam}</span>
+        <span>{homeTeam}{homeProviderId && homeNameAmbiguous
+          ? <small className="club-provider-id" aria-hidden="true">CBF {homeProviderId}</small> : null}</span>
         <span className="versus">
           {result ? `${displayedHomeGoals} — ${displayedAwayGoals}` : "vs"}
         </span>
-        <span>{awayTeam}</span>
+        <span>{awayTeam}{awayProviderId && awayNameAmbiguous
+          ? <small className="club-provider-id" aria-hidden="true">CBF {awayProviderId}</small> : null}</span>
       </div>
       {result && (result.extraTime || result.penalties) && (
         <p className="fixture-decision-summary">

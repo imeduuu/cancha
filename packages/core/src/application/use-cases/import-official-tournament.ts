@@ -74,7 +74,7 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
     if (!team || typeof team.name !== "string" || !team.name.trim()) {
       throw new Error(`Equipo oficial ${index + 1}: el nombre no es válido.`);
     }
-    const normalizedName = normalizeTeamName(team.name);
+    const normalizedName = officialTeamKey(team.name, team.externalId);
     if (officialTeamNames.has(normalizedName)) {
       throw new Error(`La fuente oficial repitió el equipo "${team.name}".`);
     }
@@ -138,8 +138,8 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
       if (typeof match.homeTeamName !== "string" || typeof match.awayTeamName !== "string") {
         throw new Error(`El partido oficial ${match.id} no publicó ambos equipos.`);
       }
-      const homeName = normalizeTeamName(match.homeTeamName);
-      const awayName = normalizeTeamName(match.awayTeamName);
+      const homeName = officialTeamKey(match.homeTeamName, match.homeTeamExternalId);
+      const awayName = officialTeamKey(match.awayTeamName, match.awayTeamExternalId);
       if (!homeName) throw new Error(`El partido oficial ${match.id} no tiene equipo local.`);
       if (!awayName) throw new Error(`El partido oficial ${match.id} no tiene equipo visitante.`);
       if (homeName === awayName) {
@@ -198,17 +198,17 @@ function validateOfficialSeason(season: OfficialLeagueSeason): void {
     phaseName: matchday.phaseName,
     fixtures: matchday.matches.map((match: OfficialMatch) => ({
       id: match.id,
-      homeTeamId: normalizeTeamName(match.homeTeamName),
-      awayTeamId: normalizeTeamName(match.awayTeamName),
+      homeTeamId: officialTeamKey(match.homeTeamName, match.homeTeamExternalId),
+      awayTeamId: officialTeamKey(match.awayTeamName, match.awayTeamExternalId),
       homeTeamName: match.homeTeamName,
       awayTeamName: match.awayTeamName,
     })),
   }));
   const teamCount = new Set([
-    ...(season.teams ?? []).map((team) => normalizeTeamName(team.name)),
+    ...(season.teams ?? []).map((team) => officialTeamKey(team.name, team.externalId)),
     ...season.matchdays.flatMap((matchday) => matchday.matches.flatMap((match: OfficialMatch) => [
-      normalizeTeamName(match.homeTeamName),
-      normalizeTeamName(match.awayTeamName),
+      officialTeamKey(match.homeTeamName, match.homeTeamExternalId),
+      officialTeamKey(match.awayTeamName, match.awayTeamExternalId),
     ])),
   ]).size;
   const roundsPerLeg = teamCount % 2 === 0 ? teamCount - 1 : teamCount;
@@ -242,6 +242,10 @@ function createTeamId(teamName: string): string {
     throw new Error("No se pudo generar un identificador para un equipo oficial.");
   }
   return `official-${slug}`;
+}
+
+function officialTeamKey(name: string, externalId?: string): string {
+  return externalId ? `external:${externalId}` : normalizeTeamName(name);
 }
 
 export async function importOfficialTournament(
@@ -282,16 +286,18 @@ export function importOfficialSeason(
     );
   }
   const teamNames = new Map<string, string>();
+  const externalIdsByKey = new Map<string, string>();
   const teamGroups = new Map<string, string>();
   const teamCompetitionNumbers = new Map<string, number>();
 
   for (const team of season.teams ?? []) {
-    const normalizedName = normalizeTeamName(team.name);
+    const normalizedName = officialTeamKey(team.name, team.externalId);
     if (!normalizedName) throw new Error("La fuente oficial contiene un equipo sin nombre.");
     if (teamNames.has(normalizedName)) {
       throw new Error(`La fuente oficial repitió el equipo "${team.name}".`);
     }
     teamNames.set(normalizedName, team.name.trim());
+    if (team.externalId) externalIdsByKey.set(normalizedName, team.externalId);
     if (team.competitionNumber !== undefined) {
       teamCompetitionNumbers.set(normalizedName, team.competitionNumber);
     }
@@ -305,12 +311,12 @@ export function importOfficialSeason(
 
   for (const matchday of season.matchdays) {
     for (const match of matchday.matches) {
-      if (normalizeTeamName(match.homeTeamName) === normalizeTeamName(match.awayTeamName)) {
+      if (officialTeamKey(match.homeTeamName, match.homeTeamExternalId) === officialTeamKey(match.awayTeamName, match.awayTeamExternalId)) {
         throw new Error(`El partido oficial ${match.id} enfrenta a un equipo consigo mismo.`);
       }
 
-      for (const teamName of [match.homeTeamName, match.awayTeamName]) {
-        const normalizedName = normalizeTeamName(teamName);
+      for (const [teamName, externalId] of [[match.homeTeamName, match.homeTeamExternalId], [match.awayTeamName, match.awayTeamExternalId]] as const) {
+        const normalizedName = officialTeamKey(teamName, externalId);
         if (!normalizedName) {
           throw new Error("La fuente oficial contiene un equipo sin nombre.");
         }
@@ -321,14 +327,15 @@ export function importOfficialSeason(
             );
           }
           teamNames.set(normalizedName, teamName.trim());
+          if (externalId) externalIdsByKey.set(normalizedName, externalId);
         }
       }
-      for (const [teamName, groupName] of [
-        [match.homeTeamName, match.homeGroupName],
-        [match.awayTeamName, match.awayGroupName],
+      for (const [teamName, groupName, externalId] of [
+        [match.homeTeamName, match.homeGroupName, match.homeTeamExternalId],
+        [match.awayTeamName, match.awayGroupName, match.awayTeamExternalId],
       ] as const) {
         if (!groupName) continue;
-        const normalizedName = normalizeTeamName(teamName);
+        const normalizedName = officialTeamKey(teamName, externalId);
         const previousGroup = teamGroups.get(normalizedName);
         if (previousGroup && previousGroup !== groupName) {
           throw new Error(`La fuente oficial asigna a ${teamName} a más de una zona.`);
@@ -342,22 +349,31 @@ export function importOfficialSeason(
     throw new Error("La temporada oficial no contiene suficientes equipos para importar.");
   }
 
-  const teams = [...teamNames.values()].map((name) => ({
+  const teams = [...teamNames.entries()].map(([key, name]) => ({
     ...(existing && options.conflictResolution === "update-preserving-results"
-      ? (() => { const previous = existing.teams.find(team => team.id === createTeamId(name));
+      ? (() => { const externalId = externalIdsByKey.get(key); const previous = existing.teams.find(team => externalId
+          ? team.id === `official-cbf-${externalId}` || team.id.endsWith(`-cbf-${externalId}`)
+          : team.id === createTeamId(name));
           return previous ? { averageIdentity: previous.averageIdentity, afaAffiliation: previous.afaAffiliation, affiliationSourceUrl: previous.affiliationSourceUrl } : {}; })()
       : {}),
-    id: createTeamId(name),
+    id: (() => {
+      const externalId = externalIdsByKey.get(key);
+      const stableId = externalId ? `official-cbf-${externalId}` : createTeamId(name);
+      // Keep identities from older imports whose display name carried “(CBF id)”.
+      return externalId
+        ? existing?.teams.find(team => team.id === stableId || team.id.endsWith(`-cbf-${externalId}`))?.id ?? stableId
+        : stableId;
+    })(),
     name,
-    ...(teamGroups.has(normalizeTeamName(name))
-      ? { groupName: teamGroups.get(normalizeTeamName(name)) }
+    ...(teamGroups.has(key)
+      ? { groupName: teamGroups.get(key) }
       : {}),
-    ...(teamCompetitionNumbers.has(normalizeTeamName(name))
-      ? { competitionNumber: teamCompetitionNumbers.get(normalizeTeamName(name)) }
+    ...(teamCompetitionNumbers.has(key)
+      ? { competitionNumber: teamCompetitionNumbers.get(key) }
       : {}),
   }));
-  const teamsByNormalizedName = new Map(
-    teams.map((team) => [normalizeTeamName(team.name), team]),
+  const teamsByIdentity = new Map(
+    [...teamNames.keys()].map((key, index) => [key, teams[index]] as const),
   );
   const roundsPerLeg = teams.length % 2 === 0 ? teams.length - 1 : teams.length;
   const normalizedMatchdays = season.matchdays.map((matchday) => {
@@ -392,8 +408,8 @@ export function importOfficialSeason(
       : Math.floor((matchday.number - 1) / roundsPerLeg) + 1,
     ...(matchday.phaseName ? { phaseName: matchday.phaseName } : {}),
     fixtures: matchday.matches.map((match) => {
-      const homeTeam = teamsByNormalizedName.get(normalizeTeamName(match.homeTeamName));
-      const awayTeam = teamsByNormalizedName.get(normalizeTeamName(match.awayTeamName));
+      const homeTeam = teamsByIdentity.get(officialTeamKey(match.homeTeamName, match.homeTeamExternalId));
+      const awayTeam = teamsByIdentity.get(officialTeamKey(match.awayTeamName, match.awayTeamExternalId));
       if (!homeTeam || !awayTeam) {
         throw new Error(`No se pudieron asociar los equipos del partido oficial ${match.id}.`);
       }

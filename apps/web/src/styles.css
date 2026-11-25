@@ -322,6 +322,7 @@
 @media (max-width: 560px) { .fixture-compact-row { grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px; } .fixture-compact-row .fixture { gap: 4px; font-size: var(--fs-xs); } .fixture-compact-row .fixture .versus { min-width: 48px; } .fixture-detail-panel { padding: var(--space-3); } }
 .fixture { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--space-3); font-size: var(--fs-sm); font-weight: 600; }
 .fixture > span:last-child { text-align: right; }
+.club-provider-id { display: inline-block; margin-left: 5px; color: var(--fg-soft); font-size: var(--fs-2xs); font-weight: 500; }
 .fixture .versus { min-width: 64px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--surface-3); color: var(--fg-soft); font-family: var(--font-num); font-size: var(--fs-lg); font-weight: 700; text-align: center; }
 .result-editor { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-2); margin-top: var(--space-3); }
 .result-editor label { width: 52px; }

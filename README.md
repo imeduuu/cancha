@@ -452,3 +452,6 @@ Desde **Biblioteca → Centro → Planificación de temporadas** puedes revisar 
 ## Preparación de copas nacionales
 
 El Centro de planificación permite registrar la admisión documentada por edición y preparar nóminas locales de copas nacionales cuando todos los criterios y cupos están resueltos. Requiere verificación manual, revisión y confirmación; conserva los destinos existentes y no genera partidos. Consulta [el alcance y las pruebas](docs/national-cup-planning.md).
+
+
+En Copa do Brasil, los clubes se muestran sin sufijos societarios. La identidad interna conserva el identificador CBF para distinguir homónimos; solo se muestra junto al nombre si hace falta desambiguar. Los respaldos continúan en JSON v7.

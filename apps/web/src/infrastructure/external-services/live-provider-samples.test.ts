@@ -56,7 +56,7 @@ describe("minimized samples captured from live providers",()=>{
   expect(season.matchdays[0].matches[0]).toMatchObject({homeTeamName:sample.home,awayTeamName:sample.away});
   expect(season.matchdays[0].matches[0].homeGoals).toBeUndefined();
  });
- it("keeps the three homonymous CBF clubs distinct using their published identifiers",async()=>{
+ it("keeps CBF club names clean and their published identities distinct",async()=>{
   const sample=read("cbf-homonyms.json") as {samples:{phaseId:string;matches:unknown[]}[]};
   const phases=sample.samples.map((s,index)=>({fase_id:s.phaseId,fase_nome:index===0?"2ª Fase":"3ª Fase",rodadas_qtd:"1",fase_tipo:"eliminacao"}));
   vi.stubGlobal("fetch",vi.fn(async(input:RequestInfo|URL)=>{
@@ -65,8 +65,9 @@ describe("minimized samples captured from live providers",()=>{
   }));
   const season=await new CopaDoBrasilOfficialSource().fetchSeason("copa-brasil");
   const names=new Set(season.matchdays.flatMap(d=>d.matches.flatMap(m=>[m.homeTeamName,m.awayTeamName])).filter(name=>name.startsWith("Operário")));
-  expect(names.size).toBe(3);
-  for(const day of season.matchdays){const clubs=day.matches.flatMap(m=>[m.homeTeamName,m.awayTeamName]);expect(new Set(clubs).size).toBe(clubs.length);}
+  expect(names.size).toBe(1);
+  expect(new Set(season.matchdays.flatMap(d=>d.matches.flatMap(m=>[[m.homeTeamName,m.homeTeamExternalId],[m.awayTeamName,m.awayTeamExternalId]])).filter(([name])=>name===[...names][0]).map(([,id])=>id))).toEqual(new Set(["20041","35079","20106"]));
+  for(const day of season.matchdays){const clubs=day.matches.flatMap(m=>[m.homeTeamExternalId,m.awayTeamExternalId]);expect(new Set(clubs).size).toBe(clubs.length);}
  });
 });
 

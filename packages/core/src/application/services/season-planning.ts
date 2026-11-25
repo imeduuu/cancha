@@ -13,6 +13,7 @@ import {canStartNewSeason,getTournamentCompletionStatus} from "../../domain/serv
 import {hasUnverifiedCompetitionRules} from "../../domain/services/competition-rules";
 import {calculateTournamentStatistics,isValidPlayedFixture} from "../../domain/services/tournament-statistics";
 import {calculateStandings,getUnresolvedStandingsTieGroups} from "../../domain/services/standings";
+import {normalizeTeamName} from "../../domain/services/team-name";
 import {validateTournamentIntegrity} from "../../domain/services/tournament-integrity";
 import {buildClubProfiles,clubOccurrenceKey} from "./club-history";
 import {competitionIdentity,seasonOrigins,seasonOverview} from "./competition-center";
@@ -174,6 +175,7 @@ export function projectSeasonPlanning(input:SeasonPlanningInput,tournaments:read
  const identities=chosen.map(p=>p.clubKey).filter((v):v is string=>!!v);
  if(new Set(identities).size!==identities.length)block("Conflicto de identidad","Un club está repetido en los participantes previstos; revisa sus orígenes.");
  for(const identity of targetIdentities){const roster=chosen.filter(p=>p.competitionId===identity);if(roster.length){
+  if(new Set(roster.map(p=>normalizeTeamName(p.name))).size!==roster.length)block("Conflicto de identidad","Hay clubes homónimos en la nómina prevista; vincula sus identidades antes de preparar la temporada.");
   const issues=validateTournamentIntegrity({id:"planning-preview",name:"Vista previa local",season:input.targetSeason,createdAt:source?.createdAt ?? "2000-01-01T00:00:00Z",teams:roster.map((p,i)=>({id:`preview-${i}`,name:p.name})),legs:1,tieBreakers:[],matchdays:[],format:"staged",competitionType:["continental","national-cup"].includes(input.mode)?"cup":"league"});
   issues.forEach(issue=>block("Conflicto de identidad",issue));
  }}

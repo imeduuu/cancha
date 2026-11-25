@@ -5,6 +5,7 @@ import { calculateStandings } from "@cancha/core/domain/services/standings";
 import type { OfficialLeagueSource, OfficialLeagueSeason } from "@cancha/core/application/ports/official-league-source";
 import type { TournamentRepository } from "@cancha/core/application/ports/tournament-repository";
 import { importOfficialTournament } from "@cancha/core/application/use-cases/import-official-tournament";
+import { createTournamentBackup, parseTournamentBackup } from "@cancha/core/application/services/tournament-archive";
 
 const season: OfficialLeagueSeason = {
   id: "anfp-liga-primera-2026",
@@ -75,6 +76,26 @@ function createRepository(existing: Tournament[] = []): TournamentRepository {
 }
 
 describe("importOfficialTournament", () => {
+  it("keeps clean CBF names, provider identities and JSON v7 roundtrips", async () => {
+    const cbfSeason: OfficialLeagueSeason = {
+      id: "cbf-copa-do-brasil-2026", name: "Copa do Brasil", season: 2026,
+      sourceUrl: "https://www.cbf.com.br/copa-do-brasil", format: "staged", competitionType: "cup",
+      matchdays: [{ number: 1, phaseName: "Fase", matches: [
+        { id: "a", homeTeamName: "Operario", homeTeamExternalId: "20041", awayTeamName: "Clube A", awayTeamExternalId: "1" },
+        { id: "b", homeTeamName: "Operario", homeTeamExternalId: "20106", awayTeamName: "Clube B", awayTeamExternalId: "2" },
+      ] }],
+    };
+    const repository = createRepository();
+    const imported = await importOfficialTournament(createSource(cbfSeason), repository);
+
+    expect(imported.teams.filter(team => team.name === "Operario").map(team => team.id)).toEqual([
+      "official-cbf-20041", "official-cbf-20106",
+    ]);
+    const backup = createTournamentBackup([imported]);
+    expect(backup.version).toBe(7);
+    expect(parseTournamentBackup(JSON.stringify(backup))[0].teams).toEqual(imported.teams);
+  });
+
   it("imports official teams, results, pending matches and two legs", async () => {
     const repository = createRepository();
     const tournament = await importOfficialTournament(

@@ -305,10 +305,15 @@ function parseCbfTeam(value: unknown, matchId: string, description: string, name
   const team = requireRecord(value, `el equipo ${description} del partido ${matchId}`);
   return {
     name: (typeof team.id === "string" ? namesById?.get(team.id) : undefined)
-      ?? requireString(team, "nome", `el equipo ${description} del partido ${matchId}`),
+      ?? cleanCbfClubName(requireString(team, "nome", `el equipo ${description} del partido ${matchId}`)),
+    externalId: typeof team.id === "string" ? team.id : undefined,
     score: team.gols,
     penalties: team.panaltis,
   };
+}
+
+function cleanCbfClubName(name: string): string {
+  return name.trim().replace(/\s+(?:-\s*)?SAF\.?$/i, "").trim();
 }
 
 function parseCbfMatch(value: JsonRecord, phase: CbfPhase, namesById?: ReadonlyMap<string, string>): ParsedCbfMatch {
@@ -323,6 +328,8 @@ function parseCbfMatch(value: JsonRecord, phase: CbfPhase, namesById?: ReadonlyM
     id,
     homeTeamName: home.name,
     awayTeamName: away.name,
+    ...(home.externalId ? { homeTeamExternalId: home.externalId } : {}),
+    ...(away.externalId ? { awayTeamExternalId: away.externalId } : {}),
     ...(phase.fase_tipo === "eliminacao" && phase.rodadas_qtd === "1"
       ? { knockoutResolution: "penalties" as const }
       : {}),
@@ -378,15 +385,11 @@ export class CopaDoBrasilOfficialSource implements OfficialLeagueSource {
       return result;
     }));
     const originalNames = new Map<string, string>();
-    const idsByName = new Map<string, Set<string>>();
     for (const { values } of publishedPhases) for (const match of values) for (const side of [match.mandante, match.visitante]) {
       if (!isRecord(side) || typeof side.id !== "string" || !side.id.trim() || typeof side.nome !== "string") continue;
       originalNames.set(side.id, side.nome.trim());
-      const key = normalizeTeamName(side.nome);
-      const ids = idsByName.get(key) ?? new Set<string>();ids.add(side.id);idsByName.set(key, ids);
     }
-    const namesById = new Map([...originalNames].map(([id,name]) => [id,
-      (idsByName.get(normalizeTeamName(name))?.size ?? 0) > 1 ? `${name} (CBF ${id})` : name]));
+    const namesById = new Map([...originalNames].map(([id,name]) => [id, cleanCbfClubName(name)]));
     const phaseMatchdays = publishedPhases.map(({ phase, values }) => {
       const matches = values.map(value => parseCbfMatch(value, phase, namesById));
       const rounds = new Map<number, OfficialMatch[]>();
@@ -425,7 +428,7 @@ export class CopaDoBrasilOfficialSource implements OfficialLeagueSource {
       format: "staged",
       competitionType: "cup",
       knockoutStages,
-      rulesNote: "Fases y cantidad de partidos por fase según el fixture oficial de la CBF. Los nombres homónimos se distinguen con el identificador de club publicado por CBF. Las fases publicadas a dos partidos se resuelven por el marcador agregado y las siguientes se generan al completar cada ronda.",
+      rulesNote: "Fases y cantidad de partidos por fase según el fixture oficial de la CBF. Las identidades internas de clubes conservan el identificador publicado por CBF. Las fases publicadas a dos partidos se resuelven por el marcador agregado y las siguientes se generan al completar cada ronda.",
       matchdays,
     };
   }
