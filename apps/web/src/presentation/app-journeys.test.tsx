@@ -20,6 +20,7 @@ const saved: Tournament = { id: "journey-2026", name: "Liga recorrido", season: 
   createdAt: "2026-01-01T00:00:00.000Z", matchdays: [{ number: 1, leg: 1,
     fixtures: [{ id: "game", homeTeamId: "a", awayTeamId: "b" }] }] };
 function click(name: string | RegExp) { fireEvent.click(screen.getByRole("button", { name })); }
+function openLibraryTools() { fireEvent.click(screen.getByText("Más herramientas de biblioteca")); }
 function openSaveRecoveryCenter() {
   const button = screen.getByRole("button", { name: /^Centro de guardado y recuperación$/ });
   if (button.getAttribute("aria-expanded") !== "true") fireEvent.click(button);
@@ -94,6 +95,7 @@ describe("complete application journeys with isolated browser storage", () => {
     localStorage.setItem("cancha.sportsUniverses", JSON.stringify(universes));
     await renderApplication(<App />);
     click("Biblioteca");
+    openLibraryTools();
     click("Panel principal del universo");
     const dashboard = screen.getByRole("region", { name: "Panel del universo deportivo" });
     fireEvent.click(within(dashboard).getByRole("button", {
@@ -327,6 +329,7 @@ describe("complete application journeys with isolated browser storage", () => {
     localStorage.setItem("cancha.tournaments", JSON.stringify([saved, other]));
     await renderApplication(<App />);
     click("Biblioteca");
+    openLibraryTools();
 
     fireEvent.click(screen.getByText("Crear universo"));
     fireEvent.change(screen.getAllByLabelText("Nombre")[0], { target: { value: "Simulación" } });
@@ -356,6 +359,7 @@ describe("complete application journeys with isolated browser storage", () => {
 
   it("assigns newly created tournaments to the active universe", async () => {
     await renderApplication(<App />);
+    openLibraryTools();
     fireEvent.click(screen.getByText("Crear universo"));
     fireEvent.change(screen.getAllByLabelText("Nombre")[0], { target: { value: "Escenario activo" } });
     click("Crear y activar universo");
@@ -381,6 +385,7 @@ describe("complete application journeys with isolated browser storage", () => {
     localStorage.setItem("cancha.tournaments", JSON.stringify([saved]));
     await renderApplication(<App />);
     click("Biblioteca");
+    openLibraryTools();
 
     async function createUniverse(name: string) {
       fireEvent.click(screen.getByText("Crear universo"));
@@ -414,6 +419,7 @@ describe("complete application journeys with isolated browser storage", () => {
     localStorage.setItem("cancha.tournaments", JSON.stringify([saved]));
     await renderApplication(<App />);
     click("Biblioteca");
+    openLibraryTools();
     await screen.findByRole("heading", { name: "Biblioteca de torneos" });
     click("Panel principal del universo");
     const dashboard = await screen.findByRole("region", { name: "Panel del universo deportivo" });
@@ -439,6 +445,7 @@ describe("complete application journeys with isolated browser storage", () => {
     }));
     await renderApplication(<App />);
     click("Biblioteca");
+    openLibraryTools();
     await screen.findByRole("heading", { name: "Biblioteca de torneos" });
     click("Panel principal del universo");
     let dashboard = await screen.findByRole("region", { name: "Panel del universo deportivo" });

@@ -23,6 +23,7 @@ interface SetupTournamentFormProps {
 }
 
 const initialTeams = ["Colo-Colo", "Universidad de Chile", "Universidad Católica", "Cobreloa"];
+const setupTieBreakerOptions = configurableTieBreakerOptions.filter((option) => option.value !== "headToHead");
 
 export function SetupTournamentForm({
   repository,
@@ -213,7 +214,7 @@ export function SetupTournamentForm({
               value={tieBreaker}
               onChange={(event) => updateTieBreaker(index, event.target.value as TieBreaker)}
             >
-              {configurableTieBreakerOptions.map((option) => (
+              {setupTieBreakerOptions.map((option) => (
                 <option
                   key={option.value}
                   value={option.value}
@@ -233,9 +234,9 @@ export function SetupTournamentForm({
         <button
           className="text-button add-rule"
           type="button"
-          disabled={tieBreakers.length >= configurableTieBreakerOptions.length}
+          disabled={tieBreakers.length >= setupTieBreakerOptions.length}
           onClick={() => {
-            const nextOption = configurableTieBreakerOptions.find((option) =>
+            const nextOption = setupTieBreakerOptions.find((option) =>
               !tieBreakers.includes(option.value),
             );
             if (nextOption) {

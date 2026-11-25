@@ -336,6 +336,8 @@ describe("simulator UI integration", () => {
     });
     await user.clear(legsInput);
     await user.type(legsInput, "1");
+    expect(screen.queryByRole("option", { name: "Enfrentamiento directo · minitabla completa (legado)" }))
+      .not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Crear campeonato/ }));
 
     expect(await screen.findByRole("heading", { name: "Campeonato UI" })).toBeInTheDocument();

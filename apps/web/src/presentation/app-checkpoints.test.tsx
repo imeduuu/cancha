@@ -157,6 +157,7 @@ it("expone el fallo de guardado sin marcar el punto como disponible", async () =
 
 it("el dashboard abre el Centro y cambiar de universo mantiene visibles los puntos de la biblioteca completa", async () => {
   const repo = await start();fireEvent.click(screen.getByRole("button", {name: "Biblioteca"}));
+  fireEvent.click(screen.getByText("Más herramientas de biblioteca"));
   fireEvent.click(screen.getByRole("button", {name: "Panel principal del universo"}));
   const dashboard = await screen.findByRole("region", {name: "Panel del universo deportivo"});
   fireEvent.click(within(dashboard).getByRole("button", {name: "Centro de guardado y recuperación"}));

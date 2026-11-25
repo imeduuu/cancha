@@ -22,7 +22,7 @@ eventos del historial.
 
 ## Alcance e integridad
 
-El selector está disponible en la Biblioteca y en el Centro de competiciones.
+Los controles para elegir y administrar universos, y el panel principal del universo, están agrupados en «Más herramientas de biblioteca». El selector también está disponible en el Centro de competiciones.
 La opción «Biblioteca anterior · sin asignar» mantiene visibles las bibliotecas
 antiguas y los torneos nuevos que aún no se organizaron. Crear un universo lo
 activa; luego se pueden incorporar varios torneos sin asignar, retirarlos o

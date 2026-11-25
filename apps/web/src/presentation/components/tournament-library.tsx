@@ -581,6 +581,8 @@ export function TournamentLibrary({
         </button>
       </div>
       <HistoricalArchiveAccess />
+      <details className="library-tools">
+      <summary>Más herramientas de biblioteca</summary>
       <SportsUniverseControls
         library={universeLibrary}
         tournaments={tournaments}
@@ -615,6 +617,7 @@ export function TournamentLibrary({
           onOpenSaveRecovery={() => setSaveRecoveryOpen(true)}
         />
       )}
+      </details>
       <div className="library-file-actions">
         <button className="small-action" disabled={busy} onClick={() => chooseFile("tournament")} type="button">
           Importar torneo desde JSON
