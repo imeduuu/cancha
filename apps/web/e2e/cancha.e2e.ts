@@ -11,7 +11,7 @@ import {advanceSecondDivision} from "@cancha/core/domain/services/second-divisio
 import {simulateChampionship} from "@cancha/core/application/use-cases/simulate-championship";
 import {brazilUpper} from "@cancha/core/test-utils/journey-competition-fixtures";
 import { continentalLeague } from "@cancha/core/test-utils/continental-qualification-fixtures";
-import { test as base, expect, type Page, type TestInfo } from "@playwright/test";
+import { test as base, expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { generateRoundRobinSchedule } from "@cancha/core/domain/services/round-robin-scheduler";
 import { divisionFixture } from "@cancha/core/domain/services/second-division-test-fixtures";
@@ -79,6 +79,7 @@ async function seed(page: Page, tournaments: Tournament[], activity: unknown[] =
   }, { tournaments, activity, universes });
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Cancha, inicio" })).toBeVisible();
+  await openTools(page);
 }
 async function saved(page: Page): Promise<Tournament[]> {
   return page.evaluate(() => JSON.parse(localStorage.getItem("cancha.tournaments") ?? "[]"));
@@ -125,12 +126,28 @@ async function layout(page: Page, info: TestInfo, label: string) {
   }
   expect(overflow.scroll, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width + 1);
 }
-async function library(page: Page) { await page.getByRole("button", { name: "Biblioteca", exact: true }).click(); }
+async function library(page: Page) {
+  await closeFixtureDetails(page);
+  await page.getByRole("button", { name: "Biblioteca", exact: true }).click();
+  const tools=page.locator(".library-tools");
+  if(!(await tools.evaluate((element:HTMLElement & {open:boolean})=>element.open)))
+    await page.getByText("Más herramientas de biblioteca",{exact:true}).click();
+}
 async function createScreen(page: Page) {
   await page.getByRole("button", { name: "Crear o importar torneo", exact: true }).click();
   await expect(page.getByRole("region", { name: "Importar campeonatos" })).toBeVisible();
 }
 function game(page: Page) { return page.getByRole("group", { name: / contra / }).first(); }
+async function openFixtureDetails(fixture:Locator){
+  const details=fixture.locator(".fixture-detail-disclosure:visible").first();
+  await expect(details).toBeVisible();
+  if(!(await details.evaluate(element=>(element as HTMLDetailsElement).open)))
+    await details.locator("summary").first().click();
+}
+async function closeFixtureDetails(page:Page){
+  const details=page.locator(".fixture-detail-disclosure[open]:visible");
+  while(await details.count())await details.first().locator("summary").first().click();
+}
 
 test("creación, participantes, resultados, tabla y simulaciones desde la interfaz", async ({ page }, info) => {
   await page.goto("/"); await expect(page.getByRole("heading", { name: "Biblioteca de torneos" })).toBeVisible();
@@ -147,6 +164,7 @@ test("creación, participantes, resultados, tabla y simulaciones desde la interf
   await layout(page, info, "setup");
   await page.getByRole("button", { name: /Crear campeonato/ }).click();
   await expect(game(page)).toBeVisible();
+  await openFixtureDetails(game(page));
   let inputs = game(page).getByRole("spinbutton");
   await inputs.nth(0).fill("3"); await inputs.nth(1).fill("1");
   await game(page).getByRole("button", { name: "Guardar", exact: true }).click();
@@ -159,6 +177,7 @@ test("creación, participantes, resultados, tabla y simulaciones desde la interf
   await game(page).getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(row.locator(".standing-points")).toHaveText("0");
   await game(page).getByRole("button", { name: /^Simular (partido|de nuevo)$/ }).click();
+  await game(page).getByText("Detalle",{exact:true}).click();
   await page.getByRole("button", { name: "Simular fecha", exact: true }).first().click();
   await expect(page.getByRole("region", { name: "Estadísticas del campeonato" })).toBeVisible();
   const stored = (await saved(page))[0];
@@ -179,18 +198,23 @@ test("simular la segunda rueda conserva íntegramente la primera", async ({ page
 test("borradores entre resumen, calendario y biblioteca; separación y recarga real", async ({ page }, info) => {
   const a = league(), other = league("other", "Otra competición");
   const b: Tournament = { ...other, teams: other.teams.map(t => ({ ...t, name: `Otro ${t.name}` })) };
-  await seed(page, [a, b]); await game(page).getByRole("spinbutton").nth(0).fill("7");
+  await seed(page, [a, b]); await openFixtureDetails(game(page)); await game(page).getByRole("spinbutton").nth(0).fill("7");
+  await closeFixtureDetails(page);
   await page.getByRole("button", { name: "Centro de calendario", exact: true }).click();
   const calendar = page.getByRole("region", { name: `Calendario de ${a.name}` });
-  await expect(calendar.getByRole("group").first().getByRole("spinbutton").nth(0)).toHaveValue("7");
+  await expect(calendar).toBeVisible();
   await layout(page, info, "calendar");
+  await page.getByRole("button",{name:"Volver al resumen",exact:true}).click();
+  await openFixtureDetails(game(page)); await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");
   await library(page); await page.getByRole("listitem", { name: b.name, exact: true }).getByRole("button", { name: "Abrir torneo", exact: true }).click();
+  await openFixtureDetails(game(page));
   await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("");
   await expect(game(page)).toHaveAccessibleName(/Otro /);
   await library(page); await page.getByRole("listitem", { name: a.name, exact: true }).getByRole("button", { name: "Abrir torneo", exact: true }).click();
+  await openFixtureDetails(game(page));
   await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");
   expect((await saved(page))[0].matchdays[0].fixtures[0].result).toBeUndefined();
-  await page.reload(); await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("");
+  await page.reload(); await openFixtureDetails(game(page)); await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("");
 });
 
 test("descarga y restauración JSON v7, confirmación nativa y teclado", async ({ page }, info) => {
@@ -293,14 +317,16 @@ test("expediente de proveedor conserva datos originales y formulario navegable",
 });
 
 test("carga lenta del calendario presenta su estado y conserva las ediciones", async ({ page }) => {
-  await seed(page, [league()]); await game(page).getByRole("spinbutton").nth(0).fill("6");
+  await seed(page, [league()]); await openFixtureDetails(game(page)); await game(page).getByRole("spinbutton").nth(0).fill("6"); await closeFixtureDetails(page);
   let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
   await page.route("**/match-calendar-*.js", async route => { await gate; await route.continue(); });
   try {
     await page.getByRole("button", { name: "Centro de calendario", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Cargando calendario" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Cargando calendario" })).toBeVisible();
   } finally { release(); }
-  await expect(page.getByRole("region", { name: "Calendario de Liga de navegador" }).getByRole("group").first().getByRole("spinbutton").nth(0)).toHaveValue("6");
+  await expect(page.getByRole("region", { name: "Calendario de Liga de navegador" })).toBeVisible();
+  await page.getByRole("button",{name:"Volver al resumen",exact:true}).click();
+  await openFixtureDetails(game(page)); await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("6");
 });
 
 test("fallo HTTP de un chunk aísla el panel y permite recuperar con las acciones disponibles", async ({ page, browserName }, info) => {
@@ -309,6 +335,7 @@ test("fallo HTTP de un chunk aísla el panel y permite recuperar con las accione
   await seed(page, [league()]);
   await expect(page.getByRole("alert").filter({ hasText: "No se pudo abrir este panel" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Tabla de posiciones", exact: true })).toBeVisible();
+  await openFixtureDetails(game(page));
   await game(page).getByRole("spinbutton").nth(0).fill("4");
   await game(page).getByRole("spinbutton").nth(1).fill("1");
   await game(page).getByRole("button", { name: "Guardar", exact: true }).click();
@@ -377,6 +404,7 @@ test("diálogo de simulación sigue utilizable con poca altura", async ({ page }
 
 test("guardar un resultado mantiene el panel en su columna", async ({ page }) => {
   await seed(page, [league()]);
+  await openFixtureDetails(game(page));
   const panel = page.locator(".preview-panel"); const before = (await panel.boundingBox())!;
   await game(page).getByRole("spinbutton").nth(0).fill("2");
   await game(page).getByRole("spinbutton").nth(1).fill("0");
@@ -395,6 +423,7 @@ test("centro de competiciones conserva temporadas y navega con diseño adaptable
   const future: Tournament = { ...source, id: "planned-center", season: 2027, name: "Planificación 2027", matchdays: [], sourceUrl: undefined,
     seasonPreparation: { schemaVersion: 1, sourceTournamentIds: [source.id], plannedParticipants: source.teams.map(t => t.name), calendarReviews: [] } };
   await seed(page, [source, future]);
+  await openFixtureDetails(game(page));
   await game(page).getByRole("spinbutton").nth(0).fill("8");
   await library(page);
   await page.getByRole("button", { name: "Centro de competiciones y temporadas", exact: true }).click();
@@ -406,6 +435,7 @@ test("centro de competiciones conserva temporadas y navega con diseño adaptable
   await center.getByRole("article").first().scrollIntoViewIfNeeded();
   await layout(page, info, "competition-center");
   await center.getByRole("article", { name: "Temporada 2027: Planificación 2027" }).getByRole("button", { name: "Abrir temporada", exact: true }).click();
+  await openFixtureDetails(game(page));
   await library(page);
   await expect(page.getByLabel("Competición guardada")).toHaveValue("brasileirao-serie-a");
   await page.getByRole("article", { name: `Temporada 2026: ${source.name}` }).getByRole("button", { name: "Abrir temporada", exact: true }).click();
@@ -443,7 +473,7 @@ test("clasificación internacional documentada desde el centro conserva trazabil
 test("historial de clubes desde el centro conserva borradores y separa identidades homónimas",async({page},info)=>{
  const first=continentalLeague(),second={...first,id:"club-history-next",season:2027,name:"Liga histórica 2027",competitionRules:{...first.competitionRules!,season:2027}};
  const homonym=continentalLeague("homonym-2026");await seed(page,[first,second,homonym]);
- await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
+ await openFixtureDetails(game(page));await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
  await page.getByRole("button",{name:"Centro de competiciones y temporadas",exact:true}).click();
  await page.getByRole("button",{name:"Historial deportivo de clubes",exact:true}).click();
  const history=page.getByRole("region",{name:"Historial deportivo de clubes"});
@@ -455,10 +485,11 @@ test("historial de clubes desde el centro conserva borradores y separa identidad
  await expect(history.getByRole("region",{name:"Estadísticas acumuladas del club"}).getByText(/6 PJ · 6 G/)).toBeVisible();
  await history.getByRole("article").first().scrollIntoViewIfNeeded();await layout(page,info,"club-history");
  await history.getByRole("button",{name:"Abrir torneo de origen",exact:true}).first().click();
- await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");await library(page);
+ await openFixtureDetails(game(page));await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");await library(page);
  await expect(page.getByRole("region",{name:"Historial deportivo de clubes"}).getByRole("checkbox").first()).toBeChecked();
  expect((await saved(page)).find(t=>t.id===first.id)?.matchdays).toEqual(first.matchdays);
  await page.getByRole("region",{name:"Historial deportivo de clubes"}).getByRole("button",{name:"Abrir torneo de origen",exact:true}).first().click();
+ await openFixtureDetails(game(page));
  await game(page).getByRole("button",{name:"Guardar",exact:true}).click();
  await expect(page.getByText("Resultado guardado.",{exact:true})).toBeVisible();await library(page);
  const updated=page.getByRole("region",{name:"Historial deportivo de clubes"});
@@ -495,7 +526,7 @@ test("palmarés y récords históricos conservan alcances y respaldos",async({pa
 
 test("H2H desde centro, perfil y calendario conserva filtros y marcadores",async({page},info)=>{
  const t=continentalLeague();await seed(page,[t]);
- await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
+ await openFixtureDetails(game(page));await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
  await page.getByRole("button",{name:"Centro de competiciones y temporadas",exact:true}).click();
  await page.getByRole("button",{name:"Enfrentamientos directos (H2H)",exact:true}).click();
  const panel=page.getByRole("region",{name:"Enfrentamientos directos (H2H) · Centro",exact:true});
@@ -505,7 +536,7 @@ test("H2H desde centro, perfil y calendario conserva filtros y marcadores",async
  await expect(panel.getByRole("article")).toHaveCount(1);await panel.getByRole("checkbox").check();
  await expect(panel.getByRole("region",{name:"Acumulado H2H"}).getByText(/1 PJ · A: 1 victorias/)).toBeVisible();
  await panel.getByLabel("Temporada H2H").selectOption("2026");await panel.scrollIntoViewIfNeeded();await layout(page,info,"head-to-head");
- await panel.getByRole("button",{name:"Abrir torneo del encuentro",exact:true}).click();await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");
+ await panel.getByRole("button",{name:"Abrir torneo del encuentro",exact:true}).click();await openFixtureDetails(game(page));await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");
  await game(page).getByRole("button",{name:"Comparar clubes (H2H)",exact:true}).click();
  const calendar=page.getByRole("region",{name:"Enfrentamientos directos (H2H) · Calendario",exact:true});await expect(calendar.getByRole("combobox",{name:"Club A",exact:true})).not.toHaveValue("");await expect(calendar.getByRole("combobox",{name:"Club B",exact:true})).not.toHaveValue("");
  await page.getByRole("button",{name:"Cerrar comparación del calendario",exact:true}).click();await library(page);
@@ -519,7 +550,7 @@ test("H2H desde centro, perfil y calendario conserva filtros y marcadores",async
 
 test("rendimiento de clubes grafica temporadas y compara actuación general sin perder borradores",async({page},info)=>{
  const t=continentalLeague(),next={...t,id:"performance-next",season:2027,name:"Liga de prueba 2027",competitionRules:{...t.competitionRules!,season:2027}};
- await seed(page,[t,next]);await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
+ await seed(page,[t,next]);await openFixtureDetails(game(page));await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
  await page.getByRole("button",{name:"Centro de competiciones y temporadas",exact:true}).click();await page.getByRole("button",{name:"Rendimiento deportivo de clubes",exact:true}).click();
  const panel=page.getByRole("region",{name:"Rendimiento deportivo · Centro",exact:true});
  const club=panel.getByRole("combobox",{name:"Club para rendimiento",exact:true});await club.selectOption((await club.getByRole("option").filter({hasText:`Alfa · ID ${t.teams[0].id}`}).getAttribute("value"))!);
@@ -531,10 +562,10 @@ test("rendimiento de clubes grafica temporadas y compara actuación general sin 
  await expect(panel.getByRole("region",{name:"Comparación de rendimiento general",exact:true})).toBeVisible();
  await panel.getByRole("checkbox").nth(0).check();await panel.getByRole("checkbox").nth(1).check();await expect(panel.getByRole("region",{name:"Evolución entre temporadas",exact:true})).toBeVisible();
  await panel.getByRole("figure",{name:"Resultados generales de Alfa",exact:true}).scrollIntoViewIfNeeded();await layout(page,info,"club-performance");
- await panel.getByRole("button",{name:"Abrir origen del rendimiento",exact:true}).first().click();await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");await library(page);
+ await panel.getByRole("button",{name:"Abrir origen del rendimiento",exact:true}).first().click();await openFixtureDetails(game(page));await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");await library(page);
  await expect(panel.getByRole("checkbox").first()).toBeChecked();await expect(panel.getByRole("combobox",{name:"Segundo club para comparar rendimiento",exact:true})).not.toHaveValue("");
  expect((await saved(page)).map(t=>t.matchdays)).toEqual([t,next].map(t=>t.matchdays));
- await panel.getByRole("button",{name:"Abrir origen del rendimiento",exact:true}).first().click();await game(page).getByRole("button",{name:"Guardar",exact:true}).click();await expect(page.getByText("Resultado guardado.",{exact:true})).toBeVisible();await library(page);
+ await panel.getByRole("button",{name:"Abrir origen del rendimiento",exact:true}).first().click();await openFixtureDetails(game(page));await game(page).getByRole("button",{name:"Guardar",exact:true}).click();await expect(page.getByText("Resultado guardado.",{exact:true})).toBeVisible();await library(page);
  await expect(panel.getByText(/Promedio de goles a favor por partido: 2,00 · En contra: 2,33/)).toBeVisible();await expect(panel.getByRole("alert")).toContainText("incompatibles");
  expect((await saved(page)).find(saved=>saved.id===next.id)?.matchdays).toEqual(next.matchdays);
 
@@ -544,12 +575,12 @@ test("rendimiento de clubes grafica temporadas y compara actuación general sin 
 
 
 test("centro de planificación revisa nóminas locales sin escribir hasta confirmar",async({page},info)=>{
- const t=continentalLeague();await seed(page,[t]);await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
+ const t=continentalLeague();await seed(page,[t]);await openFixtureDetails(game(page));await game(page).getByRole("spinbutton").nth(0).fill("7");await library(page);
  await page.getByRole("button",{name:"Centro de competiciones y temporadas",exact:true}).click();await page.getByRole("button",{name:"Planificación de temporadas",exact:true}).click();
  const panel=page.getByRole("region",{name:"Centro de planificación de temporadas",exact:true});
  await panel.getByRole("combobox",{name:"Competición de planificación",exact:true}).selectOption(t.competitionId!);await panel.getByRole("combobox",{name:"Temporada de origen de planificación",exact:true}).selectOption(t.id);await panel.getByRole("spinbutton",{name:"Año o edición de destino",exact:true}).fill("2028");await panel.getByRole("checkbox",{name:/Propongo expresamente/}).check();
  await expect(panel.getByRole("region",{name:"Vista previa de temporada"}).getByText(/4 participantes seleccionados/)).toBeVisible();expect(await saved(page)).toHaveLength(1);
- await panel.getByRole("button",{name:`Abrir origen: ${t.name}`,exact:true}).first().click();await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");await library(page);await expect(panel.getByRole("spinbutton",{name:"Año o edición de destino",exact:true})).toHaveValue("2028");
+ await panel.getByRole("button",{name:`Abrir origen: ${t.name}`,exact:true}).first().click();await openFixtureDetails(game(page));await expect(game(page).getByRole("spinbutton").nth(0)).toHaveValue("7");await library(page);await expect(panel.getByRole("spinbutton",{name:"Año o edición de destino",exact:true})).toHaveValue("2028");
  await panel.getByRole("region",{name:"Vista previa de temporada"}).scrollIntoViewIfNeeded();await layout(page,info,"season-planning-roster");await panel.getByRole("button",{name:"Revisar planificación y continuar",exact:true}).click();await expect(page.getByRole("dialog",{name:"Confirmar planificación local"})).toBeVisible();expect(await saved(page)).toHaveLength(1);await page.getByRole("button",{name:"Cancelar",exact:true}).click();expect(await saved(page)).toHaveLength(1);
  await panel.getByRole("button",{name:"Revisar planificación y continuar",exact:true}).click();await page.getByRole("button",{name:"Confirmar preparación",exact:true}).click();await expect(panel.getByRole("status")).toContainText("Planificación guardada");
  const data=await saved(page),next=data.find(s=>s.id!==t.id)!;expect(data).toHaveLength(2);expect(data.find(s=>s.id===t.id)?.matchdays).toEqual(t.matchdays);expect(next.season).toBe(2028);expect(next.matchdays).toEqual([]);expect(next.competitionRules?.verification.standings).toBe("pending");expect(next.seasonPreparation?.sourceTournamentIds).toEqual([t.id]);
@@ -657,7 +688,7 @@ test("puntos de control: IndexedDB real, recarga, descarga, restauración y elim
   await review.click();dialog = page.getByRole("dialog", {name: "Restaurar punto de control", exact: true});
   const safety = page.waitForEvent("download");await dialog.getByRole("button", {name: "Descargar respaldo actual antes de restaurar", exact: true}).click();await safety;
   await dialog.getByRole("button", {name: "Confirmar reemplazo por el punto", exact: true}).click();
-  await expect(page.getByRole("button", {name: "Biblioteca", exact: true})).toBeVisible();expect(await saved(page)).toEqual(tournaments);
+  await expect.poll(async()=>await saved(page)).toEqual(tournaments);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cancha.sportsUniverses")!))).toEqual(universes);
   const activity = await page.evaluate(() => JSON.parse(localStorage.getItem("cancha.activity")!));
   expect(activity.some((e: {id: string}) => e.id === "checkpoint-event")).toBe(true);expect(activity.at(-1).action).toBe("library-restored");
@@ -739,6 +770,7 @@ test("puntos de control: pestañas simultáneas y restauración invalidada por e
 async function readyEditor(page: Page) {
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(game(page)).toBeVisible();
+  await openFixtureDetails(game(page));
   return game(page);
 }
 
@@ -762,9 +794,10 @@ test("coordinación entre pestañas: dos ediciones simultáneas conservan una so
 });
 
 test("coordinación entre pestañas: simulación invalida un borrador y actualizar conserva los resultados", async ({page, context}, info) => {
-  await seed(page, [league()]);await readyEditor(page);
+  await seed(page, [league()]);
   const other = await context.newPage();await other.goto("/");const editor = await readyEditor(other);
   await editor.getByRole("spinbutton").nth(0).fill("9");await editor.getByRole("spinbutton").nth(1).fill("8");
+  await closeFixtureDetails(page);
   await page.getByRole("button", {name: "Simular fecha", exact: true}).first().click();
   await expect.poll(async () => (await saved(page))[0].matchdays[0].fixtures.filter(f => f.result).length).toBe(2);
   const simulated = await sportsStorage(page);
@@ -774,11 +807,12 @@ test("coordinación entre pestañas: simulación invalida un borrador y actualiz
   await expect(other.getByRole("status").filter({hasText: "Actualiza la vista"})).toBeVisible();
   expect(await sportsStorage(other)).toEqual(simulated);
   await other.getByRole("button", {name: "Actualizar biblioteca conservando borradores", exact: true}).click();
-  await expect(editor.getByRole("spinbutton").nth(0)).toHaveValue("9");expect(await sportsStorage(other)).toEqual(simulated);
+  await openFixtureDetails(editor);await expect(editor.getByRole("spinbutton").nth(0)).toHaveValue("9");expect(await sportsStorage(other)).toEqual(simulated);
   await layout(other, info, "external-change-draft-retained");
   await library(other);
   await other.getByRole("listitem", {name: "Liga de navegador", exact: true}).getByRole("button", {name: "Volver al torneo activo", exact: true}).click();
   const current = (await saved(other))[0].matchdays[0].fixtures[0].result!;
+  await openFixtureDetails(game(other));
   await expect(game(other).getByRole("spinbutton").nth(0)).toHaveValue(String(current.homeGoals));
   expect(await sportsStorage(other)).toEqual(simulated);await other.close();
 });
@@ -803,7 +837,14 @@ test("coordinación entre pestañas: restaurar un punto invalida la edición pen
   expect(await sportsStorage(other)).toEqual(restored);await other.close();
 });
 
+async function openTools(page:Page){
+  await closeFixtureDetails(page);
+  const tools=page.locator(".topbar-tools");
+  if(!(await tools.evaluate((element:HTMLElement & {open:boolean})=>element.open)))
+    await page.getByText("Más herramientas",{exact:true}).click();
+}
 async function closureCenter(page: Page) {
+  await openTools(page);
   await page.getByRole("button",{name:"Centro de cierre",exact:true}).click();
   const center=page.getByRole("region",{name:"Centro de cierre de temporadas",exact:true});await expect(center).toBeVisible();return center;
 }
@@ -862,6 +903,7 @@ test("cierre deportivo: final pendiente bloquea y enlaza al calendario sin escri
 });
 
 async function historicalArchive(page:Page) {
+  await openTools(page);
   await page.locator("#open-historical-archive").click();
   const archive=page.getByRole("region",{name:"Archivo histórico del universo",exact:true});await expect(archive).toBeVisible();return archive;
 }
@@ -913,9 +955,10 @@ test("archivo histórico: cambios externos actualizan cierres y cambiar universo
   expect((await saved(page)).find(t=>t.id===hidden.id)).toEqual(hidden);
 });
 
-async function drawCenter(page:Page){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await page.locator("#open-draw-center").click();const center=page.getByRole("region",{name:"Centro de sorteos y cruces",exact:true});await expect(center).toBeVisible();return center;}
+async function drawCenter(page:Page){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await openTools(page);await page.locator("#open-draw-center").click();const center=page.getByRole("region",{name:"Centro de sorteos y cruces",exact:true});await expect(center).toBeVisible();return center;}
 
 async function associationsManager(page:Page){
+  await openTools(page);
   await page.getByRole("button",{name:"Asociaciones y afiliaciones",exact:true}).first().click();
   const manager=page.getByRole("region",{name:"Administración de asociaciones y afiliaciones",exact:true});await expect(manager).toBeVisible();return manager;
 }
@@ -923,10 +966,10 @@ test("afiliaciones: registra asociación y aparición documental con revisión e
   const s=generatorScenario();await seed(page,[s.t],s.state.activity);const manager=await associationsManager(page),before=await sportsStorage(page);
   await manager.getByRole("button",{name:"Registrar asociación",exact:true}).click();await manager.getByRole("textbox",{name:"Nombre de la asociación",exact:true}).fill("Asociación ficticia de navegador");await manager.getByRole("combobox",{name:"Procedencia de la asociación",exact:true}).selectOption("documented");
   await manager.getByRole("textbox",{name:"URL HTTPS de la asociación",exact:true}).fill("https://example.org/fictitious-association");await manager.getByRole("textbox",{name:"Referencia de la asociación",exact:true}).fill("Fixture documental ficticio");await manager.getByRole("combobox",{name:"Estado documental de la asociación",exact:true}).selectOption("verified");await manager.getByRole("checkbox",{name:/Contrasté los documentos/}).check();
-  await manager.getByRole("button",{name:"Revisar registro de asociación o afiliación",exact:true}).click();expect(await sportsStorage(page)).toEqual(before);await layout(page,info,"association-review");await manager.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true}).focus();await page.keyboard.press("Enter");await expect(manager.getByText(/Registro confirmado\. Se conservaron/)).toBeVisible();
+  await manager.getByRole("button",{name:"Revisar registro de asociación o afiliación",exact:true}).click();expect(await sportsStorage(page)).toEqual(before);await layout(page,info,"association-review");await manager.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true}).click();await expect(manager.getByRole("heading",{name:"Asociación ficticia de navegador",exact:true})).toBeVisible();
   const associationId=await page.evaluate(()=>JSON.parse(localStorage.getItem("cancha.activity")!).find((e:{action:string})=>e.action==="association-recorded").after.association.id);
   await manager.getByRole("button",{name:"Registrar o revisar afiliación de temporada",exact:true}).click();await manager.getByRole("combobox",{name:"Asociación del participante",exact:true}).selectOption(associationId);await manager.getByRole("combobox",{name:"Procedencia de la afiliación",exact:true}).selectOption("documented");await manager.getByRole("textbox",{name:"URL HTTPS de la afiliación",exact:true}).fill("https://example.org/fictitious-affiliation");await manager.getByRole("textbox",{name:"Referencia de la afiliación",exact:true}).fill("Afiliación ficticia de esta temporada");await manager.getByRole("combobox",{name:"Estado documental de la afiliación",exact:true}).selectOption("verified");await manager.getByRole("checkbox",{name:/Contrasté los documentos/}).check();
-  const afterAssociation=await sportsStorage(page);await manager.getByRole("button",{name:"Revisar registro de asociación o afiliación",exact:true}).click();expect(await sportsStorage(page)).toEqual(afterAssociation);await manager.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true}).click();await expect(manager.getByText(/Registro confirmado\. Se conservaron/)).toBeVisible();
+  const afterAssociation=await sportsStorage(page);await manager.getByRole("button",{name:"Revisar registro de asociación o afiliación",exact:true}).click();expect(await sportsStorage(page)).toEqual(afterAssociation);await manager.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true}).click();
   const summary=manager.getByRole("region",{name:"Afiliación de Participante 1 en 2026",exact:true});await expect(summary).toContainText("Verificada por el usuario");await summary.getByText("Historial de afiliaciones de esta aparición (1)",{exact:true}).click();await expect(summary).toContainText("Afiliación ficticia de esta temporada");expect((await saved(page))[0]).toEqual(s.t);
 });
 
@@ -940,10 +983,10 @@ test("afiliaciones: restricción explícita rechaza grupos manuales y permite ge
 });
 
 test("afiliaciones: dos pestañas conservan una sola corrección y rechazan revisión obsoleta",async({page,context})=>{
-  const s=clubAssociationScenario(false);await seed(page,[s.t],s.state.activity);const first=await associationsManager(page),other=await context.newPage();await other.goto("/");const second=await associationsManager(other);
+  const s=clubAssociationScenario(false);await seed(page,[s.t],s.state.activity);const first=await associationsManager(page),other=await context.newPage(),before=await sportsStorage(page);await other.goto("/");const second=await associationsManager(other);
   for(const manager of [first,second]){await manager.getByRole("button",{name:"Registrar o revisar afiliación de temporada",exact:true}).click();await manager.getByRole("combobox",{name:"Estado de la relación",exact:true}).selectOption("unknown");await manager.getByRole("combobox",{name:"Procedencia de la afiliación",exact:true}).selectOption("local");await manager.getByRole("button",{name:"Revisar registro de asociación o afiliación",exact:true}).click();}
-  await first.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true}).click();await expect(first.getByText(/Registro confirmado\. Se conservaron/)).toBeVisible();const after=await sportsStorage(page);
-  await second.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true}).click();await expect(second.getByRole("status").filter({hasText:"La biblioteca cambió"})).toBeVisible();expect(await sportsStorage(other)).toEqual(after);expect((await saved(page))[0]).toEqual(s.t);await other.close();
+  await first.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true}).click();const after=await sportsStorage(page);expect(after).not.toEqual(before);
+  await expect(second.getByRole("button",{name:"Confirmar registro de asociación o afiliación",exact:true})).toHaveCount(0);expect(await sportsStorage(other)).toEqual(after);expect((await saved(page))[0]).toEqual(s.t);await other.close();
 });
 
 test("afiliaciones: cambiar universo no comparte asociaciones ni clubes homónimos",async({page})=>{
@@ -995,7 +1038,7 @@ test("generador local: cambiar universo invalida la revisión y no comparte bomb
   const universes:SportsUniverseLibrary={version:1,activeUniverseId:"u1",universes:[{id:"u1",name:"Generación local"},{id:"u2",name:"Universo sin configuración"}],assignments:{[s.t.id]:"u1",[otherSeason.id]:"u2"}};
   s.configuration.universeId="u1";s.configuration.foundation=drawFoundation(s.t,"u1",[s.t,otherSeason],s.state.activity);
   await seed(page,[s.t,otherSeason],s.state.activity,universes);const center=await drawCenter(page);await center.getByRole("button",{name:"Revisar Grupos registrados",exact:true}).click();const generator=center.getByRole("region",{name:"Generación local de grupos",exact:true});await generator.getByRole("button",{name:"Generar distribución local",exact:true}).click();await generator.getByRole("button",{name:"Revisar distribución",exact:true}).click();
-  const other=await context.newPage();await other.goto("/");await other.getByRole("button",{name:"Biblioteca",exact:true}).click();await other.getByRole("combobox",{name:"Universo activo",exact:true}).selectOption("u2");await expect(center.getByRole("button",{name:"Confirmar distribución y cruces",exact:true})).toHaveCount(0);
+  const other=await context.newPage();await other.goto("/");await library(other);await other.getByRole("combobox",{name:"Universo activo",exact:true}).selectOption("u2");await expect(center.getByRole("button",{name:"Confirmar distribución y cruces",exact:true})).toHaveCount(0);
   const second=await drawCenter(other);await expect(second.getByRole("option",{name:/Grupos del otro universo/})).toHaveCount(1);await second.getByRole("button",{name:"Revisar Grupos registrados",exact:true}).click();await expect(second.getByRole("button",{name:"Generar distribución local",exact:true})).toBeDisabled();expect((await saved(page)).find(t=>t.id===otherSeason.id)).toEqual(otherSeason);await other.close();
 });
 
@@ -1070,7 +1113,7 @@ test("sorteos y cruces: dos pestañas rechazan confirmaciones incompatibles y re
   const events=await page.evaluate(()=>JSON.parse(localStorage.getItem("cancha.activity")!) as {action:string;universeId?:string}[]);expect(events.filter(e=>e.action==="stage-draw-confirmed")).toHaveLength(1);expect(events.find(e=>e.action==="stage-draw-confirmed")?.universeId).toBe("u1");await other.close();
 });
 
-async function sportsDecisions(page:Page,id:string){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await page.locator("#open-sports-decisions").click();const center=page.getByRole("region",{name:"Centro de decisiones deportivas",exact:true});await expect(center).toBeVisible();await center.getByRole("combobox",{name:"Competición y temporada para decisiones",exact:true}).selectOption(id);return center;}
+async function sportsDecisions(page:Page,id:string){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await openTools(page);await page.locator("#open-sports-decisions").click();const center=page.getByRole("region",{name:"Centro de decisiones deportivas",exact:true});await expect(center).toBeVisible();await center.getByRole("combobox",{name:"Competición y temporada para decisiones",exact:true}).selectOption(id);return center;}
 async function documentaryReview(center:ReturnType<Page["getByRole"]>,t:Tournament){
   const input=decisionInput(t),manager=center.getByRole("region",{name:"Resoluciones oficiales",exact:true});
   await manager.getByText(`${input.context.title} · Pendiente`,{exact:true}).click();

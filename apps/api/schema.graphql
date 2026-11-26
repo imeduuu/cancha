@@ -132,6 +132,9 @@ type Mutation {
   """Guarda una copia completa de la biblioteca actual."""
   createSaveCheckpoint(description: String, name: String!): SaveCheckpoint!
   createTournament(input: CreateTournamentInput!): Tournament!
+
+  """Crea un enlace público de solo lectura para un torneo."""
+  createTournamentShare(tournamentId: ID!): String!
   deleteSaveCheckpoint(expectedVersion: Int!, id: ID!): Boolean!
 
   """Elimina el torneo y registra tournament-deleted."""
@@ -176,6 +179,12 @@ type Mutation {
   """
   restoreSaveCheckpoint(expectedLibraryVersion: Int!, expectedVersion: Int!, id: ID!): RestoreResult!
 
+  """Revoca un enlace público de torneo."""
+  revokeTournamentShare(token: String!): Boolean!
+
+  """Revoca todos los enlaces públicos de un torneo."""
+  revokeTournamentShares(tournamentId: ID!): Boolean!
+
   """Cambia el torneo activo (null lo deja sin torneo activo)."""
   setActiveTournament(tournamentId: ID): LibraryInfo!
   setTournamentArchived(archived: Boolean!, expectedVersion: Int!, tournamentId: ID!): Tournament!
@@ -195,6 +204,14 @@ input PointsSystemInput {
   draw: Int!
   loss: Int!
   win: Int!
+}
+
+"""Datos deportivos públicos de un torneo compartido."""
+type PublicTournament {
+  matchdays: [Matchday!]!
+  name: String!
+  season: Int
+  standings: [Standing!]!
 }
 
 type Query {
@@ -222,6 +239,9 @@ type Query {
 
   """Usuario de la sesión actual."""
   me: User!
+
+  """Consulta pública de un torneo compartido."""
+  publicTournament(token: String!): PublicTournament
 
   """Respaldo `cancha-backup` v7 del punto, verificado (para descargarlo)."""
   saveCheckpointContent(id: ID!): JSON!
