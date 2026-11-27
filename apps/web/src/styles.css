@@ -108,14 +108,14 @@
 .page-shell { max-width: var(--page-max); margin: 0 auto; padding: 0 var(--page-gutter); }
 
 /* Barra superior: banda oscura a todo el ancho (box-shadow + clip-path, sin desborde horizontal). */
-.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); min-height: 72px; padding-block: var(--space-3); color: var(--top-fg); border-image: linear-gradient(var(--top-bg) 0 0) fill 0 / / 0 100vmax; }
+.topbar { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--space-5); min-height: 64px; padding-block: var(--space-2); color: var(--top-fg); border-image: linear-gradient(var(--top-bg) 0 0) fill 0 / / 0 100vmax; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--top-fg); font-family: var(--font-display); font-size: 30px; font-weight: 800; letter-spacing: .01em; line-height: 1; text-decoration: none; }
 .brand:hover { color: var(--top-fg); }
 .brand-mark { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: var(--primary); color: var(--on-primary); font-size: var(--fs-xl); box-shadow: 0 0 0 3px var(--brand-ring); }
 .brand-period { color: var(--highlight); }
 .topbar-note, .topbar-status, .hero-footnote, .empty-footer, .page-footer, .matchday-heading > span { font-family: var(--font-label); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: var(--tracking-label); }
 .topbar-note { color: var(--top-muted); }
-.topbar-actions { display: flex; order: 3; flex: 1 1 100%; flex-wrap: wrap; gap: 6px; min-width: 0; padding-top: var(--space-3); border-top: 1px solid var(--top-button-line); }
+.topbar-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .topbar-nav { min-height: 36px; padding: 0 var(--space-3); border: 1px solid var(--top-button-line); border-radius: var(--radius-pill); background: var(--top-button-bg); color: var(--top-fg); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; transition: background-color .15s ease, border-color .15s ease; }
 .topbar-nav:hover:not(:disabled) { border-color: var(--primary); background: var(--top-button-hover); }
 .topbar-nav:disabled { cursor: wait; opacity: .6; }
@@ -133,11 +133,15 @@
 
 /* Hero: estadio de noche con focos y líneas de cal. */
 .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .82fr); gap: var(--space-8); min-height: 300px; align-items: center; border-bottom: 1px solid var(--line); overflow: hidden; }
-.active-tournament-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
-.active-tournament-bar strong { font-family: var(--font-display); font-size: var(--fs-lg); }
-.active-tournament-bar > span:last-child { color: var(--fg-soft); font-size: var(--fs-sm); }
-.tournament-route-nav { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: var(--space-2); }
-.tournament-route-nav [aria-current="page"] { border-color: var(--primary); }
+.active-tournament-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-2) 0 0; border-bottom: 1px solid var(--line); }
+.active-tournament-selector { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--fg-soft); font-size: var(--fs-xs); font-weight: 600; }
+.active-tournament-selector select { max-width: min(260px, 55vw); min-height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--surface); color: var(--fg); font: 600 var(--fs-sm) var(--font-body); }
+.tournament-route-nav { display: flex; flex: 1 1 100%; gap: var(--space-2); max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+.tournament-route-nav .topbar-nav { border-color: transparent; background: transparent; color: var(--fg-soft); }
+.tournament-route-nav [aria-current="page"] { border-color: var(--primary); background: var(--surface-3); color: var(--fg); }
+.tournament-tools-home { padding: var(--space-4) 0; }
+.tournament-tools-home h2 { margin: 0 0 var(--space-3); font: 700 var(--fs-xl) var(--font-display); }
+.tournament-tools-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .page-shell > h1.sr-only:focus { position: static; width: auto; height: auto; margin: var(--space-3) 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
 .active-tournament-label { color: var(--accent-fg); font-family: var(--font-label); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: var(--tracking-label); }
 .hero-copy { padding: var(--space-10) 0 var(--space-8); }
@@ -651,13 +655,16 @@
 }
 
 @media (max-width: 760px) {
-  .topbar-actions { justify-content: flex-start; }
-  .topbar { min-height: 64px; gap: var(--space-3); }
-  .brand { font-size: 26px; }
-  .topbar-nav { min-height: 34px; padding: 0 10px; }
+  .topbar { min-height: 52px; gap: var(--space-2); }
+  .brand { flex: 0 0 auto; gap: 7px; font-size: 24px; }
+  .brand-mark { width: 30px; height: 30px; font-size: var(--fs-lg); }
+  .topbar-actions { flex: 0 0 auto; gap: 4px; }
+  .topbar-nav { min-height: 32px; padding: 0 8px; font-size: var(--fs-2xs); }
   .topbar-active-tournament { display: none; }
-  .topbar-note { display: none; }
-  .topbar-status { display: none; }
+  .active-tournament-bar { gap: var(--space-1); padding-top: var(--space-1); }
+  .active-tournament-selector { flex-basis: 100%; }
+  .tournament-route-nav { flex-wrap: nowrap; gap: 2px; padding-bottom: var(--space-1); }
+  .tournament-route-nav .topbar-nav { flex: 0 0 auto; }
   .confirmation-dialog-content { padding: 24px; }
   .hero { grid-template-columns: minmax(0, 1fr); gap: 0; min-height: auto; padding-bottom: var(--space-6); }
   .hero-copy { padding: var(--space-8) 0 var(--space-5); }
@@ -697,7 +704,9 @@
   .regulations-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 400px) {
-  .topbar-status { font-size: var(--fs-2xs); letter-spacing: .4px; }
+  .topbar { gap: 4px; }
+  .topbar-actions { gap: 2px; }
+  .topbar-actions .topbar-nav { padding-inline: 5px; }
   .preview-panel { padding: 17px; }
   .page-footer { gap: 12px; font-size: var(--fs-2xs); }
   .confirmation-dialog-actions { flex-direction: column-reverse; }

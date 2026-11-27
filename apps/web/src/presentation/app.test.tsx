@@ -227,25 +227,20 @@ afterEach(() => {
 });
 
 describe("simulator UI integration", () => {
-  it("keeps primary navigation visible and groups advanced centers in the tools menu", async () => {
+  it("shows global navigation, a compact tournament selector, and active section tabs", async () => {
     localStorage.setItem("cancha.tournaments", JSON.stringify([tournament]));
     localStorage.setItem("cancha.activeTournamentId", tournament.id);
-    const user = userEvent.setup();
     await renderApplication(<App />);
 
-    expect(screen.getByRole("button", { name: "Biblioteca" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mis torneos" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crear torneo" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cuenta" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Torneo activo" })).toHaveTextContent("Liga Uno");
-    const menu = screen.getByText("Más herramientas");
-    expect(menu.closest("details")).not.toHaveAttribute("open");
-    menu.focus();
-    expect(document.activeElement).toBe(menu);
-    await user.click(menu);
-    expect(menu.closest("details")).toHaveAttribute("open");
-    for (const name of ["Decisiones deportivas", "Asociaciones y afiliaciones", "Sorteos y cruces", "Archivo histórico", "Centro de cierre", "Centro de simulación"]) {
-      expect(screen.getByRole("button", { name })).toBeInTheDocument();
-    }
+    expect(screen.getByRole("combobox", { name: "Cambiar torneo activo" })).toHaveValue("league-one");
+    expect(screen.getByRole("button", { name: "Resumen" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Herramientas" })).not.toHaveAttribute("aria-current");
+    expect(screen.queryByText("SIMULADOR DE CAMPEONATOS")).not.toBeInTheDocument();
+    expect(screen.queryByText("TU TORNEO, TUS REGLAS")).not.toBeInTheDocument();
   });
 
   it("keeps the library usable and reports an unavailable LocalStorage", async () => {
@@ -270,7 +265,7 @@ describe("simulator UI integration", () => {
     const user = userEvent.setup();
     await renderApplication(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Biblioteca" }));
+    await user.click(await screen.findByRole("button", { name: "Mis torneos" }));
     await user.click(screen.getByRole("button", { name: /^Centro de guardado y recuperación$/ }));
     await user.click(await screen.findByRole("button", { name: "Recuperar estado anterior" }));
     await user.click(await screen.findByRole("button", { name: "Restaurar copia local" }));
@@ -310,7 +305,7 @@ describe("simulator UI integration", () => {
     await user.click((await screen.findAllByRole("button", { name: "Historial de actividad" }))[0]);
     expect(screen.getByRole("heading", { name: "Historial de actividad" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cerrar historial" }));
-    await user.click(screen.getByRole("button", { name: "Biblioteca" }));
+    await user.click(screen.getByRole("button", { name: "Mis torneos" }));
     await user.click(await screen.findByRole("button", { name: "Auditoría" }));
     expect(screen.getByRole("heading", { name: "Historial de actividad" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cerrar historial" }));
@@ -406,7 +401,7 @@ describe("simulator UI integration", () => {
     await renderApplication(<App />);
 
     expect(await screen.findByRole("heading", { name: "Liga Uno" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Biblioteca" }));
+    await user.click(screen.getByRole("button", { name: "Mis torneos" }));
     const secondCard = screen.getByRole("listitem", { name: /Liga Dos/ });
     await user.click(within(secondCard).getByRole("button", { name: "Abrir torneo" }));
     expect(await screen.findByRole("heading", { name: "Liga Dos" })).toBeInTheDocument();
@@ -846,7 +841,7 @@ describe("simulator UI integration", () => {
     await renderApplication(<App />);
 
     await screen.findByRole("heading", { name: "Liga Uno" });
-    await user.click(screen.getByRole("button", { name: "Biblioteca" }));
+    await user.click(screen.getByRole("button", { name: "Mis torneos" }));
     await user.click(await screen.findByRole("button", { name: "Ver resumen" }));
     await user.click(screen.getByRole("button", { name: "Abrir calendario de partidos" }));
 
@@ -873,7 +868,7 @@ describe("simulator UI integration", () => {
     await renderApplication(<App />);
 
     await screen.findByRole("heading", { name: "Liga Uno" });
-    await user.click(screen.getByRole("button", { name: "Biblioteca" }));
+    await user.click(screen.getByRole("button", { name: "Mis torneos" }));
     const card = screen.getByRole("listitem", { name: "Liga Uno" });
     expect(within(card).getByLabelText("Alertas de Liga Uno")).toHaveTextContent("Incidencias: 2");
     expect(within(card).getByLabelText("Alertas de Liga Uno")).toHaveTextContent("Informativas 2");
@@ -1193,7 +1188,7 @@ describe("simulator UI integration", () => {
     };
     const backupText = JSON.stringify(createTournamentBackup([conflicting]));
     await renderApplication(<App />);
-    await user.click(await screen.findByRole("button", { name: "Biblioteca" }));
+    await user.click(await screen.findByRole("button", { name: "Mis torneos" }));
     await user.click(screen.getByRole("button", { name: /^Centro de guardado y recuperación$/ }));
     await user.click(screen.getByRole("button", { name: "Restaurar respaldo" }));
     await user.upload(
@@ -1237,7 +1232,7 @@ describe("simulator UI integration", () => {
       incomingUniverses,
     ));
     await renderApplication(<App />);
-    await user.click(await screen.findByRole("button", { name: "Biblioteca" }));
+    await user.click(await screen.findByRole("button", { name: "Mis torneos" }));
     await user.click(screen.getByRole("button", { name: /^Centro de guardado y recuperación$/ }));
     await user.click(screen.getByRole("button", { name: "Restaurar respaldo" }));
     await user.upload(
@@ -1294,7 +1289,7 @@ describe("simulator UI integration", () => {
     await user.click(within(confirmation).getByRole("button", { name: "Reemplazar biblioteca" }));
 
     expect(await screen.findByRole("heading", { name: "Liga Uno" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Biblioteca" }));
+    await user.click(screen.getByRole("button", { name: "Mis torneos" }));
     expect(await screen.findByRole("listitem", { name: /Liga Uno/ })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(new LocalStorageTournamentRepository(false).findAll().map(({ id }) => id)).toEqual([tournament.id]);
@@ -1306,7 +1301,7 @@ describe("simulator UI integration", () => {
     const user = userEvent.setup();
     await renderApplication(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Biblioteca" }));
+    await user.click(await screen.findByRole("button", { name: "Mis torneos" }));
     await user.click(screen.getByRole("button", { name: /^Centro de guardado y recuperación$/ }));
     expect(await screen.findByRole("button", { name: "Exportar datos originales para recuperación" }))
       .toBeEnabled();
@@ -1345,7 +1340,7 @@ describe("simulator UI integration", () => {
     const user = userEvent.setup();
     await renderApplication(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Biblioteca" }));
+    await user.click(await screen.findByRole("button", { name: "Mis torneos" }));
     await user.click(screen.getByRole("button", { name: /^Centro de guardado y recuperación$/ }));
     await user.click(screen.getByRole("button", { name: "Exportar datos originales para recuperación" }));
 

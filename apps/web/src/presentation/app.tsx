@@ -1399,10 +1399,9 @@ function Application({ libraryBackend }: AppProps) {
           <span className="brand-mark">C</span>
           <span>cancha<span className="brand-period">.</span></span>
         </a>
-        <span className="topbar-note">SIMULADOR DE CAMPEONATOS</span>
         <div className="topbar-actions">
           <button className="topbar-nav" disabled={libraryLoading} onClick={() => {navigate("/torneos");setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("library");}} type="button">
-            Biblioteca
+            Mis torneos
           </button>
           <button className="topbar-nav" disabled={libraryLoading} onClick={() => {
             navigate("/torneos/nuevo");setLoadError("");
@@ -1410,30 +1409,23 @@ function Application({ libraryBackend }: AppProps) {
           }} type="button">
             Crear torneo
           </button>
-          <details className="topbar-tools">
-            <summary className="topbar-nav">Más herramientas</summary>
-            <div className="topbar-tools-menu">
-              <button id="open-sports-decisions" className="topbar-nav" type="button" disabled={libraryLoading} onClick={()=>openDecisions(tournament ?? undefined)}>Decisiones deportivas</button>
-              <ClubAssociationsAccess tournament={tournament ?? undefined}/>
-              <button id="open-draw-center" className="topbar-nav" type="button" disabled={libraryLoading} onClick={()=>openDraws(tournament ?? undefined)}>Sorteos y cruces</button>
-              <button id="open-historical-archive" className="topbar-nav" type="button" disabled={libraryLoading} onClick={openArchive}>Archivo histórico</button>
-              <button id="open-season-closure" className="topbar-nav" type="button" disabled={libraryLoading} onClick={() => openClosure(tournament ?? undefined)}>Centro de cierre</button>
-              <button className="topbar-nav" disabled={libraryLoading} type="button" onClick={() => {setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setSimulationCenterOpen(value => !value);}}>Centro de simulación</button>
-            </div>
-          </details>
           <AccountAccess />
         </div>
-        <span className="topbar-status"><span /> TU TORNEO, TUS REGLAS</span>
       </header>
 
       {tournament && activeCompetition && (
         <section className="active-tournament-bar" aria-label="Torneo activo">
-          <span className="active-tournament-label">TORNEO ACTIVO</span>
-          <strong>{tournament.name}</strong>
-          <span>{activeCompetition.territory} · {activeCompetition.name} · Temporada {tournament.season ?? "sin año"}</span>
+          <label className="active-tournament-selector">Torneo activo
+            <select aria-label="Cambiar torneo activo" value={tournament.id} onChange={event => {
+              const selected = scopedTournaments.find(item => item.id === event.currentTarget.value);
+              if (selected) openTournament(selected);
+            }}>
+              {scopedTournaments.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
           <nav className="tournament-route-nav" aria-label="Secciones del torneo">
             {([ ["Resumen", "resumen"], ["Partidos", "partidos"], ["Tabla", "tabla"], ["Estadísticas", "estadisticas"], ["Plantel", "plantel"], ["Herramientas", "herramientas"] ] as const).map(([label, section]) => (
-              <button key={section} className="topbar-nav" type="button" aria-current={routeSection === section ? "page" : undefined}
+              <button key={section} className="topbar-nav" type="button" aria-current={(routeSection === section || (!routeSection && section === "resumen")) ? "page" : undefined}
                 onClick={() => navigate(tournamentPath(tournament.id, section))}>{label}</button>
             ))}
           </nav>
@@ -1613,6 +1605,18 @@ function Application({ libraryBackend }: AppProps) {
             {loadError && <p className="error-message" role="alert">{loadError}</p>}
           </div>
         ) : tournament ? (
+          <>
+          {routeSection === "herramientas" && !routeTool && <section className="tournament-tools-home" aria-label="Herramientas del torneo">
+            <h2>Herramientas</h2>
+            <div className="tournament-tools-links">
+              <button id="open-sports-decisions" className="small-action" type="button" onClick={() => openDecisions(tournament)}>Decisiones deportivas</button>
+              <ClubAssociationsAccess tournament={tournament}/>
+              <button id="open-draw-center" className="small-action" type="button" onClick={() => openDraws(tournament)}>Sorteos y cruces</button>
+              <button id="open-historical-archive" className="small-action" type="button" onClick={openArchive}>Archivo histórico</button>
+              <button id="open-season-closure" className="small-action" type="button" onClick={() => openClosure(tournament)}>Centro de cierre</button>
+              <button className="small-action" type="button" onClick={() => setSimulationCenterOpen(true)}>Simular temporadas</button>
+            </div>
+          </section>}
           <aside className="preview-panel">
               <div className="preview-topline">
               <span className="eyebrow">TORNEO ACTIVO · CALENDARIO</span>
@@ -1712,7 +1716,7 @@ function Application({ libraryBackend }: AppProps) {
                   />
                 </DeferredPanel>
               ) : (
-              <>
+              <div className="tournament-board-content">
               <div className="tournament-board" hidden={calendarView}>
               <div className="board-controls" hidden={!defaultBoardRoute}>
               <p className="preview-summary">
@@ -1998,9 +2002,10 @@ function Application({ libraryBackend }: AppProps) {
                   /></DeferredPanel>
                 </div>
               )}
-              </>
+              </div>
               )}
           </aside>
+          </>
         ) : (
           <p className="error-message" role="alert">
             No hay un campeonato cargado. Crea o importa uno para continuar.

@@ -113,8 +113,8 @@ test("centro de simulación exige revisión y confirmación antes de guardar", a
   }};
   await seed(page, [t]);
   await openTools(page);
-  await page.getByRole("button", {name: "Centro de simulación", exact: true}).click();
-  await closeTools(page);
+  await page.getByRole("button", {name: "Simular temporadas", exact: true}).click();
+
   const center = page.getByRole("region", {name: "Centro de simulación de temporadas", exact: true});
   expect((await saved(page))[0].matchdays.flatMap(d => d.fixtures).every(f => !f.result)).toBe(true);
   await center.getByRole("combobox", {name: "Alcance", exact: true}).selectOption("0");
@@ -154,7 +154,7 @@ async function layout(page: Page, info: TestInfo, label: string) {
 }
 async function library(page: Page) {
   await closeFixtureDetails(page);
-  await page.getByRole("button", { name: "Biblioteca", exact: true }).click();
+  await page.getByRole("button", { name: "Mis torneos", exact: true }).click();
   const tools=page.locator(".library-tools");
   if(!(await tools.evaluate((element:HTMLElement & {open:boolean})=>element.open)))
     await page.getByText("Más herramientas de biblioteca",{exact:true}).click();
@@ -742,7 +742,7 @@ test("puntos de control: IndexedDB real, recarga, descarga, restauración y elim
 test("puntos de control: simulación conserva contexto y rechaza contenido corrupto", async ({page}, info) => {
   const t: Tournament = {...league(), format: "round-robin", competitionRules: {season: 2026, verification: {standings: "verified", placements: "verified"}}};
   await seed(page, [t]);await openTools(page);
-  await page.getByRole("button", {name: "Centro de simulación", exact: true}).click();await closeTools(page);
+  await page.getByRole("button", {name: "Simular temporadas", exact: true}).click();
   const simulation = page.getByRole("region", {name: "Centro de simulación de temporadas", exact: true});
   await simulation.getByRole("combobox", {name: "Alcance", exact: true}).selectOption("0");await simulation.getByRole("button", {name: "Revisar simulación", exact: true}).click();
   await simulation.getByRole("button", {name: "Crear punto de control antes de simular", exact: true}).click();
@@ -868,7 +868,7 @@ test("coordinación entre pestañas: restaurar un punto invalida la edición pen
   await editor.getByRole("spinbutton").nth(0).fill("6");await editor.getByRole("spinbutton").nth(1).fill("5");
   await panel.getByRole("article", {name: "Punto: Antes de editar en otra pestaña", exact: true}).getByRole("button", {name: "Revisar restauración", exact: true}).click();
   await page.getByRole("dialog", {name: "Restaurar punto de control", exact: true}).getByRole("button", {name: "Confirmar reemplazo por el punto", exact: true}).click();
-  await expect(page.getByRole("button", {name: "Biblioteca", exact: true})).toBeVisible();
+  await expect(page.getByRole("button", {name: "Mis torneos", exact: true})).toBeVisible();
   const restored = await sportsStorage(page);expect((await checkpointRecords(page))).toHaveLength(1);
   await expect(other.getByRole("alert", {name: "Cambios externos en la biblioteca", exact: true})).toBeVisible();
   await expect(editor.getByRole("spinbutton").nth(0)).toHaveValue("6");
@@ -879,19 +879,11 @@ test("coordinación entre pestañas: restaurar un punto invalida la edición pen
 
 async function openTools(page:Page){
   await closeFixtureDetails(page);
-  const tools=page.locator(".topbar-tools");
-  if(!(await tools.evaluate((element:HTMLElement & {open:boolean})=>element.open)))
-    await page.getByText("Más herramientas",{exact:true}).click();
-}
-async function closeTools(page:Page){
-  const tools=page.locator(".topbar-tools");
-  if(await tools.evaluate((element:HTMLElement & {open:boolean})=>element.open))
-    await page.getByText("Más herramientas",{exact:true}).click();
+  await page.getByRole("button",{name:"Herramientas",exact:true}).click();
 }
 async function closureCenter(page: Page) {
   await openTools(page);
   await page.getByRole("button",{name:"Centro de cierre",exact:true}).click();
-  await closeTools(page);
   const center=page.getByRole("region",{name:"Centro de cierre de temporadas",exact:true});await expect(center).toBeVisible();return center;
 }
 test("cierre deportivo: revisión, confirmación, planificación y modificación posterior",async({page},info)=>{
@@ -951,7 +943,7 @@ test("cierre deportivo: final pendiente bloquea y enlaza al calendario sin escri
 async function historicalArchive(page:Page) {
   await openTools(page);
   await page.locator("#open-historical-archive").click();
-  await closeTools(page);
+
   const archive=page.getByRole("region",{name:"Archivo histórico del universo",exact:true});await expect(archive).toBeVisible();return archive;
 }
 test("archivo histórico: anuarios, filtros combinados y navegación conservan los datos",async({page},info)=>{
@@ -1002,12 +994,12 @@ test("archivo histórico: cambios externos actualizan cierres y cambiar universo
   expect((await saved(page)).find(t=>t.id===hidden.id)).toEqual(hidden);
 });
 
-async function drawCenter(page:Page){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await openTools(page);await page.locator("#open-draw-center").click();await closeTools(page);const center=page.getByRole("region",{name:"Centro de sorteos y cruces",exact:true});await expect(center).toBeVisible();return center;}
+async function drawCenter(page:Page){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await openTools(page);await page.locator("#open-draw-center").click();const center=page.getByRole("region",{name:"Centro de sorteos y cruces",exact:true});await expect(center).toBeVisible();return center;}
 
 async function associationsManager(page:Page){
   await openTools(page);
   await page.getByRole("button",{name:"Asociaciones y afiliaciones",exact:true}).first().click();
-  await closeTools(page);
+
   const manager=page.getByRole("region",{name:"Administración de asociaciones y afiliaciones",exact:true});await expect(manager).toBeVisible();return manager;
 }
 test("afiliaciones: registra asociación y aparición documental con revisión e historial",async({page},info)=>{
@@ -1161,7 +1153,7 @@ test("sorteos y cruces: dos pestañas rechazan confirmaciones incompatibles y re
   const events=await page.evaluate(()=>JSON.parse(localStorage.getItem("cancha.activity")!) as {action:string;universeId?:string}[]);expect(events.filter(e=>e.action==="stage-draw-confirmed")).toHaveLength(1);expect(events.find(e=>e.action==="stage-draw-confirmed")?.universeId).toBe("u1");await other.close();
 });
 
-async function sportsDecisions(page:Page,id:string){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await openTools(page);await page.locator("#open-sports-decisions").click();await closeTools(page);const center=page.getByRole("region",{name:"Centro de decisiones deportivas",exact:true});await expect(center).toBeVisible();await center.getByRole("combobox",{name:"Competición y temporada para decisiones",exact:true}).selectOption(id);return center;}
+async function sportsDecisions(page:Page,id:string){await expect(page.locator("main")).toHaveAttribute("aria-busy","false");await openTools(page);await page.locator("#open-sports-decisions").click();const center=page.getByRole("region",{name:"Centro de decisiones deportivas",exact:true});await expect(center).toBeVisible();await center.getByRole("combobox",{name:"Competición y temporada para decisiones",exact:true}).selectOption(id);return center;}
 async function documentaryReview(center:ReturnType<Page["getByRole"]>,t:Tournament){
   const input=decisionInput(t),manager=center.getByRole("region",{name:"Resoluciones oficiales",exact:true});
   await manager.getByText(`${input.context.title} · Pendiente`,{exact:true}).click();
