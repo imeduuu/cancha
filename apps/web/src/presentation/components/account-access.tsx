@@ -1,6 +1,7 @@
 import { lazy } from "react";
 import { useAccount } from "../account-context";
 import { DeferredPanel } from "./deferred-panel";
+import { navigate } from "../client-routing";
 
 const AccountPanel = lazy(() => import("./account-panel").then(module => ({ default: module.AccountPanel })));
 
@@ -17,10 +18,10 @@ export function AccountAccess() {
       className="topbar-nav account-access-button"
       aria-expanded={open}
       aria-controls="account-panel"
-      onClick={() => setOpen(!open)}
+      onClick={() => { navigate("/cuenta"); setOpen(!open); }}
     >{label}</button>
     {open && <DeferredPanel fallback={<p role="status" className="account-panel">Cargando cuenta…</p>}>
-      <AccountPanel onClose={() => setOpen(false)} />
+      <AccountPanel onClose={() => { setOpen(false); navigate("/torneos", { replace: true }); }} />
     </DeferredPanel>}
   </>;
 }

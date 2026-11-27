@@ -7,7 +7,7 @@
 - Las pestañas siguen el recorrido más común: entender el estado, consultar los partidos, revisar posiciones y rendimiento, y administrar jugadores. Las herramientas menos frecuentes quedan agrupadas aparte.
 - Las seis pestañas pertenecen al mismo torneo y temporada seleccionados. Las rutas hijas conservan ese contexto; cada vista secundaria permite volver a su sección de origen.
 - **Herramientas** funciona como índice agrupado por tareas. Allí se trasladan «Más herramientas» y estos cuatro accesos de la barra del torneo: calendario, programación del calendario, alertas e historial de actividad.
-- Las rutas de este documento son una propuesta de arquitectura, no rutas que ya estén implementadas.
+- Las rutas detalladas de este documento describen el destino completo de la arquitectura; las rutas principales conectadas hoy y su alcance están en [Enrutamiento de la web](./enrutamiento.md).
 - En 360 px las pestañas pueden desplazarse horizontalmente con teclado y lector de pantalla; los controles deben conservar nombres accesibles y una indicación visible de la sección activa.
 
 ## Mapa de navegación

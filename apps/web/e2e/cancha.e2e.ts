@@ -84,6 +84,29 @@ async function saved(page: Page): Promise<Tournament[]> {
   return page.evaluate(() => JSON.parse(localStorage.getItem("cancha.tournaments") ?? "[]"));
 }
 
+test("rutas de torneo admiten apertura directa y navegación Atrás/Adelante", async ({ page }) => {
+  const tournament = league();
+  await seed(page, [tournament]);
+  await page.goto(`/torneos/${tournament.id}/partidos`);
+  await expect(game(page)).toBeVisible();
+  await expect(page).toHaveTitle("Partidos · Cancha");
+  await expect.poll(() => page.evaluate(() => (document.activeElement as HTMLElement | null)?.tagName)).toBe("H1");
+
+  await page.getByRole("button", { name: "Centro de alertas", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/torneos/${tournament.id}/herramientas/pendientes$`));
+  await expect(page).toHaveTitle("Pendientes · Cancha");
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/torneos/${tournament.id}/partidos$`));
+  await expect(game(page)).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL(new RegExp(`/torneos/${tournament.id}/herramientas/pendientes$`));
+  await expect(page.getByRole("region", { name: `Alertas de ${tournament.name}` })).toBeVisible();
+
+  await page.goto(`/torneos/${tournament.id}/tabla`);
+  await expect(page.getByRole("region", { name: "Tabla de posiciones" }).first()).toBeVisible();
+  await expect(page).toHaveTitle("Tabla · Cancha");
+});
+
 test("centro de simulación exige revisión y confirmación antes de guardar", async ({ page }) => {
   const t: Tournament = {...league(), format: "round-robin", competitionRules: {
     season: 2026, verification: {standings: "verified", placements: "verified"},

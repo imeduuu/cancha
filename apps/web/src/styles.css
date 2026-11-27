@@ -136,6 +136,9 @@
 .active-tournament-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
 .active-tournament-bar strong { font-family: var(--font-display); font-size: var(--fs-lg); }
 .active-tournament-bar > span:last-child { color: var(--fg-soft); font-size: var(--fs-sm); }
+.tournament-route-nav { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: var(--space-2); }
+.tournament-route-nav [aria-current="page"] { border-color: var(--primary); }
+.page-shell > h1.sr-only:focus { position: static; width: auto; height: auto; margin: var(--space-3) 0; overflow: visible; clip: auto; clip-path: none; white-space: normal; }
 .active-tournament-label { color: var(--accent-fg); font-family: var(--font-label); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: var(--tracking-label); }
 .hero-copy { padding: var(--space-10) 0 var(--space-8); }
 .hero-eyebrow { color: var(--accent-fg); }

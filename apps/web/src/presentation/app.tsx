@@ -20,6 +20,7 @@ import { AccountProvider, useAccount } from "./account-context";
 import { AccountAccess } from "./components/account-access";
 import { localLibraryNeedsMigration } from "../infrastructure/persistence/local-library-migration";
 import { DeferredPanel } from "./components/deferred-panel";
+import { navigate, tournamentPath, usePathname } from "./client-routing";
 import { publishedSeasonSource } from "../infrastructure/external-services/load-official-league-source";
 import { groupCompetitions } from "@cancha/core/application/services/competition-center";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -214,6 +215,8 @@ const HistoricalArchive = lazy(() => import("./components/historical-archive").t
 const SeasonClosureCenter = lazy(() => import("./components/season-closure-center").then(module => ({default: module.SeasonClosureCenter})));
 
 function Application({ libraryBackend }: AppProps) {
+  const pathname = usePathname();
+  const account = useAccount();
   const [repository] = useState<LibraryBackend>(() => libraryBackend ?? new LocalStorageTournamentRepository(true));
   const [initialSnapshot] = useState(() => { try { return repository.snapshot(); } catch { return null; } });
   const acknowledgedLibrary = useRef(initialSnapshot);
@@ -313,6 +316,7 @@ function Application({ libraryBackend }: AppProps) {
     return committed.result;
   }), [repository]);
   const [h2hFocus,setH2HFocus]=useState<{a:string;b:string}|null>(null);
+  const activityReturnToLibrary = useRef(false);
   const [simulationTargetId, setSimulationTargetId] = useState<string>();
   const [simulationCenterOpen, setSimulationCenterOpen] = useState(false);
   const [decisionsOpen,setDecisionsOpen]=useState(false);
@@ -327,9 +331,10 @@ function Application({ libraryBackend }: AppProps) {
   const [closurePlanningRequest, setClosurePlanningRequest] = useState<{request: number; tournamentId: string; kind?: "planning" | "qualification" | "competitions"}>();
   const closureRequestCounter = useRef(0);
   const closureTrigger = useRef<HTMLElement | null>(null);
-  function openDecisions(target?:Tournament){setDecisionsTargetId(target?.id);setDecisionsOpen(true);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setSimulationCenterOpen(false);setH2HFocus(null);setActivityFocus(null);}
-  function openDraws(target?:Tournament){setAffiliationRequest(undefined);setDecisionsOpen(false);setDrawTargetId(target?.id);setDrawOpen(true);setArchiveOpen(false);setClosureOpen(false);setSimulationCenterOpen(false);setH2HFocus(null);setActivityFocus(null);}
+  function openDecisions(target?:Tournament){if (target) navigate(tournamentPath(target.id, "herramientas/decisiones"));setDecisionsTargetId(target?.id);setDecisionsOpen(true);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setSimulationCenterOpen(false);setH2HFocus(null);setActivityFocus(null);}
+  function openDraws(target?:Tournament){if (target) navigate(tournamentPath(target.id, "herramientas/sorteos"));setAffiliationRequest(undefined);setDecisionsOpen(false);setDrawTargetId(target?.id);setDrawOpen(true);setArchiveOpen(false);setClosureOpen(false);setSimulationCenterOpen(false);setH2HFocus(null);setActivityFocus(null);}
   function openArchive() {
+    if (tournament) navigate(tournamentPath(tournament.id, "herramientas/archivo"));
     setDecisionsOpen(false);setDrawOpen(false);
     setArchiveOpen(true);setClosureOpen(false);setSimulationCenterOpen(false);setH2HFocus(null);setActivityFocus(null);
   }
@@ -338,6 +343,8 @@ function Application({ libraryBackend }: AppProps) {
     setClosurePlanningRequest({request:closureRequestCounter.current,tournamentId:target?.id ?? "",kind});
   }
   function openClosure(target?: Tournament) {
+    const routeTournament = target ?? tournament;
+    if (routeTournament) navigate(tournamentPath(routeTournament.id, "herramientas/cierre"));
     setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);
     const active = document.activeElement;
     closureTrigger.current = active instanceof HTMLElement && active.matches("button, a[href], input, select, textarea, [tabindex]") ? active : null;
@@ -973,7 +980,7 @@ function Application({ libraryBackend }: AppProps) {
     }
   }
 
-  function openTournament(selectedTournament: Tournament): boolean {
+  function openTournament(selectedTournament: Tournament, section = "resumen"): boolean {
     try {
       const openingSnapshot = repository.snapshot();
       const allTournaments = repository.findAll();
@@ -989,6 +996,7 @@ function Application({ libraryBackend }: AppProps) {
       acknowledgedLibrary.current = openingSnapshot;
       setExternalChange(false);
       setTournament(current);
+      navigate(tournamentPath(current.id, section));
       setSelectedLeg(getInitialTournamentLeg(current));
       setScreen("tournament");
       setCalendarView(false);
@@ -1006,7 +1014,7 @@ function Application({ libraryBackend }: AppProps) {
   }
 
   function openTournamentCalendar(selectedTournament: Tournament) {
-    if (openTournament(selectedTournament)) {
+    if (openTournament(selectedTournament, "partidos")) {
       setCalendarInitialized(true);
       setCalendarView(true);
       setProgrammingView(false);
@@ -1038,6 +1046,7 @@ function Application({ libraryBackend }: AppProps) {
   }
 
   function toggleCalendarView() {
+    if (tournament) navigate(tournamentPath(tournament.id, calendarView ? "resumen" : "partidos"));
     setCalendarInitialized(true);
     setProgrammingView(false);
     setCalendarView((current) => !current);
@@ -1303,6 +1312,77 @@ function Application({ libraryBackend }: AppProps) {
     return () => cancelAnimationFrame(frame);
   }, [libraryRevision]);
 
+  const openTournamentRef = useRef(openTournament);
+  openTournamentRef.current = openTournament;
+  const route = useMemo(() => {
+    const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    const defaultTitle = pathname === "/" ? "Inicio"
+      : pathname === "/torneos" ? "Mis torneos"
+      : pathname === "/torneos/nuevo" ? "Crear torneo"
+        : pathname === "/cuenta" ? "Cuenta"
+          : parts[0] === "torneos" && parts[1]
+            ? ({ resumen: "Resumen", partidos: "Partidos", tabla: "Tabla", estadisticas: "Estadísticas", plantel: "Plantel", herramientas: "Herramientas" } as Record<string, string>)[parts[2] ?? ""] ?? "Resumen"
+            : "Mis torneos";
+    const toolTitles: Record<string, string> = { calendario: "Calendario", programacion: "Programaci\u00f3n", pendientes: "Pendientes", actividad: "Actividad", decisiones: "Decisiones deportivas", sorteos: "Sorteos y cruces", incidencias: "Incidencias", asociaciones: "Asociaciones", archivo: "Archivo hist\u00f3rico", cierre: "Cierre de temporada", simulacion: "Simulaci\u00f3n", planificacion: "Planificaci\u00f3n", "clasificacion-internacional": "Clasificaci\u00f3n internacional" };
+    const title = parts[2] === "herramientas" ? toolTitles[parts[3] ?? ""] ?? defaultTitle : defaultTitle;
+    return { parts, title };
+  }, [pathname]);
+  const routeSection = route.parts[2];
+  const routeTool = route.parts[3];
+  const routedTools = ["calendario", "programacion", "pendientes", "actividad", "decisiones", "sorteos", "incidencias", "asociaciones", "archivo", "cierre", "simulacion"];
+  const defaultBoardRoute = !routeSection || routeSection === "resumen"
+    || (routeSection === "herramientas" && (!routeTool || !routedTools.includes(routeTool)));
+
+  useEffect(() => {
+    document.title = `${route.title} · Cancha`;
+    if (libraryLoading) return;
+    const [root, id, section, subSection] = route.parts;
+    if (pathname === "/") {
+      account?.setPanelOpen(false);
+    } else if (pathname === "/torneos") {
+      setScreen("library");
+      account?.setPanelOpen(false);
+    } else if (pathname === "/torneos/nuevo") {
+      setScreen("setup");
+      account?.setPanelOpen(false);
+    } else if (pathname === "/cuenta") {
+      account?.setPanelOpen(true);
+    } else if (root === "torneos" && id && id !== "nuevo") {
+      const selected = repository.findAll().find((item) => item.id === id);
+      if (!selected) {
+        setScreen("library");
+      } else {
+        const routeSection = section === "herramientas" && subSection
+          ? `herramientas/${subSection}`
+          : section ?? "resumen";
+        const tool = section === "herramientas" ? subSection : undefined;
+        if (!(tool === "actividad" && activityReturnToLibrary.current)) {
+          openTournamentRef.current(selected, routeSection);
+        }
+        const isCalendar = section === "partidos" || (section === "herramientas" && subSection === "calendario");
+        setCalendarInitialized(isCalendar);
+        setCalendarView(isCalendar);
+        setAlertsView(tool === "pendientes");
+        setProgrammingView(tool === "programacion");
+        setDecisionsOpen(tool === "decisiones" || tool === "incidencias");
+        setDrawOpen(tool === "sorteos" || tool === "asociaciones");
+        setArchiveOpen(tool === "archivo");
+        setClosureOpen(tool === "cierre");
+        setSimulationCenterOpen(tool === "simulacion");
+        if (tool === "decisiones" || tool === "incidencias") setDecisionsTargetId(id);
+        if (tool === "sorteos" || tool === "asociaciones") setDrawTargetId(id);
+        if (tool === "cierre") setClosureTargetId(id);
+        if (tool === "actividad") setActivityFocus({ tournamentId: id });
+      }
+      account?.setPanelOpen(false);
+    }
+    const frame = requestAnimationFrame(() => {
+      const heading = document.querySelector<HTMLElement>("main.page-shell h1");
+      heading?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pathname, route, libraryLoading, repository, account]);
+
   function readRawTournamentDataForRecovery() {
     return repository.readRawTournamentDataForRecovery();
   }
@@ -1311,6 +1391,7 @@ function Application({ libraryBackend }: AppProps) {
     <ClubAssociationsNavigation.Provider value={{universeId:universeLibrary.activeUniverseId,open:(target,teamId)=>{openDraws(target);setAffiliationRequest({teamId,request:++affiliationRequestSerial.current});}}}><SportsDecisionsNavigation.Provider value={openDecisions}><DrawCenterNavigation.Provider value={openDraws}><HistoricalArchiveNavigation.Provider value={openArchive}><SeasonClosureNavigation.Provider value={openClosure}><LibraryWriteContext.Provider value={runWrite}><SaveRecoveryNavigation.Provider value={{service: checkpointService, open: openSaveRecovery, request: saveRecoveryRequest,
       acknowledge: () => setSaveRecoveryRequest(null), returnToOrigin: saveOrigin ? returnFromSaveRecovery : undefined}}>
     <SeasonSimulationNavigation.Provider value={target => {setSimulationTargetId(target?.id);setSimulationCenterOpen(true);}}><main className="page-shell" aria-busy={libraryLoading}>
+      <h1 className="sr-only" tabIndex={-1}>{tournament && route.parts[0] === "torneos" ? `${tournament.name} · ${route.title}` : route.title}</h1>
       {feedback && screen !== "tournament" && <p role="status">{feedback}</p>}
       {externalChange && <aside role="alert" aria-label="Cambios externos en la biblioteca" className="preview-panel"><p>La biblioteca cambió en {repository.origin === "server" ? "otra pestaña o dispositivo" : "otra pestaña"}. Tus borradores se conservan; las confirmaciones antiguas no se guardarán.</p><button type="button" onClick={refreshExternalLibrary}>Actualizar biblioteca conservando borradores</button><button type="button" onClick={reopenExternalLibrary}>Abrir biblioteca actual y cerrar formularios</button></aside>}
       <header className="topbar">
@@ -1320,11 +1401,11 @@ function Application({ libraryBackend }: AppProps) {
         </a>
         <span className="topbar-note">SIMULADOR DE CAMPEONATOS</span>
         <div className="topbar-actions">
-          <button className="topbar-nav" disabled={libraryLoading} onClick={() => {setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("library");}} type="button">
+          <button className="topbar-nav" disabled={libraryLoading} onClick={() => {navigate("/torneos");setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("library");}} type="button">
             Biblioteca
           </button>
           <button className="topbar-nav" disabled={libraryLoading} onClick={() => {
-            setLoadError("");
+            navigate("/torneos/nuevo");setLoadError("");
             setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("setup");
           }} type="button">
             Crear torneo
@@ -1350,6 +1431,12 @@ function Application({ libraryBackend }: AppProps) {
           <span className="active-tournament-label">TORNEO ACTIVO</span>
           <strong>{tournament.name}</strong>
           <span>{activeCompetition.territory} · {activeCompetition.name} · Temporada {tournament.season ?? "sin año"}</span>
+          <nav className="tournament-route-nav" aria-label="Secciones del torneo">
+            {([ ["Resumen", "resumen"], ["Partidos", "partidos"], ["Tabla", "tabla"], ["Estadísticas", "estadisticas"], ["Plantel", "plantel"], ["Herramientas", "herramientas"] ] as const).map(([label, section]) => (
+              <button key={section} className="topbar-nav" type="button" aria-current={routeSection === section ? "page" : undefined}
+                onClick={() => navigate(tournamentPath(tournament.id, section))}>{label}</button>
+            ))}
+          </nav>
         </section>
       )}
       {!tournament && <section className="hero">
@@ -1460,15 +1547,19 @@ function Application({ libraryBackend }: AppProps) {
               onOpenCalendar={openTournamentCalendar}
               onConfirmCalendarProgramming={handleConfirmCalendarProgramming}
               onOpenAlerts={(selectedTournament) => {
-                if (openTournament(selectedTournament)) setAlertsView(true);
+                if (openTournament(selectedTournament, "herramientas/pendientes")) setAlertsView(true);
               }}
-              onOpenActivity={(selectedTournament) =>
-                setActivityFocus({ tournamentId: selectedTournament.id })}
+              onOpenActivity={(selectedTournament) => {
+                activityReturnToLibrary.current = true;
+                navigate(tournamentPath(selectedTournament.id, "herramientas/actividad"));
+                setActivityFocus({ tournamentId: selectedTournament.id });
+              }}
               onRejectedImport={(reason) => {
                 recordRejectedImport(repository, reason);
                 setSavedTournaments(repository.findAll());
               }}
               onCreate={() => {
+                navigate("/torneos/nuevo");
                 setLoadError("");
                 setDecisionsOpen(false);setDrawOpen(false);setArchiveOpen(false);setClosureOpen(false);setScreen("setup");
               }}
@@ -1538,6 +1629,7 @@ function Application({ libraryBackend }: AppProps) {
                   {!alertsView && <button className="small-action" type="button"
                     aria-pressed={programmingView}
                     onClick={() => {
+                      navigate(tournamentPath(tournament.id, programmingView ? "resumen" : "herramientas/programacion"));
                       setProgrammingReturnToCalendar(false);
                       setProgrammingView((current) => !current);
                       setCalendarView(false);
@@ -1553,6 +1645,7 @@ function Application({ libraryBackend }: AppProps) {
                     aria-pressed={alertsView}
                     className="small-action"
                     onClick={() => {
+                      navigate(tournamentPath(tournament.id, alertsView ? "resumen" : "herramientas/pendientes"));
                       setAlertsView((current) => !current);
                       setCalendarView(false);
                     }}
@@ -1563,7 +1656,7 @@ function Application({ libraryBackend }: AppProps) {
                   <button
                     className="small-action"
                     type="button"
-                    onClick={() => setActivityFocus({ tournamentId: tournament.id })}
+                    onClick={() => { navigate(tournamentPath(tournament.id, "herramientas/actividad")); setActivityFocus({ tournamentId: tournament.id }); }}
                   >
                     Historial de actividad
                   </button>
@@ -1573,8 +1666,9 @@ function Application({ libraryBackend }: AppProps) {
               {alertsView ? (
                 <CompetitionAlertCenter
                   tournament={tournament}
-                  onBack={() => setAlertsView(false)}
+                  onBack={() => { navigate(tournamentPath(tournament.id, "resumen")); setAlertsView(false); }}
                   onOpenFixture={(fixtureId) => {
+                    navigate(tournamentPath(tournament.id, "partidos"));
                     const matchday = tournament.matchdays.find(({ fixtures }) =>
                       fixtures.some(({ id }) => id === fixtureId));
                     if (matchday) setSelectedLeg(matchday.leg);
@@ -1584,16 +1678,18 @@ function Application({ libraryBackend }: AppProps) {
                     setAlertsView(false);
                   }}
                   onOpenCalendar={() => {
+                    navigate(tournamentPath(tournament.id, "partidos"));
                     setCalendarInitialized(true);
                     setCalendarView(true);
                     setAlertsView(false);
                   }}
                   onOpenStatistics={() => {
+                    navigate(tournamentPath(tournament.id, "estadisticas"));
                     setCalendarView(false);
                     setAlertsView(false);
-                    setPendingFocusTargetId("tournament-statistics");
                   }}
                   onOpenRegulations={() => {
+                    navigate(tournamentPath(tournament.id, "herramientas/reglamentos"));
                     setCalendarView(false);
                     setAlertsView(false);
                     setPendingFocusTargetId("match-regulations-editor");
@@ -1608,6 +1704,7 @@ function Application({ libraryBackend }: AppProps) {
                     onConfirm={handleConfirmCalendarProgramming}
                     onOpenCalendar={openTournamentCalendar}
                     onBack={() => {
+                      navigate(tournamentPath(tournament.id, programmingReturnToCalendar ? "partidos" : "resumen"));
                       setProgrammingView(false);
                       setCalendarView(programmingReturnToCalendar);
                       setProgrammingReturnToCalendar(false);
@@ -1617,7 +1714,7 @@ function Application({ libraryBackend }: AppProps) {
               ) : (
               <>
               <div className="tournament-board" hidden={calendarView}>
-              <div className="board-controls">
+              <div className="board-controls" hidden={!defaultBoardRoute}>
               <p className="preview-summary">
                 {tournament.teams.length} equipos <span>·</span>{" "}
                 {tournament.competitionType === "cup"
@@ -1737,11 +1834,12 @@ function Application({ libraryBackend }: AppProps) {
                 </button>
               </section>
               </div>
-              <div className="board-extra">
+              <div className="board-extra" hidden={!defaultBoardRoute && routeSection !== "estadisticas" && routeSection !== "plantel"}>
               <DeferredPanel fallback={<p role="status">Cargando estadísticas…</p>}><TournamentStatisticsPanel
                 activity={scopedActivityEvents}
                 tournament={tournament}
                 tournaments={scopedTournaments}
+                view={routeSection === "plantel" ? "roster" : routeSection === "estadisticas" ? "statistics" : "all"}
                 onSaveTournament={handleSaveRoster}
                 onSaveRegulations={handleSaveRegulations}
                 onSelectTournament={(tournamentId) => {
@@ -1756,7 +1854,7 @@ function Application({ libraryBackend }: AppProps) {
                 onChange={(updated) => { setTournament(updated); setSavedTournaments(repository.findAll()); setPersistenceStatus("saved"); }}
                 onCreated={(created) => { assignNewTournaments(created.map(({id})=>id)); setSavedTournaments(repository.findAll()); setFeedback("Se crearon ambas temporadas con participantes actualizados. Calendarios y reglamentos pendientes."); setPersistenceStatus("saved"); }} /></DeferredPanel>}
               </div>
-              <div className="board-standings">
+              <div className="board-standings" hidden={!defaultBoardRoute && routeSection !== "tabla"}>
               <DeferredPanel fallback={null}><ChampionCards tournament={tournament} activity={scopedActivityEvents} /></DeferredPanel>
               {isArgentinaTournament && (
                 <label className="table-view-select">
@@ -1838,7 +1936,7 @@ function Application({ libraryBackend }: AppProps) {
                   </p>
                 )}
               </div>
-              <div className="board-fixtures">
+              <div className="board-fixtures" hidden={!defaultBoardRoute && routeSection !== "partidos"}>
               {feedback && <p className="simulation-feedback" role="status">{feedback}</p>}
               <DeferredPanel fallback={<p role="status">Cargando partidos…</p>}><FixtureList
                 matchdays={visibleMatchdays}
@@ -1891,7 +1989,7 @@ function Application({ libraryBackend }: AppProps) {
                     players={tournament.players ?? []}
                     playerRegistrations={tournament.playerRegistrations ?? []}
                     otherTournaments={scopedTournaments.filter(({ id }) => id !== tournament.id)}
-                    onBack={() => setCalendarView(false)}
+                    onBack={() => { navigate(tournamentPath(tournament.id, "resumen")); setCalendarView(false); }}
                     onOpenProgramming={() => {
                       setCalendarView(false);
                       setProgrammingReturnToCalendar(true);
@@ -1916,7 +2014,15 @@ function Application({ libraryBackend }: AppProps) {
           tournaments={scopedTournaments}
           focusTournamentId={activityFocus.tournamentId}
           focusFixtureId={activityFocus.fixtureId}
-          onClose={() => setActivityFocus(null)}
+          onClose={() => {
+            setActivityFocus(null);
+            if (activityReturnToLibrary.current) {
+              activityReturnToLibrary.current = false;
+              navigate("/torneos", { replace: true });
+            } else if (activityFocus?.tournamentId) {
+              navigate(tournamentPath(activityFocus.tournamentId, "herramientas"), { replace: true });
+            }
+          }}
           onOpenTournament={(selected) => {
             setActivityFocus(null);
             openTournament(selected);

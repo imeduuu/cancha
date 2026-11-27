@@ -8,6 +8,7 @@ import { PlayerRosterPanel } from "./player-roster-panel";
 import { MatchRegulationsEditor } from "./match-regulations-editor";
 
 interface TournamentStatisticsPanelProps {
+  view?: "all" | "statistics" | "roster";
   activity?: readonly ActivityEvent[];
   tournament: Tournament;
   tournaments: readonly Tournament[];
@@ -17,6 +18,7 @@ interface TournamentStatisticsPanelProps {
 }
 
 export function TournamentStatisticsPanel({
+  view = "all",
   tournament,
   activity = [],
   tournaments,
@@ -55,7 +57,8 @@ export function TournamentStatisticsPanel({
   });
 
   return (
-    <section id="tournament-statistics" className="statistics-panel" aria-label="Estadísticas del campeonato">
+    <section id="tournament-statistics" className="statistics-panel" aria-label={view === "roster" ? "Plantel" : "Estadísticas del campeonato"}>
+      {view === "roster" ? <section aria-label="Plantel"><h2>Plantel</h2><PlayerRosterPanel tournament={tournament} onSave={onSaveTournament} /></section> : <>
       <div className="statistics-heading">
         <div>
           <span className="eyebrow">RESUMEN DE TEMPORADA</span>
@@ -177,7 +180,7 @@ export function TournamentStatisticsPanel({
             </table>
             {stats.standings.length === 0 && <p className="muted">No hay equipos para este filtro.</p>}
           </div>
-          <PlayerRosterPanel tournament={tournament} onSave={onSaveTournament} />
+          {view !== "statistics" && <PlayerRosterPanel tournament={tournament} onSave={onSaveTournament} />}
           <MatchRegulationsEditor tournament={tournament} onSave={onSaveRegulations} />
         </section>
 
@@ -244,6 +247,7 @@ export function TournamentStatisticsPanel({
           )}
         </section>
       </div>
+      </>}
     </section>
   );
 }
